@@ -12,6 +12,7 @@
 #include "WeatherService.h"
 #include "TouchManager.h"
 #include "vn_lunar.h"
+#include "HardwareManager.h"
 #include <time.h>
 
 Display display;
@@ -19,7 +20,8 @@ Display display;
 // ─── Constructor ─────────────────────────────────────────────────────
 Display::Display()
     : _tft(), _spr(&_tft), _sprReady(false), _lastRender(0),
-      _currentPage(PAGE_CLOCK), _dockVisible(true), _lastDockActivity(0) {}
+      _currentPage(PAGE_CLOCK), _dockVisible(true), _lastDockActivity(0),
+      _calYear(0), _calMonth(0) {}
 
 // ─── Begin ───────────────────────────────────────────────────────────
 void Display::begin() {
@@ -660,7 +662,66 @@ void Display::wakeDock() {
     _lastDockActivity = millis();
 }
 
+// ─── Calendar Navigation Methods ──────────────────────────────────────
+void Display::prevCalMonth() {
+    if (_calYear == 0) {
+        time_t now = time(NULL);
+        struct tm t;
+        localtime_r(&now, &t);
+        _calYear = t.tm_year + 1900;
+        _calMonth = t.tm_mon + 1;
+    }
+    _calMonth--;
+    if (_calMonth < 1) {
+        _calMonth = 12;
+        _calYear--;
+    }
+}
+
+void Display::nextCalMonth() {
+    if (_calYear == 0) {
+        time_t now = time(NULL);
+        struct tm t;
+        localtime_r(&now, &t);
+        _calYear = t.tm_year + 1900;
+        _calMonth = t.tm_mon + 1;
+    }
+    _calMonth++;
+    if (_calMonth > 12) {
+        _calMonth = 1;
+        _calYear++;
+    }
+}
+
+void Display::resetCalMonth() {
+    time_t now = time(NULL);
+    struct tm t;
+    localtime_r(&now, &t);
+    _calYear = t.tm_year + 1900;
+    _calMonth = t.tm_mon + 1;
+}
+
 bool Display::handleTouch(uint16_t x, uint16_t y) {
+    // If on Calendar page and tapping in the top Title Card (Y <= 50)
+    if (_currentPage == PAGE_CALENDAR && y <= 50) {
+        if (x <= 66) {
+            prevCalMonth();
+            hardware.playClick();
+            _lastRender = 0; // Trigger instant redraw
+            return true;
+        } else if (x >= 250) {
+            nextCalMonth();
+            hardware.playClick();
+            _lastRender = 0; // Trigger instant redraw
+            return true;
+        } else if (x >= 75 && x <= 245) {
+            resetCalMonth();
+            hardware.playClick();
+            _lastRender = 0; // Trigger instant redraw
+            return true;
+        }
+    }
+
     // If dock is hidden, tap anywhere in the lower 60px wakes it up
     if (!_dockVisible) {
         if (y >= 180) {
@@ -842,7 +903,7 @@ void Display::drawDockIconTheme(int16_t cx, int16_t cy, uint16_t color) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-//  PAGE 1 — LUNAR MONTH CALENDAR
+//  PAGE 1 — LUNAR MONTH CALENDAR (Interactive Month Navigation)
 // ═══════════════════════════════════════════════════════════════════════
 void Display::renderPage1_Calendar() {
     drawBackground();
@@ -855,89 +916,135 @@ void Display::renderPage1_Calendar() {
     int curMonth = t.tm_mon + 1;
     int curDay = (t.tm_mday > 0) ? t.tm_mday : 1;
 
-    LunarDate curLunar = LunarCalendar::convertSolar2Lunar(curDay, curMonth, curYear);
+    // Initialize calendar view to current month on first display
+    if (_calYear == 0 || _calMonth == 0) {
+        _calYear = curYear;
+        _calMonth = curMonth;
+    }
 
-    // Title Card
+    // ── 1. TITLE CARD WITH INTERACTIVE NAVIGATION BUTTONS (H=36px) ───
     drawGlassCard(12, 8, 296, 36, 10);
+
+    // [ < ] Prev Month Button
+    _spr.fillRoundRect(18, 12, 34, 28, 6, theme.card);
+    _spr.drawRoundRect(18, 12, 34, 28, 6, theme.cardBorder);
+    _spr.fillTriangle(37, 18, 37, 34, 28, 26, theme.accent); // Left arrow
+
+    // [ > ] Next Month Button
+    _spr.fillRoundRect(264, 12, 34, 28, 6, theme.card);
+    _spr.drawRoundRect(264, 12, 34, 28, 6, theme.cardBorder);
+    _spr.fillTriangle(279, 18, 279, 34, 288, 26, theme.accent); // Right arrow
+
+    // Center Month Title (Font 2) & Status Subtitle (Font 1)
     _spr.setTextDatum(MC_DATUM);
     _spr.setTextColor(theme.accent);
-    char titleBuf[48];
-    snprintf(titleBuf, sizeof(titleBuf), "THANG %02d/%d  -  AL %02d/%02d %s", 
-             curMonth, curYear, curLunar.day, curLunar.month, curLunar.yearCanChi);
-    _spr.drawString(titleBuf, SCREEN_W / 2, 26, 2);
+    char titleBuf[32];
+    snprintf(titleBuf, sizeof(titleBuf), "THANG %02d / %d", _calMonth, _calYear);
+    _spr.drawString(titleBuf, 160, 20, 2);
 
-    // Calendar Grid Card — Extended to full height (H=178px down to Y=226)
+    bool isCurrentMonth = (_calYear == curYear && _calMonth == curMonth);
+    char subBuf[48];
+    if (isCurrentMonth) {
+        LunarDate todayLunar = LunarCalendar::convertSolar2Lunar(curDay, curMonth, curYear);
+        snprintf(subBuf, sizeof(subBuf), "Hom nay: %02d/%02d AL - Nam %s", 
+                 todayLunar.day, todayLunar.month, todayLunar.yearCanChi);
+        _spr.setTextColor(RGB565(140, 210, 255));
+    } else {
+        LunarDate midLunar = LunarCalendar::convertSolar2Lunar(15, _calMonth, _calYear);
+        snprintf(subBuf, sizeof(subBuf), "Nam %s  •  [Cham ve hom nay]", midLunar.yearCanChi);
+        _spr.setTextColor(RGB565(255, 200, 100));
+    }
+    _spr.drawString(subBuf, 160, 33, 1);
+
+    // ── 2. CALENDAR GRID CARD (Extended to H=178px down to Y=226) ────
     drawGlassCard(12, 48, 296, 178, 10);
 
     // Day of week headers (T2 to CN)
     const char* daysOfWeek[] = { "T2", "T3", "T4", "T5", "T6", "T7", "CN" };
     for (int col = 0; col < 7; col++) {
         int16_t hx = 46 + col * 38;
-        if (col == 6) _spr.setTextColor(RGB565(255, 120, 120)); // CN (Sunday) in soft red
-        else _spr.setTextColor(theme.accentSec);
-        _spr.drawString(daysOfWeek[col], hx, 60, 2);
+        if (col == 6)      _spr.setTextColor(RGB565(255, 120, 120)); // CN (Sunday) in soft red
+        else if (col == 5) _spr.setTextColor(RGB565(140, 220, 255)); // T7 (Saturday) in soft cyan
+        else               _spr.setTextColor(theme.accentSec);
+        _spr.drawString(daysOfWeek[col], hx, 58, 2);
     }
-    _spr.drawFastHLine(20, 71, 280, theme.cardBorder);
+    _spr.drawFastHLine(20, 69, 280, theme.cardBorder);
 
-    // Calculate days in current month
+    // Calculate days in viewed month
     int daysInMonth = 31;
-    if (curMonth == 4 || curMonth == 6 || curMonth == 9 || curMonth == 11) {
+    if (_calMonth == 4 || _calMonth == 6 || _calMonth == 9 || _calMonth == 11) {
         daysInMonth = 30;
-    } else if (curMonth == 2) {
-        bool isLeapYear = (curYear % 4 == 0 && curYear % 100 != 0) || (curYear % 400 == 0);
+    } else if (_calMonth == 2) {
+        bool isLeapYear = (_calYear % 4 == 0 && _calYear % 100 != 0) || (_calYear % 400 == 0);
         daysInMonth = isLeapYear ? 29 : 28;
     }
 
     // Sakamoto's algorithm to get day of week for day 1 (0 = Sunday, 1 = Monday, ...)
     static const int tMap[] = { 0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4 };
-    int yCalc = curYear;
-    if (curMonth < 3) yCalc -= 1;
-    int wday1 = (yCalc + yCalc / 4 - yCalc / 100 + yCalc / 400 + tMap[curMonth - 1] + 1) % 7;
+    int yCalc = _calYear;
+    if (_calMonth < 3) yCalc -= 1;
+    int wday1 = (yCalc + yCalc / 4 - yCalc / 100 + yCalc / 400 + tMap[_calMonth - 1] + 1) % 7;
     int startCol = (wday1 + 6) % 7; // Convert to Monday = 0, ..., Sunday = 6
 
-    // Render calendar grid with Solar day (top) and Lunar day (bottom)
+    int totalSlots = startCol + daysInMonth;
+    int numRows = (totalSlots + 6) / 7; // 4, 5, or 6 rows
+
+    // Dynamic row spacing: 5 rows gets 28px height, 6 rows gets 24px height
+    int16_t rowH = (numRows <= 5) ? 28 : 24;
+    int16_t gridStartY = (numRows <= 5) ? 75 : 73;
+
+    // Render calendar grid with distinct vertical separation between Solar & Lunar dates
     for (int d = 1; d <= daysInMonth; d++) {
         int slot = startCol + (d - 1);
         int col = slot % 7;
         int row = slot / 7;
-        int16_t dx = 46 + col * 38;
-        int16_t dy = 83 + row * 24;
+        int16_t cx = 46 + col * 38;
+        int16_t cy = gridStartY + row * rowH;
 
-        LunarDate ld = LunarCalendar::convertSolar2Lunar(d, curMonth, curYear);
+        LunarDate ld = LunarCalendar::convertSolar2Lunar(d, _calMonth, _calYear);
+        bool isToday = (d == curDay && isCurrentMonth);
 
-        bool isToday = (d == curDay);
+        int16_t cellH = rowH - 3;
+        int16_t solarY = cy + (rowH == 28 ? 8 : 6);
+        int16_t lunarY = cy + (rowH == 28 ? 19 : 15);
+
         if (isToday) {
-            _spr.fillRoundRect(dx - 16, dy - 10, 32, 22, 6, theme.accent);
+            // Highlight today with filled accent pill
+            _spr.fillRoundRect(cx - 16, cy, 32, cellH, 6, theme.accent);
             _spr.setTextColor(theme.bg);
-            _spr.drawNumber(d, dx, dy - 3, 2);
+            _spr.drawNumber(d, cx, solarY, 2);
 
-            // Lunar date in today pill
+            // Lunar date inside today pill
             char lStr[8];
             if (ld.day == 1) snprintf(lStr, sizeof(lStr), "1/%d", ld.month);
             else snprintf(lStr, sizeof(lStr), "%d", ld.day);
             _spr.setTextColor(RGB565(30, 30, 30));
-            _spr.drawString(lStr, dx, dy + 6, 1);
+            _spr.drawString(lStr, cx, lunarY, 1);
         } else {
-            // Solar day
-            if (col == 6) _spr.setTextColor(RGB565(255, 120, 120)); // Sunday
-            else _spr.setTextColor(theme.textMain);
-            _spr.drawNumber(d, dx, dy - 3, 2);
+            // Subtle plate background for all days
+            _spr.fillRoundRect(cx - 16, cy, 32, cellH, 4, theme.card);
 
-            // Lunar day
+            // Solar day (Font 2)
+            if (col == 6)      _spr.setTextColor(RGB565(255, 120, 120)); // Sunday red
+            else if (col == 5) _spr.setTextColor(RGB565(140, 220, 255)); // Saturday cyan
+            else               _spr.setTextColor(theme.textMain);
+            _spr.drawNumber(d, cx, solarY, 2);
+
+            // Lunar day (Font 1)
             char lStr[8];
             if (ld.day == 1) {
                 // Highlight Mùng 1 in bright gold
                 snprintf(lStr, sizeof(lStr), "1/%d", ld.month);
                 _spr.setTextColor(RGB565(255, 200, 0));
             } else if (ld.day == 15) {
-                // Highlight Ngày Rằm in gold
+                // Highlight Ngày Rằm in bright gold
                 snprintf(lStr, sizeof(lStr), "15");
                 _spr.setTextColor(RGB565(255, 200, 0));
             } else {
                 snprintf(lStr, sizeof(lStr), "%d", ld.day);
                 _spr.setTextColor(theme.textDim);
             }
-            _spr.drawString(lStr, dx, dy + 6, 1);
+            _spr.drawString(lStr, cx, lunarY, 1);
         }
     }
 }

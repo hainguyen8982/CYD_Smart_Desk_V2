@@ -42,6 +42,13 @@ private:
     bool          _dockVisible;
     unsigned long _lastDockActivity;
 
+    // ── Calendar Navigation State ─────────────────────────────
+    int16_t       _calYear;
+    int8_t        _calMonth;
+    void          prevCalMonth();
+    void          nextCalMonth();
+    void          resetCalMonth();
+
     // ── Page renderers ───────────────────────────────────────
     void renderPage0_WeatherClock();
     void renderPage1_Calendar();
