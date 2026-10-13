@@ -13,6 +13,21 @@ WeatherService::WeatherService()
       _lat(10.8231f), _lon(106.6297f) {
     memset(&_data, 0, sizeof(_data));
     strncpy(_data.city, "TP. HCM", sizeof(_data.city)); // Default to Saigon coordinates
+
+    _data.forecast[0].tempMin = 24.0f; _data.forecast[0].tempMax = 33.0f;
+    _data.forecast[0].type = WEATHER_CLEAR;
+    strlcpy(_data.forecast[0].dayName, "THU 4", sizeof(_data.forecast[0].dayName));
+    strlcpy(_data.forecast[0].condText, "Nang dep", sizeof(_data.forecast[0].condText));
+
+    _data.forecast[1].tempMin = 24.0f; _data.forecast[1].tempMax = 31.0f;
+    _data.forecast[1].type = WEATHER_RAIN;
+    strlcpy(_data.forecast[1].dayName, "THU 5", sizeof(_data.forecast[1].dayName));
+    strlcpy(_data.forecast[1].condText, "Co mua", sizeof(_data.forecast[1].condText));
+
+    _data.forecast[2].tempMin = 25.0f; _data.forecast[2].tempMax = 34.0f;
+    _data.forecast[2].type = WEATHER_CLOUDY;
+    strlcpy(_data.forecast[2].dayName, "THU 6", sizeof(_data.forecast[2].dayName));
+    strlcpy(_data.forecast[2].condText, "Co may", sizeof(_data.forecast[2].condText));
 }
 
 void WeatherService::begin() {
@@ -178,9 +193,9 @@ void WeatherService::_detectCityFromIP() {
 void WeatherService::_fetchWeather() {
     Serial.printf("[Weather] Fetching Open-Meteo for %s (%.4f, %.4f)...\n", _data.city, _lat, _lon);
 
-    char url[256];
+    char url[320];
     snprintf(url, sizeof(url),
-        "http://api.open-meteo.com/v1/forecast?latitude=%.4f&longitude=%.4f&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code,uv_index&daily=sunrise,sunset&timezone=auto",
+        "http://api.open-meteo.com/v1/forecast?latitude=%.4f&longitude=%.4f&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code,uv_index&daily=sunrise,sunset,weather_code,temperature_2m_max,temperature_2m_min&forecast_days=4&timezone=auto",
         _lat, _lon);
 
     HTTPClient http;
@@ -249,10 +264,47 @@ void WeatherService::_fetchWeather() {
                 strlcpy(_data.description, "Nhieu may", sizeof(_data.description));
             }
 
+            // ── Parse 3-day forecast (Next 3 days: apiDay = 1, 2, 3) ──
+            time_t nowT = time(NULL);
+            struct tm curTm;
+            localtime_r(&nowT, &curTm);
+            const char* dayNames[] = { "C.NHAT", "THU 2", "THU 3", "THU 4", "THU 5", "THU 6", "THU 7" };
+
+            for (int d = 0; d < 3; d++) {
+                int apiDay = d + 1; // Days 1, 2, 3 (next 3 days!)
+                if (!doc["daily"]["temperature_2m_max"][apiDay].isNull()) {
+                    _data.forecast[d].tempMax = doc["daily"]["temperature_2m_max"][apiDay] | 32.0f;
+                    _data.forecast[d].tempMin = doc["daily"]["temperature_2m_min"][apiDay] | 24.0f;
+                    int codeD = doc["daily"]["weather_code"][apiDay] | 0;
+
+                    if (codeD == 0) {
+                        _data.forecast[d].type = WEATHER_CLEAR;
+                        strlcpy(_data.forecast[d].condText, "Nang dep", sizeof(_data.forecast[d].condText));
+                    } else if (codeD <= 3) {
+                        _data.forecast[d].type = WEATHER_CLOUDY;
+                        strlcpy(_data.forecast[d].condText, "Co may", sizeof(_data.forecast[d].condText));
+                    } else if (codeD == 45 || codeD == 48) {
+                        _data.forecast[d].type = WEATHER_MIST;
+                        strlcpy(_data.forecast[d].condText, "Suong mu", sizeof(_data.forecast[d].condText));
+                    } else if ((codeD >= 51 && codeD <= 67) || (codeD >= 80 && codeD <= 82)) {
+                        _data.forecast[d].type = WEATHER_RAIN;
+                        strlcpy(_data.forecast[d].condText, "Co mua", sizeof(_data.forecast[d].condText));
+                    } else if (codeD >= 95) {
+                        _data.forecast[d].type = WEATHER_STORM;
+                        strlcpy(_data.forecast[d].condText, "Mua dong", sizeof(_data.forecast[d].condText));
+                    } else {
+                        _data.forecast[d].type = WEATHER_CLOUDY;
+                        strlcpy(_data.forecast[d].condText, "May nhe", sizeof(_data.forecast[d].condText));
+                    }
+                }
+                int wday = (curTm.tm_wday + apiDay) % 7;
+                strlcpy(_data.forecast[d].dayName, dayNames[wday], sizeof(_data.forecast[d].dayName));
+            }
+
             _data.valid = true;
 
-            Serial.printf("[Weather] ✓ Open-Meteo OK: %.1f°C, %s (%s), %d%%RH, Wind: %.1f km/h, UV: %.1f\n",
-                _data.temp, _data.main, _data.description, _data.humidity, _data.windSpeed, _data.uvIndex);
+            Serial.printf("[Weather] ✓ Open-Meteo OK: %.1f°C, %s, %d%%RH, Wind: %.1f km/h, UV: %.1f | Next 3 days forecast loaded\n",
+                _data.temp, _data.main, _data.humidity, _data.windSpeed, _data.uvIndex);
         } else {
             Serial.printf("[Weather] JSON parse error: %s\n", err.c_str());
         }

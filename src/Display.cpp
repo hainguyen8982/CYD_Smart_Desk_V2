@@ -306,8 +306,8 @@ void Display::renderPage0_WeatherClock() {
     _spr.setTextColor(RGB565(100, 150, 200));
     _spr.drawString(">", leftX + cardW - 12, cardY + 11, 1);
 
-    // Divider line
-    _spr.drawFastHLine(leftX + 8, cardY + 22, cardW - 16, theme.cardBorder);
+    // Divider line (Soft neutral light gray)
+    _spr.drawFastHLine(leftX + 8, cardY + 22, cardW - 16, RGB565(110, 115, 125));
 
     // Main Row: Weather Icon (prominent 32px) + Temp (Font 4) + Condition
     // Icon placed with ample breathing room below divider line
@@ -367,8 +367,8 @@ void Display::renderPage0_WeatherClock() {
     _spr.setTextColor(RGB565(100, 150, 200));
     _spr.drawString(">", rightX + cardW - 12, cardY + 11, 1);
 
-    // Divider line
-    _spr.drawFastHLine(rightX + 8, cardY + 22, cardW - 16, theme.cardBorder);
+    // Divider line (Soft neutral light gray)
+    _spr.drawFastHLine(rightX + 8, cardY + 22, cardW - 16, RGB565(110, 115, 125));
 
     // Main Row: Moon Icon (28px) + Lunar Date (Font 4) + Can Chi Ngay on separate line
     // Centered at cardY + 49 to align horizontally with weather icon
@@ -394,7 +394,7 @@ void Display::renderPage0_WeatherClock() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-//  POPUP MODAL 1: CHI TIET THOI TIET
+//  POPUP MODAL 1: CHI TIET THOI TIET (Tầng 1: Hiện tại | Tầng 2: Dự báo 3 ngày)
 // ═══════════════════════════════════════════════════════════════════════
 void Display::renderWeatherPopup() {
     int16_t mx = 20;
@@ -436,22 +436,31 @@ void Display::renderWeatherPopup() {
     // Top divider line (Y = my + 30)
     _spr.drawFastHLine(mx + 12, my + 30, mw - 24, RGB565(40, 60, 90));
 
-    // 2. Main Row: Centered evenly between Y = my + 30 and Y = my + 100
-    int16_t midCy = my + 65;
-    drawWeatherIcon(mx + 42, midCy, wType, night);
+    // ══════════════════════════════════════════════════════════════════
+    // TẦNG 1: Thời tiết hiện tại (Layout chuẩn: Icon to bên trái, 2 dòng thông số bên phải)
+    // ══════════════════════════════════════════════════════════════════
+    // Cột trái: Icon thời tiết lớn (tâm Y = my + 57, cân đối hoàn hảo giữa 2 vạch kẻ)
+    drawWeatherIcon(mx + 25, my + 57, wType, night);
 
+    // Cột phải: Canh trái từ infoX = mx + 50 (ngay sau icon)
+    int16_t infoX = mx + 50;
+
+    // Dòng 1 (Y = my + 38): Nhiệt độ to + Trạng thái
     char tempNum[8];
     snprintf(tempNum, sizeof(tempNum), "%.0f", w.valid ? w.temp : 29.0f);
-    _spr.setTextDatum(ML_DATUM);
+    _spr.setTextDatum(TL_DATUM);
     _spr.setTextColor(C_WHITE);
-    _spr.drawString(tempNum, mx + 80, my + 58, 6);
+    _spr.drawString(tempNum, infoX, my + 38, 4);
 
-    int16_t numW = _spr.textWidth(tempNum, 6);
-    int16_t degX = mx + 80 + numW + 4;
-    _spr.drawCircle(degX + 3, my + 49, 3, C_GOLD);
-    _spr.drawCircle(degX + 3, my + 49, 2, C_GOLD);
+    int16_t numW = _spr.textWidth(tempNum, 4);
+    int16_t degX = infoX + numW + 2;
+    _spr.drawCircle(degX + 2, my + 41, 2, C_GOLD);
     _spr.setTextColor(C_GOLD);
-    _spr.drawString("C", degX + 11, my + 48, 4);
+    _spr.drawString("C", degX + 7, my + 40, 2);
+
+    // Dấu chấm phân cách •
+    _spr.setTextColor(RGB565(90, 130, 180));
+    _spr.drawString("•", degX + 23, my + 40, 2);
 
     const char* condStr = "Quang dang";
     switch (wType) {
@@ -464,45 +473,85 @@ void Display::renderWeatherPopup() {
         default:             condStr = "Troi mat me"; break;
     }
     _spr.setTextColor(RGB565(255, 215, 0)); // Gold
-    _spr.drawString(condStr, mx + 80, my + 84, 2);
+    _spr.drawString(condStr, degX + 33, my + 40, 2);
 
-    // Bottom divider line (Y = my + 100)
-    _spr.drawFastHLine(mx + 12, my + 100, mw - 24, RGB565(40, 60, 90));
-
-    // 3. Three Detailed Metric Rows (Evenly spaced without bottom footer)
-    // Row 1: Do am
-    drawMiniDrop(_spr, mx + 24, my + 120, C_CYAN);
+    // Dòng 2 (Y = my + 68): 3 thông số Độ ẩm • Gió • UV tinh gọn (bỏ chữ thừa vì đã có icon)
     _spr.setTextDatum(ML_DATUM);
-    _spr.setTextColor(RGB565(170, 200, 230));
-    _spr.drawString("Do am khong khi:", mx + 36, my + 120, 2);
-    char humVal[16];
-    snprintf(humVal, sizeof(humVal), "%d%%", w.valid ? w.humidity : 78);
-    _spr.setTextDatum(MR_DATUM);
-    _spr.setTextColor(C_WHITE);
-    _spr.drawString(humVal, mx + mw - 20, my + 120, 2);
 
-    // Row 2: Toc do gio
-    drawMiniWind(_spr, mx + 24, my + 145, RGB565(120, 210, 255));
-    _spr.setTextDatum(ML_DATUM);
-    _spr.setTextColor(RGB565(170, 200, 230));
-    _spr.drawString("Toc do gio:", mx + 36, my + 145, 2);
-    char windVal[16];
-    snprintf(windVal, sizeof(windVal), "%.1f km/h", w.valid ? w.windSpeed : 7.2f);
-    _spr.setTextDatum(MR_DATUM);
-    _spr.setTextColor(C_WHITE);
-    _spr.drawString(windVal, mx + mw - 20, my + 145, 2);
-
-    // Row 3: Chi so UV
-    drawMiniSun(_spr, mx + 24, my + 170, C_GOLD);
-    _spr.setTextDatum(ML_DATUM);
-    _spr.setTextColor(RGB565(170, 200, 230));
-    _spr.drawString("Chi so tia UV:", mx + 36, my + 170, 2);
-    char uvVal[16];
+    char humStr[16];
+    snprintf(humStr, sizeof(humStr), "%d%%", w.valid ? w.humidity : 78);
+    char windStr[20];
+    snprintf(windStr, sizeof(windStr), "%.1f km/h", w.valid ? w.windSpeed : 7.2f);
+    char uvStr[16];
     float uv = w.valid ? w.uvIndex : 6.0f;
-    snprintf(uvVal, sizeof(uvVal), "%.0f (Cao)", uv);
-    _spr.setTextDatum(MR_DATUM);
+    snprintf(uvStr, sizeof(uvStr), "UV %.0f", uv);
+
+    const int16_t gap = 10; // Khoảng cách đệm đồng đều rộng rãi
+    int16_t currX = infoX;
+
+    // 1. Độ ẩm (Giọt nước + 78%, nâng lên 1px cho cân chuẩn trục với số)
+    drawMiniDrop(_spr, currX + 2, my + 67, C_CYAN);
+    _spr.setTextColor(RGB565(170, 205, 235));
+    _spr.drawString(humStr, currX + 11, my + 68, 1);
+    currX += 11 + _spr.textWidth(humStr, 1) + gap;
+
+    // Dấu chấm phân cách 1 •
+    _spr.setTextColor(RGB565(80, 110, 150));
+    _spr.drawString("•", currX, my + 68, 1);
+    currX += _spr.textWidth("•", 1) + gap;
+
+    // 2. Tốc độ gió (Cánh gió + 7.2 km/h)
+    drawMiniWind(_spr, currX + 2, my + 68, RGB565(120, 210, 255));
+    _spr.setTextColor(RGB565(170, 205, 235));
+    _spr.drawString(windStr, currX + 12, my + 68, 1);
+    currX += 12 + _spr.textWidth(windStr, 1) + gap;
+
+    // Dấu chấm phân cách 2 •
+    _spr.setTextColor(RGB565(80, 110, 150));
+    _spr.drawString("•", currX, my + 68, 1);
+    currX += _spr.textWidth("•", 1) + gap;
+
+    // 3. Chỉ số UV (Mặt trời + UV 6)
+    drawMiniSun(_spr, currX + 2, my + 68, C_GOLD);
     _spr.setTextColor(C_GOLD);
-    _spr.drawString(uvVal, mx + mw - 20, my + 170, 2);
+    _spr.drawString(uvStr, currX + 12, my + 68, 1);
+
+    // Đường kẻ phân cách giữa Tầng 1 và Tầng 2 (Y = my + 84)
+    _spr.drawFastHLine(mx + 12, my + 84, mw - 24, RGB565(40, 60, 90));
+
+    // ══════════════════════════════════════════════════════════════════
+    // TẦNG 2: 3 Cột Dự Báo Thời Tiết Liền Mạch (Phân cách bằng 2 vạch dọc thanh mảnh)
+    // ══════════════════════════════════════════════════════════════════
+    int16_t colW = (mw - 16) / 3; // ~88px mỗi cột
+    int16_t startX = mx + 8;
+
+    // Vẽ 2 vạch ngăn cách dọc mảnh, tinh tế giữa 3 cột (từ Y = my + 94 đến my + 184)
+    _spr.drawFastVLine(startX + colW, my + 94, 90, RGB565(25, 40, 62));
+    _spr.drawFastVLine(startX + colW * 2, my + 94, 90, RGB565(25, 40, 62));
+
+    for (int d = 0; d < 3; d++) {
+        int16_t colCenterX = startX + d * colW + colW / 2;
+
+        // 1. Tên Thứ (Font 2, đồng bộ màu trắng sáng cho cả 3 ngày)
+        _spr.setTextDatum(MC_DATUM);
+        _spr.setTextColor(C_WHITE);
+        _spr.drawString(w.forecast[d].dayName, colCenterX, my + 104, 2);
+
+        // 2. Weather Icon mini (16px, nằm thoáng ở tâm)
+        drawForecastIcon(colCenterX, my + 127, w.forecast[d].type);
+
+        // 3. Trạng thái thời tiết (Font 1, Gold)
+        _spr.setTextDatum(MC_DATUM);
+        _spr.setTextColor(RGB565(255, 215, 0)); // Gold
+        _spr.drawString(w.forecast[d].condText, colCenterX, my + 149, 1);
+
+        // 4. Nhiệt độ Min - Max (Font 1)
+        char tRange[16];
+        snprintf(tRange, sizeof(tRange), "%.0f - %.0f C", w.forecast[d].tempMin, w.forecast[d].tempMax);
+        _spr.setTextColor(RGB565(200, 225, 245));
+        _spr.drawString(tRange, colCenterX, my + 169, 1);
+        _spr.drawCircle(colCenterX + _spr.textWidth(tRange, 1) / 2 - 6, my + 166, 1, C_GOLD);
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -714,6 +763,65 @@ void Display::drawWeatherIcon(int16_t cx, int16_t cy, uint8_t wType, bool isNigh
             break;
         default:
             drawPartlyCloudyIcon(cx, cy);
+            break;
+    }
+}
+
+void Display::drawForecastIcon(int16_t cx, int16_t cy, uint8_t wType) {
+    switch (wType) {
+        case WEATHER_CLEAR:
+            // Compact 14px warm glowing sun
+            _spr.fillCircle(cx, cy, 6, C_SUN_ORANGE);
+            _spr.fillCircle(cx, cy, 5, C_SUN_YELLOW);
+            _spr.fillCircle(cx - 1, cy - 1, 2, RGB565(255, 255, 180));
+            _spr.drawPixel(cx, cy - 7, C_SUN_YELLOW);
+            _spr.drawPixel(cx, cy + 7, C_SUN_YELLOW);
+            _spr.drawPixel(cx - 7, cy, C_SUN_YELLOW);
+            _spr.drawPixel(cx + 7, cy, C_SUN_YELLOW);
+            break;
+        case WEATHER_CLOUDY:
+            // Mini cute cloud with warm sun peek
+            _spr.fillCircle(cx + 4, cy - 3, 4, C_SUN_YELLOW);
+            _spr.fillCircle(cx - 4, cy + 1, 4, RGB565(140, 165, 190));
+            _spr.fillCircle(cx + 3, cy + 1, 4, RGB565(140, 165, 190));
+            _spr.fillCircle(cx - 1, cy - 1, 5, RGB565(205, 225, 245));
+            _spr.fillRect(cx - 4, cy, 8, 4, RGB565(170, 195, 220));
+            break;
+        case WEATHER_RAIN:
+            // Mini rain cloud with cyan raindrops
+            _spr.fillCircle(cx - 4, cy - 1, 4, RGB565(115, 135, 160));
+            _spr.fillCircle(cx + 3, cy - 1, 4, RGB565(115, 135, 160));
+            _spr.fillCircle(cx - 1, cy - 3, 5, RGB565(165, 185, 210));
+            _spr.fillRect(cx - 4, cy - 1, 8, 3, RGB565(145, 165, 190));
+            _spr.drawLine(cx - 4, cy + 5, cx - 5, cy + 8, RGB565(0, 220, 255));
+            _spr.drawLine(cx, cy + 5, cx - 1, cy + 8, RGB565(0, 220, 255));
+            _spr.drawLine(cx + 4, cy + 5, cx + 3, cy + 8, RGB565(0, 220, 255));
+            break;
+        case WEATHER_STORM:
+            // Darker storm cloud with golden lightning bolt
+            _spr.fillCircle(cx - 4, cy - 2, 4, RGB565(85, 100, 120));
+            _spr.fillCircle(cx + 3, cy - 2, 4, RGB565(85, 100, 120));
+            _spr.fillCircle(cx - 1, cy - 4, 5, RGB565(115, 130, 150));
+            _spr.fillRect(cx - 4, cy - 2, 8, 3, RGB565(95, 110, 130));
+            _spr.drawLine(cx, cy + 3, cx - 2, cy + 6, RGB565(255, 230, 0));
+            _spr.drawLine(cx - 2, cy + 6, cx + 1, cy + 6, RGB565(255, 230, 0));
+            _spr.drawLine(cx + 1, cy + 6, cx - 1, cy + 9, RGB565(255, 230, 0));
+            break;
+        case WEATHER_SNOW:
+            _spr.fillCircle(cx - 3, cy - 2, 4, RGB565(155, 180, 205));
+            _spr.fillCircle(cx + 3, cy - 2, 4, RGB565(155, 180, 205));
+            _spr.fillCircle(cx, cy - 4, 5, RGB565(195, 215, 235));
+            _spr.drawPixel(cx - 3, cy + 5, C_WHITE);
+            _spr.drawPixel(cx + 3, cy + 5, C_WHITE);
+            _spr.drawPixel(cx, cy + 8, C_WHITE);
+            break;
+        case WEATHER_MIST:
+            _spr.drawFastHLine(cx - 7, cy - 3, 14, RGB565(155, 180, 205));
+            _spr.drawFastHLine(cx - 9, cy, 18, RGB565(135, 160, 190));
+            _spr.drawFastHLine(cx - 6, cy + 3, 12, RGB565(115, 145, 175));
+            break;
+        default:
+            _spr.fillCircle(cx, cy, 5, C_SUN_YELLOW);
             break;
     }
 }

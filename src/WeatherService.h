@@ -12,6 +12,25 @@
 #include <time.h>
 #include "Config.h"
 
+// ─── Classify weather into simple type for icon rendering ────────────
+enum WeatherType : uint8_t {
+    WEATHER_CLEAR   = 0,
+    WEATHER_CLOUDY  = 1,
+    WEATHER_RAIN    = 2,
+    WEATHER_STORM   = 3,
+    WEATHER_SNOW    = 4,
+    WEATHER_MIST    = 5,
+};
+
+// ─── Daily Forecast structure (3-day forecast) ───────────────────────
+struct DailyForecast {
+    float tempMax;          // Max temperature (°C)
+    float tempMin;          // Min temperature (°C)
+    WeatherType type;       // WEATHER_CLEAR, etc.
+    char dayName[12];       // "H.NAY", "T.MAI", "THU 4", etc.
+    char condText[16];      // "Nang dep", "Co mua", etc.
+};
+
 // ─── Weather data structure ──────────────────────────────────────────
 struct WeatherData {
     float temp;             // Current temperature (°C)
@@ -30,16 +49,7 @@ struct WeatherData {
     uint8_t sunsetMin;      // 0..59
     float uvIndex;          // UV index
     bool valid;             // Data fetched successfully?
-};
-
-// ─── Classify weather into simple type for icon rendering ────────────
-enum WeatherType : uint8_t {
-    WEATHER_CLEAR   = 0,
-    WEATHER_CLOUDY  = 1,
-    WEATHER_RAIN    = 2,
-    WEATHER_STORM   = 3,
-    WEATHER_SNOW    = 4,
-    WEATHER_MIST    = 5,
+    DailyForecast forecast[3]; // 3-day forecast: [0] Today, [1] Tomorrow, [2] Day after
 };
 
 class WeatherService {

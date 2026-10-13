@@ -99,6 +99,7 @@ private:
     void drawRainIcon(int16_t cx, int16_t cy);
     void drawStormIcon(int16_t cx, int16_t cy);
     void drawMoonIcon(int16_t cx, int16_t cy, int16_t r, uint8_t lunarDay, uint16_t bgTint = 0);
+    void drawForecastIcon(int16_t cx, int16_t cy, uint8_t weatherType);
 };
 
 extern Display display;
