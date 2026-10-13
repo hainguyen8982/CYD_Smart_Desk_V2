@@ -13,6 +13,7 @@
 #include "TouchManager.h"
 #include "vn_lunar.h"
 #include "HardwareManager.h"
+#include "DockIconsColor20.h"
 #include <LittleFS.h>
 #include <TJpg_Decoder.h>
 #include <time.h>
@@ -1250,23 +1251,10 @@ void Display::renderDock() {
         bool isActive = (i < 4 && _currentPage == i);
 
         if (isActive) {
-            // 1. Pure obsidian interior (deep black, ZERO navy blue)
-            _spr.fillRoundRect(cx - 17, dockY + 3, 34, 30, 15, RGB565(8, 12, 20));
-
-            // 2. Soft atmospheric outer halo
-            uint16_t haloColor = ((theme.accent & 0xF7DE) >> 1);
-            _spr.drawRoundRect(cx - 18, dockY + 2, 36, 32, 16, haloColor);
-
-            // 3. Double-thick intense Neon Border (pure radiant theme.accent)
-            _spr.drawRoundRect(cx - 17, dockY + 3, 34, 30, 15, theme.accent);
-            _spr.drawRoundRect(cx - 16, dockY + 4, 32, 28, 14, theme.accent);
-
-            // 4. Top specular highlight spark
-            _spr.drawFastHLine(cx - 8, dockY + 5, 16, C_WHITE);
-
-            // 5. Active Underglow LED Indicator Bar at bottom of dock
-            _spr.fillRoundRect(cx - 9, dockY + dockH - 4, 18, 2, 1, theme.accent);
-            _spr.drawFastHLine(cx - 5, dockY + dockH - 4, 10, C_WHITE);
+            // Nền tối nhẹ cho icon đang được chọn (Bo góc tròn thực sự r=10)
+            _spr.fillRoundRect(cx - 16, dockY + 4, 32, 28, 10, RGB565(18, 24, 36));
+            // Đường bao khi chọn icon 1px, màu xanh lá, 4 góc bo tròn thực sự (r=10, không bị vát)
+            _spr.drawRoundRect(cx - 16, dockY + 4, 32, 28, 10, RGB565(0, 230, 118));
         }
 
         switch (i) {
@@ -1279,82 +1267,38 @@ void Display::renderDock() {
     }
 }
 
-// ─── Dock Vector Icons (Rich, Vibrant Multi-Color Icons) ─────────────
+// ─── Professional 20x20 Color Glyph Renderer (Vibrant & Crisp) ────────
+static void drawDockBitmap20(TFT_eSprite& spr, int16_t cx, int16_t cy, const uint16_t* bmp) {
+    int16_t startX = cx - 10;
+    int16_t startY = cy - 10;
+    for (int r = 0; r < 20; r++) {
+        for (int c = 0; c < 20; c++) {
+            uint16_t color = pgm_read_word(&bmp[r * 20 + c]);
+            if (color != 0x0000) {
+                spr.drawPixel(startX + c, startY + r, color);
+            }
+        }
+    }
+}
+
 void Display::drawDockIconHome(int16_t cx, int16_t cy, bool isActive) {
-    // Ống khói màu xám bạc
-    _spr.fillRect(cx + 4, cy - 8, 2, 4, RGB565(170, 185, 205));
-    // Mái ngói đỏ cam rực rỡ
-    _spr.fillTriangle(cx, cy - 8, cx - 10, cy, cx + 10, cy, RGB565(255, 75, 55));
-    _spr.drawLine(cx, cy - 9, cx - 10, cy - 1, RGB565(255, 140, 110)); // Viền mái sáng
-    // Thân nhà màu trắng kem
-    _spr.fillRoundRect(cx - 7, cy, 14, 9, 1, C_WHITE);
-    // Cánh cửa màu vàng gold ấm áp
-    _spr.fillRoundRect(cx - 3, cy + 2, 6, 7, 1, RGB565(255, 210, 0));
-    _spr.drawPixel(cx + 1, cy + 5, RGB565(120, 60, 0)); // Tay nắm cửa
+    drawDockBitmap20(_spr, cx, cy, dock_pro_home_20x20);
 }
 
 void Display::drawDockIconCalendar(int16_t cx, int16_t cy, bool isActive) {
-    // Thân lịch màu trắng tinh
-    _spr.fillRoundRect(cx - 8, cy - 5, 16, 14, 2, C_WHITE);
-    // Gáy lịch trên màu đỏ tươi rực rỡ
-    _spr.fillRoundRect(cx - 8, cy - 7, 16, 5, 1, RGB565(255, 50, 50));
-    // 2 khuyên sắt móc lịch màu bạc
-    _spr.fillRoundRect(cx - 5, cy - 9, 2, 4, 1, RGB565(220, 230, 245));
-    _spr.fillRoundRect(cx + 3, cy - 9, 2, 4, 1, RGB565(220, 230, 245));
-    // 4 ô ngày màu sắc sinh động (Cyan, Gold, Green)
-    _spr.fillRect(cx - 5, cy + 1, 3, 2, RGB565(0, 200, 255));
-    _spr.fillRect(cx + 2, cy + 1, 3, 2, RGB565(0, 200, 255));
-    _spr.fillRect(cx - 5, cy + 4, 3, 2, RGB565(255, 185, 0)); // Ngày nổi bật
-    _spr.fillRect(cx + 2, cy + 4, 3, 2, RGB565(0, 230, 118)); // Ngày hoàn thành
+    drawDockBitmap20(_spr, cx, cy, dock_pro_calendar_20x20);
 }
 
 void Display::drawDockIconFinance(int16_t cx, int16_t cy, bool isActive) {
-    // 3 cột tăng trưởng màu Xanh lục bảo (Emerald Green)
-    _spr.fillRoundRect(cx - 8, cy + 2, 4, 7, 1, RGB565(0, 235, 120));
-    _spr.fillRoundRect(cx - 2, cy - 2, 4, 11, 1, RGB565(0, 235, 120));
-    _spr.fillRoundRect(cx + 4, cy - 6, 4, 15, 1, RGB565(0, 235, 120));
-    // Vạch sáng trên đỉnh mỗi cột
-    _spr.drawFastHLine(cx - 7, cy + 2, 2, RGB565(180, 255, 210));
-    _spr.drawFastHLine(cx - 1, cy - 2, 2, RGB565(180, 255, 210));
-    _spr.drawFastHLine(cx + 5, cy - 6, 2, RGB565(180, 255, 210));
-    // Đường xu hướng vút lên màu Vàng Gold
-    _spr.drawLine(cx - 8, cy + 1, cx - 2, cy - 3, RGB565(255, 215, 0));
-    _spr.drawLine(cx - 2, cy - 3, cx + 7, cy - 9, RGB565(255, 215, 0));
-    _spr.drawLine(cx - 8, cy + 2, cx + 7, cy - 8, RGB565(255, 215, 0));
-    // Mũi tên nhọn hướng lên
-    _spr.fillTriangle(cx + 8, cy - 11, cx + 4, cy - 7, cx + 8, cy - 6, RGB565(255, 215, 0));
+    drawDockBitmap20(_spr, cx, cy, dock_pro_finance_20x20);
 }
 
 void Display::drawDockIconPomodoro(int16_t cx, int16_t cy, bool isActive) {
-    // Quả cà chua màu Đỏ Pomodoro tươi rói
-    _spr.fillCircle(cx, cy + 1, 8, RGB565(255, 45, 40));
-    // Núm bấm trên màu bạc sáng
-    _spr.fillRoundRect(cx - 2, cy - 9, 5, 3, 1, RGB565(230, 240, 255));
-    // Mặt đồng hồ màu trắng sữa bên trong
-    _spr.fillCircle(cx, cy + 1, 6, RGB565(255, 245, 240));
-    // Trục kim
-    _spr.drawPixel(cx, cy + 1, RGB565(40, 40, 40));
-    // Kim giờ (đen) và kim phút (xanh cyan)
-    _spr.drawLine(cx, cy + 1, cx, cy - 3, RGB565(30, 30, 30));
-    _spr.drawLine(cx, cy + 1, cx + 3, cy - 1, RGB565(0, 180, 240));
-    // 4 vạch số cam đỏ ở 12h, 3h, 6h, 9h
-    _spr.drawPixel(cx, cy - 4, RGB565(255, 80, 60));
-    _spr.drawPixel(cx + 5, cy + 1, RGB565(255, 80, 60));
-    _spr.drawPixel(cx, cy + 6, RGB565(255, 80, 60));
-    _spr.drawPixel(cx - 5, cy + 1, RGB565(255, 80, 60));
+    drawDockBitmap20(_spr, cx, cy, dock_pro_pomodoro_20x20);
 }
 
 void Display::drawDockIconTheme(int16_t cx, int16_t cy, bool isActive) {
-    // Bảng màu họa sĩ màu Gỗ Vàng Ấm
-    _spr.fillCircle(cx, cy, 8, RGB565(235, 200, 150));
-    _spr.drawCircle(cx, cy, 8, RGB565(180, 145, 95));
-    // Lỗ xỏ ngón tay cái màu nền
-    _spr.fillCircle(cx + 3, cy + 3, 2, RGB565(12, 16, 26));
-    // 4 giọt sơn rực rỡ tươi sáng
-    _spr.fillCircle(cx - 4, cy - 3, 2, RGB565(255, 40, 40));  // Đỏ tươi
-    _spr.fillCircle(cx + 2, cy - 4, 2, RGB565(255, 220, 0)); // Vàng chanh
-    _spr.fillCircle(cx - 4, cy + 3, 2, RGB565(0, 215, 255)); // Cyan rực
-    _spr.fillCircle(cx + 3, cy - 1, 2, RGB565(40, 230, 90)); // Xanh lá mạ
+    drawDockBitmap20(_spr, cx, cy, dock_pro_theme_20x20);
 }
 
 // ═══════════════════════════════════════════════════════════════════════
