@@ -24,7 +24,11 @@ struct WeatherData {
     char city[32];          // City name
     int32_t sunrise;        // Unix timestamp
     int32_t sunset;         // Unix timestamp
-    float uvIndex;          // UV index (requires OneCall API)
+    uint8_t sunriseHour;    // 0..23
+    uint8_t sunriseMin;     // 0..59
+    uint8_t sunsetHour;     // 0..23
+    uint8_t sunsetMin;      // 0..59
+    float uvIndex;          // UV index
     bool valid;             // Data fetched successfully?
 };
 

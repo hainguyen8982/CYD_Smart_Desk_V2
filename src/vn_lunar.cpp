@@ -166,3 +166,29 @@ LunarDate LunarCalendar::convertSolar2Lunar(uint8_t dd, uint8_t mm, uint16_t yy)
 
     return result;
 }
+
+static const char* const SOLAR_TERMS[24] = {
+    "Xuan Phan", "Thanh Minh", "Coc Vu",     "Lap Ha",
+    "Tieu Man",  "Mang Chung", "Ha Chi",     "Tieu Thu",
+    "Dai Thu",   "Lap Thu",    "Xu Thu",     "Bach Lo",
+    "Thu Phan",  "Han Lo",     "Suong Giang", "Lap Dong",
+    "Tieu Tuyet", "Dai Tuyet",  "Dong Chi",   "Tieu Han",
+    "Dai Han",   "Lap Xuan",   "Vu Thuy",    "Kinh Trap"
+};
+
+const char* LunarCalendar::getSolarTermName(uint8_t dd, uint8_t mm, uint16_t yy) {
+    long long jdn = getJulius(dd, mm, yy);
+    double timeZone = 7.0;
+    double T = (jdn - 2451545.5 - timeZone / 24.0) / 36525.0;
+    double T2 = T * T;
+    double dr = PI / 180.0;
+    double M = 357.52910 + 35999.05030 * T - 0.0001559 * T2 - 0.00000048 * T * T2;
+    double L0 = 280.46645 + 36000.76983 * T + 0.0003032 * T2;
+    double DL = (1.914600 - 0.004817 * T - 0.000014 * T2) * sin(dr * M);
+    DL += (0.019993 - 0.000101 * T) * sin(dr * 2 * M) + 0.000290 * sin(dr * 3 * M);
+    double L = (L0 + DL) * dr;
+    L = L - PI * 2 * (uint32_t)(L / (PI * 2));
+    if (L < 0) L += PI * 2;
+    uint32_t termIdx = (uint32_t)(L / PI * 12.0) % 24;
+    return SOLAR_TERMS[termIdx];
+}

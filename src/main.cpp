@@ -14,6 +14,7 @@
 #include "TouchManager.h"
 #include "Display.h"
 #include "WeatherService.h"
+#include "WebDashboard.h"
 
 void setup() {
     Serial.begin(115200);
@@ -39,6 +40,11 @@ void setup() {
 
     // 5. Connect WiFi, sync NTP, fetch weather
     weather.begin();
+
+    // 6. Start Web Dashboard for mobile wallpaper upload & controls
+    if (weather.isConnected()) {
+        webDashboard.begin();
+    }
 
     Serial.println("[System] Setup complete!");
     Serial.printf("[System] Free heap: %d bytes\n", ESP.getFreeHeap());
@@ -77,6 +83,12 @@ void loop() {
     // 4. Update weather data periodically
     weather.update();
 
-    // 5. Render display & dock (internally rate-limited to ~30 FPS)
+    // 5. Maintain Web Dashboard server
+    if (weather.isConnected() && !webDashboard.isRunning()) {
+        webDashboard.begin();
+    }
+    webDashboard.update();
+
+    // 6. Render display & dock (internally rate-limited to ~30 FPS)
     display.update();
 }

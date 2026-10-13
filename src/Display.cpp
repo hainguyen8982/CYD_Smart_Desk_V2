@@ -13,19 +13,56 @@
 #include "TouchManager.h"
 #include "vn_lunar.h"
 #include "HardwareManager.h"
+#include <LittleFS.h>
+#include <TJpg_Decoder.h>
 #include <time.h>
 
 Display display;
 
+static TFT_eSprite* s_sprInstance = nullptr;
+
+bool Display::tjpgRenderCallback(int16_t x, int16_t y, uint16_t w, uint16_t h, uint16_t* bitmap) {
+    if (!s_sprInstance) return false;
+    // Dim pixels by ~38% (62% luminance) for optimal contrast with neon and white text
+    for (int i = 0; i < w * h; i++) {
+        uint16_t p = bitmap[i];
+        uint16_t r = (((p >> 11) & 0x1F) * 62) / 100;
+        uint16_t g = (((p >> 5)  & 0x3F) * 62) / 100;
+        uint16_t b = (( p        & 0x1F) * 62) / 100;
+        bitmap[i] = (r << 11) | (g << 5) | b;
+    }
+    s_sprInstance->pushImage(x, y, w, h, bitmap);
+    return true;
+}
+
+void Display::notifyWallpaperUpdated() {
+    _hasWallpaper = LittleFS.exists("/wallpaper.jpg");
+    _wpCheckNeeded = true;
+}
+
 // ─── Constructor ─────────────────────────────────────────────────────
 Display::Display()
-    : _tft(), _spr(&_tft), _sprReady(false), _lastRender(0),
+    : _hasWallpaper(false), _wpCheckNeeded(true),
+      _tft(), _spr(&_tft), _sprReady(false), _lastRender(0),
       _currentPage(PAGE_CLOCK), _dockVisible(true), _lastDockActivity(0),
+      _activePopup(POPUP_NONE),
       _calYear(0), _calMonth(0) {}
 
 // ─── Begin ───────────────────────────────────────────────────────────
 void Display::begin() {
     initTheme();                   // Load saved theme from NVS
+
+    // Mount LittleFS for custom wallpaper storage
+    if (LittleFS.begin(true)) {
+        Serial.println("[Display] LittleFS mounted successfully");
+        _hasWallpaper = LittleFS.exists("/wallpaper.jpg");
+        if (_hasWallpaper) {
+            Serial.println("[Display] Custom wallpaper detected (/wallpaper.jpg)");
+        }
+    } else {
+        Serial.println("[Display] LittleFS mount failed");
+    }
+
     _tft.init();
     delay(100);
     _tft.setRotation(1);           // Landscape 320×240
@@ -106,7 +143,14 @@ void Display::update() {
         default:            renderPage0_WeatherClock(); break;
     }
 
-    renderDock();
+    // If popup modal is active, render it over page; otherwise render dock
+    if (_activePopup == POPUP_WEATHER) {
+        renderWeatherPopup();
+    } else if (_activePopup == POPUP_LUNAR) {
+        renderLunarPopup();
+    } else {
+        renderDock();
+    }
 
     _spr.pushSprite(0, 0);
 }
@@ -126,288 +170,479 @@ void Display::update() {
 //  │                   └───────────────────┘                         │
 //  │  ┌─ HOME ─┐  ┌─ BACK ─┐  ┌─ MENU ─┐                           │
 //  └──────────────────────────────────────────────────────────────────┘
+// ─── Mini icons for Weather Metrics (Water Drop, Wind, UV) ───────────
+static void drawMiniDrop(TFT_eSprite& spr, int16_t x, int16_t y, uint16_t color) {
+    spr.fillCircle(x, y + 2, 2, color);
+    spr.drawPixel(x, y - 2, color);
+    spr.drawLine(x - 2, y + 2, x, y - 2, color);
+    spr.drawLine(x + 2, y + 2, x, y - 2, color);
+}
+
+static void drawMiniWind(TFT_eSprite& spr, int16_t x, int16_t y, uint16_t color) {
+    spr.drawFastHLine(x - 4, y - 2, 8, color);
+    spr.drawPixel(x + 4, y - 3, color);
+    spr.drawFastHLine(x - 2, y + 2, 6, color);
+    spr.drawPixel(x + 4, y + 3, color);
+}
+
+static void drawMiniSun(TFT_eSprite& spr, int16_t x, int16_t y, uint16_t color) {
+    spr.fillCircle(x, y, 2, color);
+    spr.drawPixel(x, y - 4, color);
+    spr.drawPixel(x, y + 4, color);
+    spr.drawPixel(x - 4, y, color);
+    spr.drawPixel(x + 4, y, color);
+}
+
+static void drawMiniMoon(TFT_eSprite& spr, int16_t x, int16_t y, uint16_t color) {
+    spr.fillCircle(x, y, 3, color);
+    spr.fillCircle(x + 1, y - 1, 3, RGB565(15, 20, 32)); // crescent shadow
+}
+
+static void drawMiniStar(TFT_eSprite& spr, int16_t x, int16_t y, uint16_t color) {
+    spr.drawFastVLine(x, y - 3, 7, color);
+    spr.drawFastHLine(x - 3, y, 7, color);
+    spr.drawPixel(x, y, C_WHITE);
+}
+
+static void drawMiniCal(TFT_eSprite& spr, int16_t x, int16_t y, uint16_t color) {
+    spr.drawRoundRect(x - 3, y - 3, 7, 7, 1, color);
+    spr.drawFastHLine(x - 3, y - 1, 7, color);
+    spr.drawPixel(x - 1, y - 4, color);
+    spr.drawPixel(x + 1, y - 4, color);
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  PAGE 0 — WEATHER CLOCK (Matches user reference image)
 // ═══════════════════════════════════════════════════════════════════════
 void Display::renderPage0_WeatherClock() {
     // ────────────────────────────────────────────────────────────────
-    // 1. BACKGROUND — deep navy + pastel blobs + sparkles
+    // 1. BACKGROUND (Custom Wallpaper OR Deep Obsidian with Ambient Aura)
     // ────────────────────────────────────────────────────────────────
     drawBackground();
 
-    // ────────────────────────────────────────────────────────────────
-    // 2. TIME — Bold rounded digits with cyan outer glow & sparkles
-    // ────────────────────────────────────────────────────────────────
     time_t now = time(NULL);
     struct tm t;
     localtime_r(&now, &t);
 
+    LunarDate lDate = LunarCalendar::convertSolar2Lunar(t.tm_mday, t.tm_mon + 1, 1900 + t.tm_year);
+
+    // ────────────────────────────────────────────────────────────────
+    // 2. GIANT HERO CLOCK — Shifted down to clockCy = 55 for perfect screen balance
+    // ────────────────────────────────────────────────────────────────
     char timeBuf[8];
     snprintf(timeBuf, sizeof(timeBuf), "%02d:%02d", t.tm_hour, t.tm_min);
 
-    // Multi-pass neon cyan glow around the numbers (Font 6)
-    _spr.setTextDatum(TL_DATUM);
+    int16_t clockCx = 160;
+    int16_t clockCy = 55;
 
-    // Outer halo layer (deep sky cyan)
-    _spr.setTextColor(RGB565(0, 100, 180));
-    _spr.drawString(timeBuf, 16, 22, 6);
-    _spr.drawString(timeBuf, 20, 22, 6);
-    _spr.drawString(timeBuf, 18, 20, 6);
-    _spr.drawString(timeBuf, 18, 24, 6);
+    _spr.setTextDatum(MC_DATUM);
 
-    // Inner bright neon glow layer
-    _spr.setTextColor(RGB565(0, 220, 255));
-    _spr.drawString(timeBuf, 17, 21, 6);
-    _spr.drawString(timeBuf, 19, 21, 6);
-    _spr.drawString(timeBuf, 17, 23, 6);
-    _spr.drawString(timeBuf, 19, 23, 6);
+    // Layer 1: Ambient deep cyan glow halo
+    _spr.setTextColor(RGB565(0, 70, 150));
+    _spr.drawString(timeBuf, clockCx - 2, clockCy, 8);
+    _spr.drawString(timeBuf, clockCx + 2, clockCy, 8);
+    _spr.drawString(timeBuf, clockCx, clockCy - 2, 8);
+    _spr.drawString(timeBuf, clockCx, clockCy + 2, 8);
 
-    // Crisp pure white core
-    _spr.setTextColor(C_WHITE);
-    _spr.drawString(timeBuf, 18, 22, 6);
+    // Layer 2: Bright cyan rim
+    _spr.setTextColor(RGB565(0, 190, 255));
+    _spr.drawString(timeBuf, clockCx - 1, clockCy - 1, 8);
+    _spr.drawString(timeBuf, clockCx + 1, clockCy - 1, 8);
+    _spr.drawString(timeBuf, clockCx - 1, clockCy + 1, 8);
+    _spr.drawString(timeBuf, clockCx + 1, clockCy + 1, 8);
 
-    // Cute pastel star sparkles around the clock digits (matching mockup)
-    drawSparkle(13,  16, 3, C_SPARKLE_CYAN);
-    drawSparkle(78,  14, 2, C_BLOB_PINK);
-    drawSparkle(154, 18, 3, C_BLOB_LILAC);
-    drawSparkle(164, 56, 2, C_SPARKLE_CYAN);
-    drawSparkle(13,  64, 2, C_SPARKLE_W);
-    drawStarDot(46,  14, C_WHITE);
-    drawStarDot(116, 14, C_CYAN_GLOW);
-    drawStarDot(168, 36, C_BLOB_PINK);
+    // Layer 3: Solid Electric Neon Cyan body (matching reference image)
+    _spr.setTextColor(RGB565(0, 245, 255));
+    _spr.drawString(timeBuf, clockCx, clockCy, 8);
 
     // ────────────────────────────────────────────────────────────────
-    // 3. DATE — Clean Vietnamese date line
+    // 3. DATE LINE — Centered with ample space (Y = 107, Font 2, Pure White)
     // ────────────────────────────────────────────────────────────────
     const char* vnDayNames[] = {
         "CHU NHAT", "THU HAI", "THU BA", "THU TU",
         "THU NAM", "THU SAU", "THU BAY"
     };
-
     char dateBuf[40];
     snprintf(dateBuf, sizeof(dateBuf), "%s, %02d/%02d/%d",
              vnDayNames[t.tm_wday],
              t.tm_mday, t.tm_mon + 1, 1900 + t.tm_year);
 
-    _spr.setTextDatum(TL_DATUM);
+    _spr.setTextDatum(MC_DATUM);
     _spr.setTextColor(C_WHITE);
-    _spr.drawString(dateBuf, 18, 80, 2);
+    _spr.drawString(dateBuf, 160, 107, 2);
 
     // ────────────────────────────────────────────────────────────────
-    // 4. MOON PHASE & LUNAR CALENDAR (Astronomical Vietnamese Lunar Calendar)
-    // ────────────────────────────────────────────────────────────────
-    LunarDate lDate = LunarCalendar::convertSolar2Lunar(t.tm_mday, t.tm_mon + 1, t.tm_year + 1900);
-    uint8_t lunarDay = lDate.day;
-
-    float moonPct = 0;
-    const char* phaseName = "Trang Non";
-
-    if (lunarDay <= 1)       { phaseName = "Trang Non";         moonPct = 0; }
-    else if (lunarDay <= 6)  { phaseName = "Trang Luoi Liem";   moonPct = lunarDay * 6.7f; }
-    else if (lunarDay <= 8)  { phaseName = "Ban Nguyet Dau";   moonPct = 50; }
-    else if (lunarDay <= 13) { phaseName = "Trang Truong Dan";  moonPct = 50 + (lunarDay - 8) * 6.0f; }
-    else if (lunarDay <= 16) { phaseName = "Trang Tron (Ram)";  moonPct = 100; }
-    else if (lunarDay <= 21) { phaseName = "Trang Khuyet Dan";  moonPct = 100 - (lunarDay - 16) * 6.0f; }
-    else if (lunarDay <= 23) { phaseName = "Ban Nguyet Cuoi";  moonPct = 50; }
-    else                     { phaseName = "Trang Tan Cuoi";   moonPct = 50 - (lunarDay - 23) * 7.0f; }
-
-    _spr.setTextDatum(TL_DATUM);
-    _spr.setTextColor(C_WHITE);
-    _spr.drawString(phaseName, 18, 114, 2);
-
-    // 3D textured moon orb next to phase name
-    int16_t moonOrbX = 18 + _spr.textWidth(phaseName, 2) + 10;
-    drawMoonIcon(moonOrbX, 122, 9, lunarDay);
-
-    // Vietnamese Lunar Date (Am Lich VN chinh xac theo Ho Ngoc Duc)
-    char lunarBuf[32];
-    if (lDate.isLeap) {
-        snprintf(lunarBuf, sizeof(lunarBuf), "AL: %02d/%02d+ - %s", lDate.day, lDate.month, lDate.yearCanChi);
-    } else {
-        snprintf(lunarBuf, sizeof(lunarBuf), "AL: %02d/%02d - %s", lDate.day, lDate.month, lDate.yearCanChi);
-    }
-    _spr.setTextColor(RGB565(140, 205, 255)); // Soft sky cyan
-    _spr.drawString(lunarBuf, 18, 140, 2);
-
-    // Can Chi of the Day & illumination
-    char dayInfoBuf[32];
-    snprintf(dayInfoBuf, sizeof(dayInfoBuf), "Ngay %s (%d%%)", lDate.dayCanChi, (int)moonPct);
-    _spr.setTextColor(C_TEXT_DIM);
-    _spr.drawString(dayInfoBuf, 18, 164, 1);
-
-    // ────────────────────────────────────────────────────────────────
-    // 5. WEATHER CARD — Full-height with City Location Header
+    // 4. TWO EXPANDED GLASS CARDS (Y = 129..211, H = 82, W = 146)
+    //    Balanced full-screen symmetry with floating dock overlay!
     // ────────────────────────────────────────────────────────────────
     const WeatherData& w = weather.getData();
     WeatherType wType = weather.getType();
     bool night = weather.isNight();
 
-    // Use full height (down to Y=232)
-    int16_t cardX = 176, cardY = 8;
-    int16_t cardW = 136, cardH = 224;
+    int16_t cardY = 129;
+    int16_t cardH = 82;
+    int16_t cardW = 146;
 
-    drawGlassCard(cardX, cardY, cardW, cardH, 14);
+    // ── LEFT CARD: THOI TIET (X = 10..156, H = 82) ──────────────────
+    int16_t leftX = 10;
+    drawGlassCard(leftX, cardY, cardW, cardH, 12);
 
-    // ── Location Header: GPS Pin + City Name ─────────────────────
-    // Pin icon: red dot with downward pointer
-    _spr.fillCircle(cardX + 16, cardY + 16, 4, C_RED);
-    _spr.fillTriangle(cardX + 13, cardY + 16, cardX + 19, cardY + 16, cardX + 16, cardY + 22, C_RED);
-    _spr.drawPixel(cardX + 16, cardY + 15, C_WHITE); // pin center
+    // Header (Y = cardY + 11): GPS Icon + City Name (Font 2)
+    _spr.fillCircle(leftX + 14, cardY + 11, 2, C_RED);
+    _spr.fillTriangle(leftX + 12, cardY + 11, leftX + 16, cardY + 11, leftX + 14, cardY + 15, C_RED);
 
-    // City Name in uppercase Font 2
     const char* cityStr = (strlen(w.city) > 0) ? w.city : "TP. HCM";
-    char cityUpper[24];
+    char cityUpper[20];
     size_t cj = 0;
     for (; cityStr[cj] && cj < sizeof(cityUpper) - 1; cj++) {
         cityUpper[cj] = (char)toupper((unsigned char)cityStr[cj]);
     }
     cityUpper[cj] = '\0';
+    _spr.setTextDatum(ML_DATUM);
+    _spr.setTextColor(C_WHITE);
+    _spr.drawString(cityUpper, leftX + 22, cardY + 11, 2);
+
+    // Hint: small touch arrow ">" at top right
+    _spr.setTextColor(RGB565(100, 150, 200));
+    _spr.drawString(">", leftX + cardW - 12, cardY + 11, 1);
+
+    // Divider line
+    _spr.drawFastHLine(leftX + 8, cardY + 22, cardW - 16, theme.cardBorder);
+
+    // Main Row: Weather Icon (prominent 32px) + Temp (Font 4) + Condition
+    // Icon placed with ample breathing room below divider line
+    int16_t iconCx = leftX + 24;
+    int16_t iconCy = cardY + 49;
+    drawWeatherIcon(iconCx, iconCy, wType, night);
+
+    char tempStr[8];
+    snprintf(tempStr, sizeof(tempStr), "%.0f", w.valid ? w.temp : 29.0f);
+    _spr.setTextDatum(TL_DATUM);
+    _spr.setTextColor(C_WHITE);
+    _spr.drawString(tempStr, leftX + 48, cardY + 31, 4);
+
+    int16_t tNumW = _spr.textWidth(tempStr, 4);
+    int16_t degX = leftX + 48 + tNumW + 2;
+    _spr.drawCircle(degX + 2, cardY + 34, 2, C_GOLD);
+    _spr.setTextColor(C_GOLD);
+    _spr.drawString("C", degX + 7, cardY + 33, 2);
+
+    // Condition text: spaced 6px cleanly below 29°C for relaxed readability
+    const char* condStr = "Quang";
+    switch (wType) {
+        case WEATHER_CLEAR:  condStr = night ? "Dem quang" : "Troi nang"; break;
+        case WEATHER_CLOUDY: condStr = "Co may"; break;
+        case WEATHER_RAIN:   condStr = "Co mua"; break;
+        case WEATHER_STORM:  condStr = "Mua dong"; break;
+        case WEATHER_SNOW:   condStr = "Tuyet"; break;
+        case WEATHER_MIST:   condStr = "Suong mu"; break;
+        default:             condStr = "Troi dep"; break;
+    }
+    _spr.setTextDatum(TL_DATUM);
+    _spr.setTextColor(RGB565(255, 215, 0)); // Gold
+    _spr.drawString(condStr, leftX + 50, cardY + 60, 1);
+
+    // ── RIGHT CARD: AM LICH (X = 164..310, H = 82) ──────────────────
+    int16_t rightX = 164;
+    drawGlassCard(rightX, cardY, cardW, cardH, 12);
+
+    uint8_t lunarDay = lDate.day;
+    float moonPct = 0;
+    const char* phaseName = "Trang Non";
+    if (lunarDay <= 1)       { phaseName = "Trang Non";        moonPct = 0; }
+    else if (lunarDay <= 6)  { phaseName = "Trang Luoi Liem";  moonPct = lunarDay * 6.7f; }
+    else if (lunarDay <= 8)  { phaseName = "Ban Nguyet Dau";   moonPct = 50; }
+    else if (lunarDay <= 13) { phaseName = "Trang Truong Dan"; moonPct = 50 + (lunarDay - 8) * 6.0f; }
+    else if (lunarDay <= 16) { phaseName = "Trang Tron (Ram)"; moonPct = 100; }
+    else if (lunarDay <= 21) { phaseName = "Trang Khuyet Dan"; moonPct = 100 - (lunarDay - 16) * 6.0f; }
+    else if (lunarDay <= 23) { phaseName = "Ban Nguyet Cuoi";  moonPct = 50; }
+    else                     { phaseName = "Trang Tan Cuoi";   moonPct = 50 - (lunarDay - 23) * 7.0f; }
+
+    // Header (Y = cardY + 11): Phase Name (Font 2)
+    _spr.setTextDatum(ML_DATUM);
+    _spr.setTextColor(C_WHITE);
+    _spr.drawString(phaseName, rightX + 14, cardY + 11, 2);
+
+    // Hint: small touch arrow ">" at top right
+    _spr.setTextColor(RGB565(100, 150, 200));
+    _spr.drawString(">", rightX + cardW - 12, cardY + 11, 1);
+
+    // Divider line
+    _spr.drawFastHLine(rightX + 8, cardY + 22, cardW - 16, theme.cardBorder);
+
+    // Main Row: Moon Icon (28px) + Lunar Date (Font 4) + Can Chi Ngay on separate line
+    // Centered at cardY + 49 to align horizontally with weather icon
+    int16_t moonCx = rightX + 24;
+    int16_t moonCy = cardY + 49;
+    drawMoonIcon(moonCx, moonCy, 14, lunarDay);
+
+    char alDayStr[16];
+    snprintf(alDayStr, sizeof(alDayStr), "%02d/%02d", lDate.day, lDate.month);
+    _spr.setTextDatum(TL_DATUM);
+    _spr.setTextColor(C_WHITE);
+    _spr.drawString(alDayStr, rightX + 48, cardY + 31, 4);
+
+    _spr.setTextColor(RGB565(140, 205, 255));
+    _spr.drawString("AL", rightX + 48 + _spr.textWidth(alDayStr, 4) + 4, cardY + 33, 2);
+
+    // Can Chi day placed 6px cleanly below 04/09 AL — NEVER overlaps!
+    char dayCanChiBuf[28];
+    snprintf(dayCanChiBuf, sizeof(dayCanChiBuf), "Ngay %s", lDate.dayCanChi);
+    _spr.setTextDatum(TL_DATUM);
+    _spr.setTextColor(RGB565(255, 215, 0)); // Gold
+    _spr.drawString(dayCanChiBuf, rightX + 50, cardY + 60, 1);
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  POPUP MODAL 1: CHI TIET THOI TIET
+// ═══════════════════════════════════════════════════════════════════════
+void Display::renderWeatherPopup() {
+    int16_t mx = 20;
+    int16_t my = 20;
+    int16_t mw = 280;
+    int16_t mh = 195;
+    int16_t mr = 16;
+
+    // Dark frosted glass backing
+    _spr.fillRoundRect(mx, my, mw, mh, mr, RGB565(10, 15, 26));
+    _spr.drawRoundRect(mx, my, mw, mh, mr, RGB565(0, 200, 255));
+    _spr.drawRoundRect(mx + 1, my + 1, mw - 2, mh - 2, mr - 1, RGB565(0, 80, 160));
+    _spr.drawFastHLine(mx + mr, my, mw - mr * 2, C_WHITE);
+
+    const WeatherData& w = weather.getData();
+    WeatherType wType = weather.getType();
+    bool night = weather.isNight();
+
+    // 1. Header (Y = my + 16): GPS Pin + City Name
+    _spr.fillCircle(mx + 16, my + 16, 3, C_RED);
+    _spr.fillTriangle(mx + 14, my + 16, mx + 18, my + 16, mx + 16, my + 21, C_RED);
+    const char* cityStr = (strlen(w.city) > 0) ? w.city : "TP. HO CHI MINH";
+    char cityUpper[28];
+    size_t cj = 0;
+    for (; cityStr[cj] && cj < sizeof(cityUpper) - 1; cj++) {
+        cityUpper[cj] = (char)toupper((unsigned char)cityStr[cj]);
+    }
+    cityUpper[cj] = '\0';
+    _spr.setTextDatum(ML_DATUM);
+    _spr.setTextColor(C_WHITE);
+    _spr.drawString(cityUpper, mx + 26, my + 16, 2);
+
+    // Close button [ X ]
+    _spr.fillRoundRect(mx + mw - 26, my + 8, 18, 16, 4, RGB565(40, 50, 70));
+    _spr.setTextColor(C_WHITE);
+    _spr.setTextDatum(MC_DATUM);
+    _spr.drawString("X", mx + mw - 17, my + 16, 2);
+
+    // Top divider line (Y = my + 30)
+    _spr.drawFastHLine(mx + 12, my + 30, mw - 24, RGB565(40, 60, 90));
+
+    // 2. Main Row: Centered evenly between Y = my + 30 and Y = my + 100
+    int16_t midCy = my + 65;
+    drawWeatherIcon(mx + 42, midCy, wType, night);
+
+    char tempNum[8];
+    snprintf(tempNum, sizeof(tempNum), "%.0f", w.valid ? w.temp : 29.0f);
+    _spr.setTextDatum(ML_DATUM);
+    _spr.setTextColor(C_WHITE);
+    _spr.drawString(tempNum, mx + 80, my + 58, 6);
+
+    int16_t numW = _spr.textWidth(tempNum, 6);
+    int16_t degX = mx + 80 + numW + 4;
+    _spr.drawCircle(degX + 3, my + 49, 3, C_GOLD);
+    _spr.drawCircle(degX + 3, my + 49, 2, C_GOLD);
+    _spr.setTextColor(C_GOLD);
+    _spr.drawString("C", degX + 11, my + 48, 4);
+
+    const char* condStr = "Quang dang";
+    switch (wType) {
+        case WEATHER_CLEAR:  condStr = night ? "Dem quang" : "Troi nang dep"; break;
+        case WEATHER_CLOUDY: condStr = "Nhieu may"; break;
+        case WEATHER_RAIN:   condStr = "Troi mua rao"; break;
+        case WEATHER_STORM:  condStr = "Mua dong set"; break;
+        case WEATHER_SNOW:   condStr = "Tuyet roi"; break;
+        case WEATHER_MIST:   condStr = "Suong mu"; break;
+        default:             condStr = "Troi mat me"; break;
+    }
+    _spr.setTextColor(RGB565(255, 215, 0)); // Gold
+    _spr.drawString(condStr, mx + 80, my + 84, 2);
+
+    // Bottom divider line (Y = my + 100)
+    _spr.drawFastHLine(mx + 12, my + 100, mw - 24, RGB565(40, 60, 90));
+
+    // 3. Three Detailed Metric Rows (Evenly spaced without bottom footer)
+    // Row 1: Do am
+    drawMiniDrop(_spr, mx + 24, my + 120, C_CYAN);
+    _spr.setTextDatum(ML_DATUM);
+    _spr.setTextColor(RGB565(170, 200, 230));
+    _spr.drawString("Do am khong khi:", mx + 36, my + 120, 2);
+    char humVal[16];
+    snprintf(humVal, sizeof(humVal), "%d%%", w.valid ? w.humidity : 78);
+    _spr.setTextDatum(MR_DATUM);
+    _spr.setTextColor(C_WHITE);
+    _spr.drawString(humVal, mx + mw - 20, my + 120, 2);
+
+    // Row 2: Toc do gio
+    drawMiniWind(_spr, mx + 24, my + 145, RGB565(120, 210, 255));
+    _spr.setTextDatum(ML_DATUM);
+    _spr.setTextColor(RGB565(170, 200, 230));
+    _spr.drawString("Toc do gio:", mx + 36, my + 145, 2);
+    char windVal[16];
+    snprintf(windVal, sizeof(windVal), "%.1f km/h", w.valid ? w.windSpeed : 7.2f);
+    _spr.setTextDatum(MR_DATUM);
+    _spr.setTextColor(C_WHITE);
+    _spr.drawString(windVal, mx + mw - 20, my + 145, 2);
+
+    // Row 3: Chi so UV
+    drawMiniSun(_spr, mx + 24, my + 170, C_GOLD);
+    _spr.setTextDatum(ML_DATUM);
+    _spr.setTextColor(RGB565(170, 200, 230));
+    _spr.drawString("Chi so tia UV:", mx + 36, my + 170, 2);
+    char uvVal[16];
+    float uv = w.valid ? w.uvIndex : 6.0f;
+    snprintf(uvVal, sizeof(uvVal), "%.0f (Cao)", uv);
+    _spr.setTextDatum(MR_DATUM);
+    _spr.setTextColor(C_GOLD);
+    _spr.drawString(uvVal, mx + mw - 20, my + 170, 2);
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  POPUP MODAL 2: CHI TIET THIEN VAN & AM LICH
+// ═══════════════════════════════════════════════════════════════════════
+void Display::renderLunarPopup() {
+    int16_t mx = 20;
+    int16_t my = 20;
+    int16_t mw = 280;
+    int16_t mh = 195;
+    int16_t mr = 16;
+
+    // Dark glass backing with golden/cyan border
+    _spr.fillRoundRect(mx, my, mw, mh, mr, RGB565(10, 15, 26));
+    _spr.drawRoundRect(mx, my, mw, mh, mr, RGB565(255, 215, 0));
+    _spr.drawRoundRect(mx + 1, my + 1, mw - 2, mh - 2, mr - 1, RGB565(180, 140, 20));
+    _spr.drawFastHLine(mx + mr, my, mw - mr * 2, C_WHITE);
+
+    time_t now = time(NULL);
+    struct tm t;
+    localtime_r(&now, &t);
+    LunarDate ld = LunarCalendar::convertSolar2Lunar(t.tm_mday, t.tm_mon + 1, 1900 + t.tm_year);
+
+    uint8_t lunarDay = ld.day;
+    float moonPct = 0;
+    const char* phaseName = "Trang Non";
+    if (lunarDay <= 1)       { phaseName = "Trang Non";        moonPct = 0; }
+    else if (lunarDay <= 6)  { phaseName = "Trang Luoi Liem";  moonPct = lunarDay * 6.7f; }
+    else if (lunarDay <= 8)  { phaseName = "Ban Nguyet Dau";   moonPct = 50; }
+    else if (lunarDay <= 13) { phaseName = "Trang Truong Dan"; moonPct = 50 + (lunarDay - 8) * 6.0f; }
+    else if (lunarDay <= 16) { phaseName = "Trang Tron (Ram)"; moonPct = 100; }
+    else if (lunarDay <= 21) { phaseName = "Trang Khuyet Dan"; moonPct = 100 - (lunarDay - 16) * 6.0f; }
+    else if (lunarDay <= 23) { phaseName = "Ban Nguyet Cuoi";  moonPct = 50; }
+    else                     { phaseName = "Trang Tan Cuoi";   moonPct = 50 - (lunarDay - 23) * 7.0f; }
+
+    // 1. Header (Y = my + 16)
+    _spr.setTextDatum(ML_DATUM);
+    _spr.setTextColor(RGB565(255, 215, 0));
+    _spr.drawString("THIEN VAN & AM LICH", mx + 16, my + 16, 2);
+
+    // Close button [ X ]
+    _spr.fillRoundRect(mx + mw - 26, my + 8, 18, 16, 4, RGB565(40, 50, 70));
+    _spr.setTextColor(C_WHITE);
+    _spr.setTextDatum(MC_DATUM);
+    _spr.drawString("X", mx + mw - 17, my + 16, 2);
+
+    // 2. Large Moon Orb (R = 20, diameter 40px) + Phase Name + Illumination
+    // Centered evenly between Y = my + 30 and Y = my + 100
+    int16_t midCy = my + 68;
+    drawMoonIcon(mx + 42, midCy, 20, lunarDay, RGB565(10, 15, 26));
+
+    // Top divider line (Y = my + 30) — drawn after moon icon to guarantee 100% crisp, continuous line
+    _spr.drawFastHLine(mx + 12, my + 30, mw - 24, RGB565(70, 60, 90));
 
     _spr.setTextDatum(ML_DATUM);
     _spr.setTextColor(C_WHITE);
-    _spr.drawString(cityUpper, cardX + 25, cardY + 16, 2);
+    _spr.drawString(phaseName, mx + 80, my + 54, 4);
 
-    // Frosted separator line
-    _spr.drawFastHLine(cardX + 12, cardY + 28, cardW - 24, theme.cardBorder);
+    char illuBuf[32];
+    snprintf(illuBuf, sizeof(illuBuf), "Do sang mat trang: %.0f%%", moonPct);
+    _spr.setTextColor(RGB565(140, 205, 255));
+    _spr.drawString(illuBuf, mx + 80, my + 78, 2);
 
-    // 3D Weather illustration — shifted down to cardY + 58 to give 10px clear margin under separator line
-    drawWeatherIcon(cardX + cardW / 2, cardY + 58, wType, night);
+    // Bottom divider line (Y = my + 100)
+    _spr.drawFastHLine(mx + 12, my + 100, mw - 24, RGB565(70, 60, 90));
 
-    // Temperature — large bold numbers (Font 6) shifted to tempY = 96
-    char tempStr[8];
-    snprintf(tempStr, sizeof(tempStr), "%.0f", w.valid ? w.temp : 24.0f);
-
-    int16_t numW = _spr.textWidth(tempStr, 6);
-    int16_t degSymW = 6;
-    int16_t unitW = _spr.textWidth("C", 4);
-    int16_t totalW = numW + degSymW + unitW;
-    int16_t blockStartX = cardX + (cardW - totalW) / 2;
-    int16_t tempY = 96;
-
-    _spr.setTextDatum(TL_DATUM);
+    // 3. Lunar Details List (Evenly spaced without bottom footer)
+    // Row 1: Ngay am lich
+    _spr.setTextDatum(ML_DATUM);
+    _spr.setTextColor(RGB565(170, 200, 230));
+    _spr.drawString("Ngay am lich:", mx + 20, my + 120, 2);
+    char lDateBuf[24];
+    snprintf(lDateBuf, sizeof(lDateBuf), "%02d thang %02d", ld.day, ld.month);
+    _spr.setTextDatum(MR_DATUM);
     _spr.setTextColor(C_WHITE);
-    _spr.drawString(tempStr, blockStartX, tempY, 6);
+    _spr.drawString(lDateBuf, mx + mw - 20, my + 120, 2);
 
-    // Gold Degree symbol (°)
-    int16_t degX = blockStartX + numW + 3;
-    _spr.drawCircle(degX + 2, tempY + 6, 3, C_GOLD);
-    _spr.drawCircle(degX + 2, tempY + 6, 2, C_GOLD);
+    // Row 2: Ngay can chi
+    _spr.setTextDatum(ML_DATUM);
+    _spr.setTextColor(RGB565(170, 200, 230));
+    _spr.drawString("Ngay can chi:", mx + 20, my + 145, 2);
+    _spr.setTextDatum(MR_DATUM);
+    _spr.setTextColor(RGB565(255, 215, 0)); // Gold
+    _spr.drawString(ld.dayCanChi, mx + mw - 20, my + 145, 2);
 
-    // Gold "C" unit
-    _spr.setTextColor(C_GOLD);
-    _spr.drawString("C", degX + 8, tempY + 3, 4);
-
-    // Condition name: 100% Vietnamese uppercase title
-    const char* condVn = "QUANG MAY";
-    switch (wType) {
-        case WEATHER_CLEAR:  condVn = night ? "DEM QUANG" : "TROI NANG"; break;
-        case WEATHER_CLOUDY: condVn = "CO MAY"; break;
-        case WEATHER_RAIN:   condVn = "CO MUA"; break;
-        case WEATHER_STORM:  condVn = "MUA DONG"; break;
-        case WEATHER_SNOW:   condVn = "CO TUYET"; break;
-        case WEATHER_MIST:   condVn = "SUONG MU"; break;
-        default:             condVn = night ? "DEM DEP" : "TROI DEP"; break;
-    }
-
-    _spr.setTextDatum(MC_DATUM);
-    _spr.setTextColor(C_GOLD);
-    _spr.drawString(condVn, cardX + cardW / 2, tempY + 44, 2);
-
-    // Localized condition description in Vietnamese
-    _spr.setTextColor(RGB565(255, 215, 0));
-    _spr.drawString(w.valid ? w.description : (night ? "Troi quang, gio nhe" : "Nang dep, it may"),
-                    cardX + cardW / 2, tempY + 58, 1);
-
-    // ── Weather metrics: Balanced vertical layout filling card down to bottom ──
-    int16_t detailY = tempY + 72;
-    _spr.setTextDatum(TL_DATUM);
-
-    // Row 1: Humidity
-    _spr.fillCircle(cardX + 16, detailY + 4, 3, C_CYAN);
-    _spr.drawPixel(cardX + 16, detailY + 1, C_CYAN);
-    char humBuf[20];
-    snprintf(humBuf, sizeof(humBuf), "Do am: %d%%", w.valid ? w.humidity : 65);
-    _spr.setTextColor(C_TEXT_DIM);
-    _spr.drawString(humBuf, cardX + 26, detailY, 1);
-
-    // Row 2: Wind
-    detailY += 18;
-    _spr.drawFastHLine(cardX + 13, detailY + 3, 6, C_CYAN);
-    _spr.drawFastHLine(cardX + 15, detailY + 6, 4, C_CYAN);
-    char windBuf[20];
-    snprintf(windBuf, sizeof(windBuf), "Gio: %.0f km/h", w.valid ? w.windSpeed : 12.0f);
-    _spr.drawString(windBuf, cardX + 26, detailY, 1);
-
-    // Row 3: UV Index
-    detailY += 18;
-    _spr.fillCircle(cardX + 16, detailY + 4, 3, C_SUN_YELLOW);
-    _spr.drawCircle(cardX + 16, detailY + 4, 4, C_SUN_ORANGE);
-    char uvBuf[24];
-    float uvVal = w.valid ? w.uvIndex : 4.0f;
-    const char* uvTag = (uvVal >= 8) ? "Rat cao" : (uvVal >= 6) ? "Cao" : (uvVal >= 3) ? "Vua" : "Thap";
-    snprintf(uvBuf, sizeof(uvBuf), "UV: %.0f (%s)", uvVal, uvTag);
-    _spr.drawString(uvBuf, cardX + 26, detailY, 1);
-
-    // Bottom dock is drawn as a floating overlay by Display::update()
+    // Row 3: Nam can chi
+    _spr.setTextDatum(ML_DATUM);
+    _spr.setTextColor(RGB565(170, 200, 230));
+    _spr.drawString("Nam can chi:", mx + 20, my + 170, 2);
+    char yrBuf[32];
+    snprintf(yrBuf, sizeof(yrBuf), "%s (2026)", ld.yearCanChi);
+    _spr.setTextDatum(MR_DATUM);
+    _spr.setTextColor(RGB565(255, 215, 0)); // Gold
+    _spr.drawString(yrBuf, mx + mw - 20, my + 170, 2);
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-//  BACKGROUND — Organic blobs + sparkle stars using current Theme
+//  BACKGROUND — Custom Wallpaper OR Organic Blobs + Sparkle Stars
 // ═══════════════════════════════════════════════════════════════════════
 void Display::drawBackground() {
+    // 1. Try decoding custom wallpaper from LittleFS if present
+    if (_hasWallpaper) {
+        s_sprInstance = &_spr;
+        TJpgDec.setJpgScale(1);
+        TJpgDec.setCallback(Display::tjpgRenderCallback);
+        if (TJpgDec.drawFsJpg(0, 0, "/wallpaper.jpg", LittleFS) == 0) {
+            return; // Successfully rendered wallpaper background!
+        }
+        // If decoding failed (corrupted file), fallback to procedural
+        _hasWallpaper = false;
+    }
+
+    // 2. Default: Deep Obsidian Cosmic Sky (Pure velvety black with delicate twinkling stars)
     _spr.fillSprite(theme.bg);
 
-    // Animated time offset for subtle blob movement
-    uint32_t tick = millis() / 80;
+    // Subtle atmospheric vertical night gradient (softly transitioning from deep midnight to dark horizon)
+    for (int y = 0; y < 112; y += 4) {
+        uint8_t shade = map(y, 0, 112, 3, 10);
+        _spr.drawFastHLine(0, y, SCREEN_W, RGB565(1, 3, shade));
+        _spr.drawFastHLine(0, y + 1, SCREEN_W, RGB565(1, 3, shade));
+    }
 
-    // ── Large pastel blobs (organic shapes via overlapping circles) ──
+    // Twinkling delicate diamond stars and celestial stardust dots (No wireframe circles!)
+    uint32_t tick = millis() / 100;
+    uint8_t flickerPhase = (tick / 3) & 0x07;
+    drawSparkle(24,  20, 2, (flickerPhase == 0) ? C_SPARKLE_CYAN : C_CYAN_DIM);
+    drawSparkle(296, 20, 2, (flickerPhase == 1) ? C_SPARKLE_CYAN : C_CYAN_DIM);
+    drawSparkle(26,  82, 2, (flickerPhase == 2) ? C_SPARKLE_W : C_CYAN_DIM);
+    drawSparkle(294, 82, 2, (flickerPhase == 3) ? C_SPARKLE_W : C_CYAN_DIM);
+    drawSparkle(160, 115, 1, (flickerPhase == 4) ? C_SPARKLE_W : C_CYAN_DIM);
 
-    // Top-right cluster: blue + cyan blobs
-    int16_t bx1 = 280 + (int16_t)(sin(tick * 0.013) * 5);
-    int16_t by1 = 30  + (int16_t)(cos(tick * 0.017) * 3);
-    drawBlob(bx1, by1, 50, C_BLOB_BLUE);
-    drawBlob(bx1 + 15, by1 - 20, 30, RGB565(60, 160, 240));
-
-    // Top-left cluster: pink + coral
-    int16_t bx2 = 45  + (int16_t)(sin(tick * 0.011) * 4);
-    int16_t by2 = 15  + (int16_t)(cos(tick * 0.019) * 3);
-    drawBlob(bx2, by2, 28, C_BLOB_PINK);
-    drawBlob(bx2 + 30, by2 + 5, 18, C_BLOB_CORAL);
-
-    // Mid-right: mint/teal blob
-    int16_t bx3 = 295 + (int16_t)(sin(tick * 0.015) * 3);
-    int16_t by3 = 130 + (int16_t)(cos(tick * 0.012) * 4);
-    drawBlob(bx3, by3, 35, C_BLOB_MINT);
-
-    // Bottom-left: lilac/purple blob
-    int16_t bx4 = 30  + (int16_t)(sin(tick * 0.009) * 5);
-    int16_t by4 = 200 + (int16_t)(cos(tick * 0.014) * 3);
-    drawBlob(bx4, by4, 30, C_BLOB_LILAC);
-
-    // Mid-left small accent blob
-    drawBlob(10, 90, 20, RGB565(200, 140, 255));
-
-    // ── Sparkles (tiny 4-point stars) ────────────────────────────────
-    // Deterministic positions with subtle flicker via tick
-    uint8_t flickerPhase = (tick / 3) & 0x07;  // 8 phases
-
-    drawSparkle(85,  40,  3, (flickerPhase == 0) ? C_SPARKLE_CYAN : C_SPARKLE_W);
-    drawSparkle(130, 25,  2, (flickerPhase == 1) ? C_SPARKLE_CYAN : C_SPARKLE_W);
-    drawSparkle(180, 15,  2, (flickerPhase == 2) ? C_SPARKLE_W : C_CYAN_DIM);
-    drawSparkle(250, 60,  3, (flickerPhase == 3) ? C_SPARKLE_CYAN : C_SPARKLE_W);
-    drawSparkle(50,  65,  2, (flickerPhase == 4) ? C_SPARKLE_W : C_CYAN_DIM);
-    drawSparkle(155, 50,  2, (flickerPhase == 5) ? C_SPARKLE_CYAN : C_SPARKLE_W);
-    drawSparkle(300, 90,  2, (flickerPhase == 6) ? C_SPARKLE_W : C_CYAN_DIM);
-    drawSparkle(200, 100, 2, (flickerPhase == 7) ? C_SPARKLE_CYAN : C_SPARKLE_W);
-
-    // Extra tiny star dots
-    drawStarDot(70,  18, C_WHITE);
-    drawStarDot(115, 45, C_CYAN_GLOW);
-    drawStarDot(190, 35, C_WHITE);
-    drawStarDot(240, 20, C_BLOB_PINK);
-    drawStarDot(170, 65, C_WHITE);
-    drawStarDot(280, 75, C_CYAN_GLOW);
-    drawStarDot(40, 140, C_WHITE);
-    drawStarDot(310, 45, C_BLOB_MINT);
+    // Micro celestial stardust
+    drawStarDot(18,  48, C_WHITE);
+    drawStarDot(302, 48, C_CYAN_GLOW);
+    drawStarDot(82,  24, RGB565(180, 220, 255));
+    drawStarDot(238, 24, RGB565(255, 240, 200));
+    drawStarDot(52,  88, C_CYAN_GLOW);
+    drawStarDot(268, 88, C_WHITE);
 }
+
 
 // ─── Blob: soft organic shape via overlapping translucent circles ────
 void Display::drawBlob(int16_t cx, int16_t cy, int16_t r, uint16_t color) {
@@ -445,14 +680,13 @@ void Display::drawWeatherIcon(int16_t cx, int16_t cy, uint8_t wType, bool isNigh
     switch (wType) {
         case WEATHER_CLEAR:
             if (isNight) {
-                // Night sky: artistic golden crescent moon + sparkling stars
+                // Night sky: artistic golden crescent moon + sparkling stars (diameter 30px)
                 _spr.fillCircle(cx - 3, cy - 2, 13, C_GOLD);
                 _spr.fillCircle(cx + 4, cy - 6, 13, theme.card); // clean crescent
-                drawCloudIcon(cx + 8, cy + 8, 26, 12);
-                drawSparkle(cx - 10, cy + 8, 2, C_WHITE);
-                drawStarDot(cx + 12, cy - 8, C_CYAN_GLOW);
+                drawSparkle(cx - 9, cy + 7, 2, C_WHITE);
+                drawStarDot(cx + 11, cy - 7, C_CYAN_GLOW);
             } else {
-                drawSunIcon(cx, cy, 14);
+                drawSunIcon(cx, cy, 10);
             }
             break;
         case WEATHER_CLOUDY:
@@ -465,18 +699,17 @@ void Display::drawWeatherIcon(int16_t cx, int16_t cy, uint8_t wType, bool isNigh
             drawStormIcon(cx, cy);
             break;
         case WEATHER_SNOW:
-            drawCloudIcon(cx, cy - 5, 30, 18);
-            // snowflakes
-            for (int i = 0; i < 5; i++) {
-                int16_t sx = cx - 10 + i * 5;
-                int16_t sy = cy + 12 + (i & 1) * 4;
-                drawSparkle(sx, sy, 2, C_WHITE);
+            drawCloudIcon(cx, cy - 4, 26, 14);
+            for (int i = 0; i < 4; i++) {
+                int16_t sx = cx - 9 + i * 6;
+                int16_t sy = cy + 10 + (i & 1) * 3;
+                drawSparkle(sx, sy, 1, C_WHITE);
             }
             break;
         case WEATHER_MIST:
             for (int i = 0; i < 4; i++) {
-                int16_t lw = 24 - i * 2;
-                _spr.drawFastHLine(cx - lw / 2, cy - 6 + i * 5, lw, C_TEXT_DIM);
+                int16_t lw = 26 - i * 3;
+                _spr.drawFastHLine(cx - lw / 2, cy - 6 + i * 4, lw, C_TEXT_DIM);
             }
             break;
         default:
@@ -486,20 +719,20 @@ void Display::drawWeatherIcon(int16_t cx, int16_t cy, uint8_t wType, bool isNigh
 }
 
 void Display::drawSunIcon(int16_t cx, int16_t cy, int16_t r) {
-    // 8 rounded pill / circular rays around the sun
+    // 8 circular ray points around the sun (diameter ~30px)
     for (int a = 0; a < 360; a += 45) {
         float rad = a * PI / 180.0f;
-        int16_t rx = cx + (int16_t)(cos(rad) * (r + 7));
-        int16_t ry = cy + (int16_t)(sin(rad) * (r + 7));
-        _spr.fillCircle(rx, ry, 2, C_SUN_YELLOW);
-        _spr.drawPixel(rx, ry, RGB565(255, 245, 180));
+        int16_t rx = cx + (int16_t)(cos(rad) * (r + 5));
+        int16_t ry = cy + (int16_t)(sin(rad) * (r + 5));
+        _spr.drawPixel(rx, ry, C_SUN_YELLOW);
+        _spr.drawPixel(rx + (a % 90 == 0 ? 1 : 0), ry, RGB565(255, 245, 180));
     }
 
     // 3D Sun body with warm radial depth
     _spr.fillCircle(cx, cy, r + 2, C_SUN_ORANGE);
     _spr.fillCircle(cx, cy, r, C_SUN_YELLOW);
-    _spr.fillCircle(cx - 2, cy - 2, r - 3, RGB565(255, 245, 160));
-    _spr.drawPixel(cx - 3, cy - 3, C_WHITE);
+    _spr.fillCircle(cx - 2, cy - 2, r - 2, RGB565(255, 245, 160));
+    _spr.drawPixel(cx - 2, cy - 2, C_WHITE);
 }
 
 void Display::drawCloudIcon(int16_t cx, int16_t cy, int16_t w, int16_t h) {
@@ -519,72 +752,126 @@ void Display::drawCloudIcon(int16_t cx, int16_t cy, int16_t w, int16_t h) {
     _spr.fillCircle(cx + w / 4, cy - baseR - 1, baseR + 1, C_WHITE);
 
     // Specular top highlight
-    _spr.fillCircle(cx + 1, cy - baseR - 6, baseR - 1, RGB565(255, 255, 255));
-    _spr.fillCircle(cx - w / 4, cy - baseR - 4, baseR - 2, RGB565(255, 255, 255));
+    _spr.fillCircle(cx + 1, cy - baseR - 4, baseR - 1, RGB565(255, 255, 255));
 }
 
 void Display::drawPartlyCloudyIcon(int16_t cx, int16_t cy) {
-    // 1. 3D Sun behind top-left
-    int16_t sx = cx - 10;
-    int16_t sy = cy - 8;
-    int16_t sr = 12;
+    // 1. 3D Sun behind top-left (sr = 8, rays at 12)
+    int16_t sx = cx - 5;
+    int16_t sy = cy - 5;
+    int16_t sr = 8;
 
-    // Sun rays (visible around upper / left arc)
     for (int a = 0; a < 360; a += 45) {
         float rad = a * PI / 180.0f;
-        int16_t rx = sx + (int16_t)(cos(rad) * (sr + 5));
-        int16_t ry = sy + (int16_t)(sin(rad) * (sr + 5));
-        _spr.fillCircle(rx, ry, 2, C_SUN_YELLOW);
+        int16_t rx = sx + (int16_t)(cos(rad) * (sr + 4));
+        int16_t ry = sy + (int16_t)(sin(rad) * (sr + 4));
+        _spr.drawPixel(rx, ry, C_SUN_YELLOW);
     }
-    // Sun body with warm radial depth
-    _spr.fillCircle(sx, sy, sr + 2, C_SUN_ORANGE);
+    _spr.fillCircle(sx, sy, sr + 1, C_SUN_ORANGE);
     _spr.fillCircle(sx, sy, sr, C_SUN_YELLOW);
-    _spr.fillCircle(sx - 2, sy - 2, sr - 3, RGB565(255, 245, 170));
+    _spr.fillCircle(sx - 1, sy - 1, sr - 2, RGB565(255, 245, 170));
 
-    // 2. 3D Fluffy Cloud in foreground
-    int16_t clx = cx + 8;
-    int16_t cly = cy + 6;
-    drawCloudIcon(clx, cly, 34, 16);
+    // 2. 3D Fluffy Cloud in foreground (w = 26, h = 14)
+    int16_t clx = cx + 3;
+    int16_t cly = cy + 4;
+    drawCloudIcon(clx, cly, 26, 14);
 }
 
 void Display::drawRainIcon(int16_t cx, int16_t cy) {
-    drawCloudIcon(cx, cy - 6, 28, 14);
+    drawCloudIcon(cx, cy - 4, 26, 14);
     // Rain drops
     for (int i = 0; i < 4; i++) {
-        int16_t dx = cx - 8 + i * 6;
-        int16_t dy = cy + 6 + (i & 1) * 3;
-        _spr.drawLine(dx, dy, dx - 2, dy + 5, C_RAIN_BLUE);
+        int16_t dx = cx - 7 + i * 5;
+        int16_t dy = cy + 7 + (i & 1) * 2;
+        _spr.drawLine(dx, dy, dx - 1, dy + 5, C_RAIN_BLUE);
     }
 }
 
 void Display::drawStormIcon(int16_t cx, int16_t cy) {
-    drawCloudIcon(cx, cy - 6, 28, 14);
+    drawCloudIcon(cx, cy - 4, 26, 14);
     // Lightning bolt
-    _spr.drawLine(cx,     cy + 4, cx - 3, cy + 10, C_GOLD);
-    _spr.drawLine(cx - 3, cy + 10, cx + 1, cy + 10, C_GOLD);
-    _spr.drawLine(cx + 1, cy + 10, cx - 2, cy + 18, C_GOLD);
+    _spr.drawLine(cx,     cy + 4, cx - 2, cy + 9, C_GOLD);
+    _spr.drawLine(cx - 2, cy + 9, cx + 1, cy + 9, C_GOLD);
+    _spr.drawLine(cx + 1, cy + 9, cx - 1, cy + 15, C_GOLD);
 }
 
-void Display::drawMoonIcon(int16_t cx, int16_t cy, int16_t r, uint8_t lunarDay) {
-    // Full moon base
-    _spr.fillCircle(cx, cy, r, C_MOON_FACE);
+void Display::drawMoonIcon(int16_t cx, int16_t cy, int16_t r, uint8_t lunarDay, uint16_t bgTint) {
+    if (bgTint == 0) bgTint = theme.card;
 
-    // Craters
-    _spr.fillCircle(cx - r / 3, cy - r / 4, r / 5, C_MOON_CRATER);
-    _spr.fillCircle(cx + r / 4, cy + r / 3, r / 6, C_MOON_CRATER);
-    _spr.fillCircle(cx + r / 5, cy - r / 3, r / 7, C_MOON_CRATER);
+    // Palette: Luminous moon gold & pearlescent highlights
+    uint16_t moonGold = RGB565(255, 230, 140);      // Warm celestial gold
+    uint16_t moonHighlight = RGB565(255, 248, 210); // Luminous inner glow
+    uint16_t craterColor = RGB565(225, 200, 120);   // Soft crater shading
 
-    // Shadow for crescent effect
-    if (lunarDay < 15) {
-        // Waxing: shadow on the left
-        int16_t offset = map(lunarDay, 0, 14, r + 2, -r);
-        _spr.fillCircle(cx + offset, cy, r + 1, C_BG_DARK);
-    } else if (lunarDay > 15) {
-        // Waning: shadow on the right
-        int16_t offset = map(lunarDay, 16, 29, -r, r + 2);
-        _spr.fillCircle(cx + offset, cy, r + 1, C_BG_DARK);
+    if (lunarDay <= 1) {
+        // Trăng non (New Moon): Celestial outline with tiny star
+        _spr.drawCircle(cx, cy, r, RGB565(70, 90, 120));
+        _spr.drawCircle(cx, cy, r - 1, RGB565(40, 50, 75));
+        drawSparkle(cx, cy, 2, C_WHITE);
+        return;
     }
-    // lunarDay == 15: full moon, no shadow
+
+    if (lunarDay >= 14 && lunarDay <= 16) {
+        // Trăng tròn / Rằm (Full Moon): Centered exactly at geometric cy
+        _spr.fillCircle(cx, cy, r, moonGold);
+        _spr.fillCircle(cx - r / 4, cy - r / 4, r * 2 / 3, moonHighlight);
+        _spr.fillCircle(cx - r / 3, cy - r / 5, r / 5, craterColor);
+        _spr.fillCircle(cx + r / 4, cy + r / 3, r / 6, craterColor);
+        _spr.fillCircle(cx + r / 3, cy - r / 3, r / 7, craterColor);
+        _spr.fillCircle(cx - r / 5, cy + r / 3, r / 7, craterColor);
+        _spr.drawCircle(cx, cy, r + 1, RGB565(255, 242, 190));
+        return;
+    }
+
+    bool isWaxing = (lunarDay < 15);
+
+    if ((isWaxing && lunarDay <= 6) || (!isWaxing && lunarDay >= 24)) {
+        // ── CRESCENT MOON (Trăng lưỡi liềm nghệ thuật: 2 góc nhọn chếch vút lên trên) ──
+        // CÂN CHỈNH QUANG HỌC (Optical Centering):
+        // Nâng trục vẽ lên (r * 2 / 10) để trọng tâm thị giác của phần trăng phát sáng
+        // nằm ngay chính giữa 2 đường kẻ, sừng trên vút ngang số ngày AL, đáy trăng không bị chìm
+        int16_t optCy = cy - (r * 2 / 10);
+
+        // 1. Draw radiant moon body
+        _spr.fillCircle(cx, optCy, r, moonGold);
+        _spr.fillCircle(cx, optCy, r - 1, moonHighlight);
+
+        // 2. Cutout shadow circle shifted UPWARDS (dy < 0) and slightly sideways
+        int16_t dy = -r * 4 / 10;
+        int16_t dx = 0;
+
+        if (isWaxing) {
+            // Waxing (Mùng 2..6): crescent cradled on bottom-right, horns point up
+            dx = map(lunarDay, 2, 6, -r * 2 / 10, -r * 6 / 10);
+        } else {
+            // Waning (24..29): crescent cradled on bottom-left, horns point up
+            dx = map(lunarDay, 24, 29, r * 6 / 10, r * 2 / 10);
+        }
+
+        _spr.fillCircle(cx + dx, optCy + dy, r, bgTint);
+
+        // 3. Delicate celestial sparkle star near the upper horn
+        if (isWaxing) {
+            drawSparkle(cx - r * 4 / 10, optCy - r * 4 / 10, 1, C_WHITE);
+        } else {
+            drawSparkle(cx + r * 4 / 10, optCy - r * 4 / 10, 1, C_WHITE);
+        }
+    } else {
+        // ── QUARTER / GIBBOUS (Bán nguyệt & Trăng trương dần) ──
+        int16_t optCy = cy - (r * 1 / 10);
+        _spr.fillCircle(cx, optCy, r, moonGold);
+        _spr.fillCircle(cx - r / 3, optCy - r / 4, r / 5, craterColor);
+        _spr.fillCircle(cx + r / 4, optCy + r / 3, r / 6, craterColor);
+
+        int16_t dy = -r * 2 / 10;
+        int16_t offset = 0;
+        if (isWaxing) {
+            offset = map(lunarDay, 7, 13, -r * 7 / 10, -r * 13 / 10);
+        } else {
+            offset = map(lunarDay, 17, 23, r * 13 / 10, r * 7 / 10);
+        }
+        _spr.fillCircle(cx + offset, optCy + dy, r, bgTint);
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -636,9 +923,8 @@ void Display::drawGlassCard(int16_t x, int16_t y, int16_t w, int16_t h, int16_t 
         _spr.fillRoundRect(x, y, w, h, radius, theme.card);
     }
 
-    // Specular top highlight & frosted glowing glass border
+    // Clean, elegant frosted glowing glass border (no harsh top specular line)
     _spr.drawRoundRect(x, y, w, h, radius, theme.cardBorder);
-    _spr.drawFastHLine(x + radius, y, w - radius * 2, RGB565(140, 190, 245));
 }
 
 void Display::drawGlassCardAccent(int16_t x, int16_t y, int16_t w, int16_t h,
@@ -702,7 +988,26 @@ void Display::resetCalMonth() {
 }
 
 bool Display::handleTouch(uint16_t x, uint16_t y) {
-    // If on Calendar page and tapping in the top Title Card (Y <= 50)
+    // 1. If a popup modal is currently open, tap anywhere to close it!
+    if (_activePopup != POPUP_NONE) {
+        _activePopup = POPUP_NONE;
+        hardware.playClick();
+        _lastRender = 0; // Trigger instant redraw
+        return true;
+    }
+
+    // 2. ƯU TIÊN TUYỆT ĐỐI CHO THANH DOCK: Khi Dock đang hiển thị, chạm vào vùng Dock (Y >= 185) luôn xử lý cho Dock!
+    if (_dockVisible && y >= 185) {
+        wakeDock(); // Reset 5s auto-hide timer
+        if (x < 94)                   { setPage(PAGE_CLOCK);    return true; }
+        else if (x >= 94 && x < 138)  { setPage(PAGE_CALENDAR); return true; }
+        else if (x >= 138 && x < 182) { setPage(PAGE_FINANCE);  return true; }
+        else if (x >= 182 && x < 226) { setPage(PAGE_POMODORO); return true; }
+        else if (x >= 226)            { nextTheme(); wakeDock(); return true; }
+        return true;
+    }
+
+    // 3. If on Calendar page and tapping in the top Title Card (Y <= 50)
     if (_currentPage == PAGE_CALENDAR && y <= 50) {
         if (x <= 66) {
             prevCalMonth();
@@ -722,24 +1027,30 @@ bool Display::handleTouch(uint16_t x, uint16_t y) {
         }
     }
 
-    // If dock is hidden, tap anywhere in the lower 60px wakes it up
+    // 4. If on Clock page (PAGE_CLOCK), tap on Cards to open detailed Popups
+    // GIỚI HẠN CHẶT CHẼ TRONG THÂN CARD (Y: 126..194)
+    // Chạm từ Y >= 195 trở xuống hoàn toàn dành cho việc bật Dock, KHÔNG BAO GIỜ bị bật nhầm popup!
+    if (_currentPage == PAGE_CLOCK && y >= 126 && y <= 194) {
+        if (x >= 10 && x <= 156) {
+            _activePopup = POPUP_WEATHER;
+            hardware.playClick();
+            _lastRender = 0; // Trigger instant redraw
+            return true;
+        } else if (x >= 164 && x <= 310) {
+            _activePopup = POPUP_LUNAR;
+            hardware.playClick();
+            _lastRender = 0; // Trigger instant redraw
+            return true;
+        }
+    }
+
+    // 5. Khi Dock đang ẩn, chạm vào vùng dưới màn hình (Y >= 195) sẽ đánh thức Dock
     if (!_dockVisible) {
-        if (y >= 180) {
+        if (y >= 195) {
             wakeDock();
             return true;
         }
         return false;
-    }
-
-    // Dock is visible -> hit test buttons (5 slots, 44px wide each)
-    if (y >= 180) {
-        wakeDock(); // Reset 5s auto-hide timer
-        if (x < 94)                   { setPage(PAGE_CLOCK);    return true; }
-        else if (x >= 94 && x < 138)  { setPage(PAGE_CALENDAR); return true; }
-        else if (x >= 138 && x < 182) { setPage(PAGE_FINANCE);  return true; }
-        else if (x >= 182 && x < 226) { setPage(PAGE_POMODORO); return true; }
-        else if (x >= 226)            { nextTheme(); wakeDock(); return true; }
-        return true;
     }
 
     return false;
@@ -831,13 +1142,23 @@ void Display::renderDock() {
         bool isActive = (i < 4 && _currentPage == i);
 
         if (isActive) {
-            // Glowing neon pill behind active icon
-            _spr.fillRoundRect(cx - 17, dockY + 3, 34, 30, 15, RGB565(22, 36, 58));
-            _spr.drawRoundRect(cx - 17, dockY + 3, 34, 30, 15, theme.accent);
+            // 1. Pure obsidian interior (deep black, ZERO navy blue)
+            _spr.fillRoundRect(cx - 17, dockY + 3, 34, 30, 15, RGB565(8, 12, 20));
 
-            // Active Underglow Indicator Bar at bottom of dock
-            _spr.fillRoundRect(cx - 8, dockY + dockH - 4, 16, 2, 1, theme.accent);
-            _spr.drawFastHLine(cx - 4, dockY + dockH - 4, 8, C_WHITE);
+            // 2. Soft atmospheric outer halo
+            uint16_t haloColor = ((theme.accent & 0xF7DE) >> 1);
+            _spr.drawRoundRect(cx - 18, dockY + 2, 36, 32, 16, haloColor);
+
+            // 3. Double-thick intense Neon Border (pure radiant theme.accent)
+            _spr.drawRoundRect(cx - 17, dockY + 3, 34, 30, 15, theme.accent);
+            _spr.drawRoundRect(cx - 16, dockY + 4, 32, 28, 14, theme.accent);
+
+            // 4. Top specular highlight spark
+            _spr.drawFastHLine(cx - 8, dockY + 5, 16, C_WHITE);
+
+            // 5. Active Underglow LED Indicator Bar at bottom of dock
+            _spr.fillRoundRect(cx - 9, dockY + dockH - 4, 18, 2, 1, theme.accent);
+            _spr.drawFastHLine(cx - 5, dockY + dockH - 4, 10, C_WHITE);
         }
 
         switch (i) {

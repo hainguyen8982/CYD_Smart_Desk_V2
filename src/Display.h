@@ -31,7 +31,15 @@ public:
     bool handleTouch(uint16_t x, uint16_t y);
     void wakeDock();
 
+    // ── Custom Wallpaper ──────────────────────────────────────
+    void notifyWallpaperUpdated();
+    bool hasWallpaper() const { return _hasWallpaper; }
+    static bool tjpgRenderCallback(int16_t x, int16_t y, uint16_t w, uint16_t h, uint16_t* bitmap);
+
 private:
+    bool          _hasWallpaper;
+    bool          _wpCheckNeeded;
+
     TFT_eSPI      _tft;
     TFT_eSprite   _spr;           // Full-screen double-buffer sprite
     bool          _sprReady;
@@ -41,6 +49,16 @@ private:
     uint8_t       _currentPage;
     bool          _dockVisible;
     unsigned long _lastDockActivity;
+
+    // ── Popup Modal State ─────────────────────────────────────
+    enum PopupState {
+        POPUP_NONE = 0,
+        POPUP_WEATHER,
+        POPUP_LUNAR
+    };
+    PopupState    _activePopup;
+    void          renderWeatherPopup();
+    void          renderLunarPopup();
 
     // ── Calendar Navigation State ─────────────────────────────
     int16_t       _calYear;
@@ -80,7 +98,7 @@ private:
     void drawPartlyCloudyIcon(int16_t cx, int16_t cy);
     void drawRainIcon(int16_t cx, int16_t cy);
     void drawStormIcon(int16_t cx, int16_t cy);
-    void drawMoonIcon(int16_t cx, int16_t cy, int16_t r, uint8_t lunarDay);
+    void drawMoonIcon(int16_t cx, int16_t cy, int16_t r, uint8_t lunarDay, uint16_t bgTint = 0);
 };
 
 extern Display display;

@@ -180,7 +180,7 @@ void WeatherService::_fetchWeather() {
 
     char url[256];
     snprintf(url, sizeof(url),
-        "http://api.open-meteo.com/v1/forecast?latitude=%.4f&longitude=%.4f&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code,uv_index",
+        "http://api.open-meteo.com/v1/forecast?latitude=%.4f&longitude=%.4f&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code,uv_index&daily=sunrise,sunset&timezone=auto",
         _lat, _lon);
 
     HTTPClient http;
@@ -199,6 +199,28 @@ void WeatherService::_fetchWeather() {
             _data.windSpeed  = doc["current"]["wind_speed_10m"] | 10.0f;
             _data.uvIndex    = doc["current"]["uv_index"] | 0.0f;
             int wCode        = doc["current"]["weather_code"] | 0;
+
+            // Daily astronomical sunrise & sunset
+            const char* sRise = doc["daily"]["sunrise"][0];
+            const char* sSet  = doc["daily"]["sunset"][0];
+            if (sRise && strlen(sRise) >= 16) {
+                int h = 5, m = 48;
+                if (sscanf(sRise + 11, "%d:%d", &h, &m) == 2) {
+                    _data.sunriseHour = (uint8_t)h;
+                    _data.sunriseMin  = (uint8_t)m;
+                }
+            } else {
+                _data.sunriseHour = 5; _data.sunriseMin = 48;
+            }
+            if (sSet && strlen(sSet) >= 16) {
+                int h = 17, m = 35;
+                if (sscanf(sSet + 11, "%d:%d", &h, &m) == 2) {
+                    _data.sunsetHour = (uint8_t)h;
+                    _data.sunsetMin  = (uint8_t)m;
+                }
+            } else {
+                _data.sunsetHour = 17; _data.sunsetMin = 35;
+            }
 
             // Map WMO code
             if (wCode == 0) {

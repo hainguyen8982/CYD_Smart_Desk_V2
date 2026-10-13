@@ -17,6 +17,7 @@ public:
     static long long getJulius(uint32_t dd, uint32_t mm, uint32_t yy);
     static const char* getCanName(uint8_t index);
     static const char* getChiName(uint8_t index);
+    static const char* getSolarTermName(uint8_t dd, uint8_t mm, uint16_t yy);
 
 private:
     static uint32_t getNewMoonDay(uint32_t k);
