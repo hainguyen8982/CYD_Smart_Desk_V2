@@ -132,11 +132,11 @@ graph TD
 ```
 
 - [x] **Giai đoạn 0:** Khắc phục lỗi màn hình trắng tinh, thêm `invertDisplay(true)`, hoàn tất Fallback 8-bit Sprite.
-- [ ] **Giai đoạn 1:** Xây dựng `Theme.h/.cpp` (3 Themes bảo toàn layout) + `Display` Component Sprites 16-bit an toàn RAM.
-- [ ] **Giai đoạn 2:** Xây dựng `TouchManager` (Calibration, bộ lọc nhiễu, Hitbox $\ge 40\text{px}$, âm click còi) + Thanh Dock tự ẩn 5s.
-- [ ] **Giai đoạn 3:** Hoàn thiện Page 0 (Đồng hồ neon + Thời tiết thực + Âm lịch Việt Nam).
-- [ ] **Giai đoạn 4:** Hoàn thiện Page 1 (Lịch tháng Âm - Dương đầy đủ).
-- [ ] **Giai đoạn 5:** Tích hợp API Tài chính (Vàng SJC 7 ngày + Ngoại tệ) và vẽ biểu đồ sóng Sparkline mượt mà.
-- [ ] **Giai đoạn 6:** Hoàn thiện Page 3 (Pomodoro vòng cung + Báo thức chuông Buzzer).
+- [x] **Giai đoạn 1:** Xây dựng `Theme.h/.cpp` (3 Themes bảo toàn layout) + `Display` Component Sprites 16-bit an toàn RAM.
+- [x] **Giai đoạn 2:** Xây dựng `TouchManager` (Calibration, bộ lọc nhiễu, Hitbox $\ge 40\text{px}$, âm click còi) + Thanh Dock tự ẩn 5s.
+- [x] **Giai đoạn 3:** Hoàn thiện Page 0 (Đồng hồ neon + Thời tiết thực + Âm lịch Việt Nam + Báo thức Alarm chuông vàng cảm ứng mặt trước).
+- [x] **Giai đoạn 4:** Hoàn thiện Page 1 (Lịch tháng Âm - Dương đầy đủ).
+- [x] **Giai đoạn 5:** Tích hợp API Tài chính (Vàng SJC 7 ngày + Ngoại tệ) và vẽ biểu đồ sóng Sparkline mượt mà.
+- [x] **Giai đoạn 6:** Hoàn thiện Page 3 (Pomodoro Split Layout + Chú cà chua Tomato Mascot + Nút công thái học).
 - [ ] **Giai đoạn 7:** Web Portal nội bộ (Cấu hình WiFi, đổi Thành phố, chọn Ngoại tệ, đổi Theme) + Auto-Brightness qua LDR.
 - [ ] **Giai đoạn 8:** Tối ưu hóa, stress test 48h không tràn RAM, bàn giao mã nguồn thương mại hoàn chỉnh.

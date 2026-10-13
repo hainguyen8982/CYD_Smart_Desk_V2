@@ -33,7 +33,7 @@ WeatherService::WeatherService()
 void WeatherService::begin() {
     _connectWiFi();
     if (isConnected()) {
-        display.showBootStatus("Syncing NTP Time...");
+        display.showBootStatus("Syncing NTP Time...", 75);
         _syncTime();
 
         // Chờ nhanh tối đa 4s để đồng bộ giờ ngay lúc khởi động
@@ -45,15 +45,21 @@ void WeatherService::begin() {
                 struct tm t;
                 localtime_r(&now, &t);
                 Serial.printf("[NTP] Time synced on boot: %02d:%02d:%02d\n", t.tm_hour, t.tm_min, t.tm_sec);
-                display.showBootStatus("Time Synced!");
-                delay(300);
+                display.showBootStatus("NTP Time Synced!", 88);
+                delay(250);
                 break;
             }
             delay(150);
         }
 
+        display.showBootStatus("Updating Weather...", 94);
         _detectCityFromIP();
         _fetchWeather();
+        display.showBootStatus("System Ready!", 100);
+        delay(400);
+    } else {
+        display.showBootStatus("System Ready!", 100);
+        delay(400);
     }
 }
 
@@ -135,7 +141,7 @@ uint8_t WeatherService::getLunarDay() const {
 
 void WeatherService::_connectWiFi() {
     Serial.println("[WiFi] Starting WiFiManager...");
-    display.showBootStatus("Connecting WiFi...");
+    display.showBootStatus("Connecting WiFi...", 35);
 
     WiFiManager wm;
     wm.setConfigPortalTimeout(120);
@@ -144,18 +150,18 @@ void WeatherService::_connectWiFi() {
 
     wm.setAPCallback([](WiFiManager* myWiFiManager) {
         Serial.println("[WiFi] Entered AP Config Portal Mode");
-        display.showBootStatus("AP: CYD-SmartDesk-V2 (192.168.4.1)");
+        display.showBootStatus("AP Mode: CYD-SmartDesk-V2", 50);
     });
 
     if (!wm.autoConnect("CYD-SmartDesk-V2")) {
         Serial.println("[WiFi] Failed to connect, continuing offline");
-        display.showBootStatus("WiFi failed. Continuing offline...");
-        delay(1000);
+        display.showBootStatus("WiFi Offline Mode", 60);
+        delay(600);
         return;
     }
     Serial.printf("[WiFi] Connected! IP: %s\n", WiFi.localIP().toString().c_str());
-    display.showBootStatus("WiFi Connected!");
-    delay(500);
+    display.showBootStatus("WiFi Connected!", 68);
+    delay(300);
 }
 
 void WeatherService::_syncTime() {

@@ -23,7 +23,9 @@ public:
     Display();
     void begin();
     void update();
-    void showBootStatus(const char* status);
+    void playBootAnimation();
+    void drawFabXLogo(int16_t x, int16_t y);
+    void showBootStatus(const char* status, uint8_t progressPercent = 0);
 
     // ── Navigation & Touch ────────────────────────────────────
     void setPage(uint8_t p);
@@ -54,11 +56,36 @@ private:
     enum PopupState {
         POPUP_NONE = 0,
         POPUP_WEATHER,
-        POPUP_LUNAR
+        POPUP_LUNAR,
+        POPUP_ALARM
     };
     PopupState    _activePopup;
     void          renderWeatherPopup();
     void          renderLunarPopup();
+    void          renderAlarmPopup();
+    void          renderAlarmTimeOnly();
+    void          renderAlarmToggleBtnOnly();
+    void          renderAlarmRingingScreen();
+
+    // ── Alarm Engine ──────────────────────────────────────────
+    bool          _alarmEnabled;
+    uint8_t       _alarmHour;          // 0..23
+    uint8_t       _alarmMinute;        // 0..59
+    bool          _alarmRinging;
+    unsigned long _alarmRingStart;
+    unsigned long _lastAlarmBeepTick;
+    bool          _alarmSnoozed;
+    time_t        _alarmSnoozeUntil;
+    int           _alarmLastTriggerDay;
+    unsigned long _alarmAutoCloseTime;
+
+    void          loadAlarmSettings();
+    void          saveAlarmSettings();
+    void          checkAlarmTick();
+    void          triggerAlarm();
+    void          dismissAlarm();
+    void          snoozeAlarm();
+    void          drawBellIcon(int16_t cx, int16_t cy, bool isEnabled, uint16_t customColor = 0);
 
     // ── Calendar Navigation State ─────────────────────────────
     int16_t       _calYear;

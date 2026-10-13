@@ -29,10 +29,11 @@ void setup() {
     // 1. Initialize hardware subsystems (Backlight, LDR, Speaker, RGB)
     hardware.begin();
 
-    // 2. Initialize display & show boot splash
+    // 2. Initialize display & show boot splash with particle convergence
     display.begin();
 
     // 3. Initialize touch input
+    display.showBootStatus("Initializing Touch...", 22);
     touch.begin();
 
     // 4. BOOT button as input with pullup (for 3s calibration trigger)
@@ -43,8 +44,12 @@ void setup() {
 
     // 6. Start Web Dashboard for mobile wallpaper upload & controls
     if (weather.isConnected()) {
+        display.showBootStatus("Starting Dashboard...", 98);
         webDashboard.begin();
     }
+
+    display.showBootStatus("System Ready!", 100);
+    delay(300);
 
     Serial.println("[System] Setup complete!");
     Serial.printf("[System] Free heap: %d bytes\n", ESP.getFreeHeap());

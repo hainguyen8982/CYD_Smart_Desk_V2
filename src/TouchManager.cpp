@@ -25,6 +25,9 @@ void TouchManager::begin() {
     pinMode(PIN_TOUCH_CS, OUTPUT);
     digitalWrite(PIN_TOUCH_CS, HIGH);
     pinMode(PIN_TOUCH_IRQ, INPUT);
+    pinMode(25, OUTPUT); // CLK
+    pinMode(32, OUTPUT); // MOSI
+    pinMode(39, INPUT);  // MISO
 
     _loadCalibration();
 
@@ -37,10 +40,6 @@ void TouchManager::begin() {
 
 uint16_t TouchManager::_xptReadChannel(uint8_t cmd) {
     digitalWrite(PIN_TOUCH_CS, LOW);
-
-    pinMode(25, OUTPUT); // CLK
-    pinMode(32, OUTPUT); // MOSI
-    pinMode(39, INPUT);  // MISO
 
     for (int i = 7; i >= 0; i--) {
         digitalWrite(32, (cmd >> i) & 1);
@@ -66,15 +65,22 @@ uint16_t TouchManager::_xptReadChannel(uint8_t cmd) {
 bool TouchManager::_readRaw(uint16_t *raw90, uint16_t *rawD0) {
     if (digitalRead(PIN_TOUCH_IRQ) == HIGH) return false;
 
-    long sum90 = 0, sumD0 = 0;
-    const int samples = 8;
-    for (int i = 0; i < samples; i++) {
+    // Đọc trục Y (0x90): đọc 1 mẫu xả điện dung phiến điện trở, sau đó lấy trung bình 4 mẫu ổn định
+    _xptReadChannel(0x90);
+    long sum90 = 0;
+    for (int i = 0; i < 4; i++) {
         sum90 += _xptReadChannel(0x90);
+    }
+
+    // Đọc trục X (0xD0): đọc 1 mẫu xả điện dung phiến điện trở, sau đó lấy trung bình 4 mẫu ổn định
+    _xptReadChannel(0xD0);
+    long sumD0 = 0;
+    for (int i = 0; i < 4; i++) {
         sumD0 += _xptReadChannel(0xD0);
     }
 
-    uint16_t r90 = sum90 / samples;
-    uint16_t rD0 = sumD0 / samples;
+    uint16_t r90 = sum90 / 4;
+    uint16_t rD0 = sumD0 / 4;
 
     // Filter out edge noise
     if (r90 < 150 || rD0 < 150 || r90 > 3950 || rD0 > 3950) return false;
@@ -107,37 +113,42 @@ bool TouchManager::checkTap(uint16_t *x, uint16_t *y) {
 
     uint16_t currX = 0, currY = 0;
     bool pressed = getTouch(&currX, &currY);
+    unsigned long now = millis();
 
     if (pressed) {
         if (!_isTouching) {
-            _isTouching = true;
-            _touchStartTime = millis();
-            _startX = currX;
-            _startY = currY;
-        }
-        _lastX = currX;
-        _lastY = currY;
-        return false;
-    } else {
-        if (_isTouching) {
-            _isTouching = false;
-            unsigned long duration = millis() - _touchStartTime;
-            int dx = abs((int)_lastX - (int)_startX);
-            int dy = abs((int)_lastY - (int)_startY);
-
-            // Valid tap: finger held between 40ms and 600ms, minimal movement
-            if (duration >= 40 && duration < 600 && dx < 45 && dy < 45) {
-                unsigned long now = millis();
-                if (now - _lastTapTime > 150) { // Debounce successive taps
+            // Ngay khi vừa chạm ngón tay vào màn hình -> NHẬN LỆNH NGAY LẬP TỨC (Press event)
+            if (now - _lastTapTime >= 120) {
+                _isTouching = true;
+                _touchStartTime = now;
+                _startX = currX;
+                _startY = currY;
+                _lastTapTime = now;
+                *x = currX;
+                *y = currY;
+                hardware.playClick();
+                Serial.printf("[Touch] ✓ Tap registered on press at (%d, %d)\n", *x, *y);
+                return true;
+            }
+        } else {
+            // Đang giữ ngón tay trên màn hình (Long press / Auto-repeat)
+            // Giữ quá 360ms sẽ tự động lặp lại mỗi 150ms để tăng/giảm giờ cực nhanh
+            unsigned long heldDuration = now - _touchStartTime;
+            if (heldDuration > 360 && (now - _lastTapTime >= 150)) {
+                int dx = abs((int)currX - (int)_startX);
+                int dy = abs((int)currY - (int)_startY);
+                if (dx < 35 && dy < 35) {
                     _lastTapTime = now;
-                    *x = _lastX;
-                    *y = _lastY;
+                    *x = _startX;
+                    *y = _startY;
                     hardware.playClick();
-                    Serial.printf("[Touch] ✓ Tap registered at (%d, %d)\n", *x, *y);
                     return true;
                 }
             }
         }
+    } else {
+        // Nhấc ngón tay khỏi màn hình -> Reset trạng thái chạm
+        _isTouching = false;
     }
     return false;
 }

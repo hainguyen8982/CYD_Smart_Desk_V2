@@ -14,9 +14,10 @@ HardwareManager::HardwareManager()
       _smoothedLdr(-1) {}
 
 void HardwareManager::begin() {
-    // 1. Backlight
+    // 1. Backlight - keep OFF initially to avoid flashing stale frame from previous reboot
     pinMode(PIN_TFT_BL, OUTPUT);
-    setBacklight(85);
+    analogWrite(PIN_TFT_BL, 0);
+    _currentBrightness = 0;
 
     // 2. LDR Ambient sensor (GPIO 34 ADC1)
     pinMode(PIN_LDR, INPUT);

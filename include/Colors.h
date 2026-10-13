@@ -80,4 +80,21 @@ inline uint16_t hexToRGB565(const char* hex) {
     return RGB565(r, g, b);
 }
 
+// ─── Linear blend between two RGB565 colors (alpha 0..255) ────────────
+inline uint16_t blendColor(uint16_t c1, uint16_t c2, uint8_t alpha) {
+    uint8_t r1 = (c1 >> 11) & 0x1F;
+    uint8_t g1 = (c1 >> 5)  & 0x3F;
+    uint8_t b1 = c1         & 0x1F;
+
+    uint8_t r2 = (c2 >> 11) & 0x1F;
+    uint8_t g2 = (c2 >> 5)  & 0x3F;
+    uint8_t b2 = c2         & 0x1F;
+
+    uint8_t r = (r1 * (255 - alpha) + r2 * alpha) / 255;
+    uint8_t g = (g1 * (255 - alpha) + g2 * alpha) / 255;
+    uint8_t b = (b1 * (255 - alpha) + b2 * alpha) / 255;
+
+    return (r << 11) | (g << 5) | b;
+}
+
 #endif // COLORS_H

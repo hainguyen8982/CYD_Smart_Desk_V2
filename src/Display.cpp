@@ -14,8 +14,10 @@
 #include "vn_lunar.h"
 #include "HardwareManager.h"
 #include "DockIconsColor20.h"
+#include "FabXLogo.h"
 #include <LittleFS.h>
 #include <TJpg_Decoder.h>
+#include <Preferences.h>
 #include <time.h>
 
 Display display;
@@ -47,6 +49,10 @@ Display::Display()
       _tft(), _spr(&_tft), _sprReady(false), _lastRender(0),
       _currentPage(PAGE_CLOCK), _dockVisible(true), _lastDockActivity(0),
       _activePopup(POPUP_NONE),
+      _alarmEnabled(false), _alarmHour(7), _alarmMinute(0),
+      _alarmRinging(false), _alarmRingStart(0), _lastAlarmBeepTick(0),
+      _alarmSnoozed(false), _alarmSnoozeUntil(0), _alarmLastTriggerDay(-1),
+      _alarmAutoCloseTime(0),
       _calYear(0), _calMonth(0),
       _pomoMode(POMO_FOCUS), _pomoState(POMO_STOPPED),
       _pomoTotalSec(25 * 60), _pomoRemainingSec(25 * 60),
@@ -55,6 +61,7 @@ Display::Display()
 // ─── Begin ───────────────────────────────────────────────────────────
 void Display::begin() {
     initTheme();                   // Load saved theme from NVS
+    loadAlarmSettings();           // Load saved alarm settings from NVS
 
     // Mount LittleFS for custom wallpaper storage
     if (LittleFS.begin(true)) {
@@ -71,18 +78,7 @@ void Display::begin() {
     delay(100);
     _tft.setRotation(1);           // Landscape 320×240
     _tft.invertDisplay(true);      // CYD panel requires color inversion
-    _tft.fillScreen(theme.bg);
-
-    // Set backlight on
-    pinMode(PIN_TFT_BL, OUTPUT);
-    analogWrite(PIN_TFT_BL, 200);
-
-    // Show boot splash immediately so screen is NEVER blank while WiFi connects
-    _tft.setTextColor(C_WHITE, C_BLACK);
-    _tft.setTextDatum(MC_DATUM);
-    _tft.drawString("CYD SmartDesk V2", SCREEN_W / 2, SCREEN_H / 2 - 25, 4);
-    _tft.setTextColor(C_CYAN, C_BLACK);
-    _tft.drawString("Initializing...", SCREEN_W / 2, SCREEN_H / 2 + 15, 2);
+    _tft.fillScreen(C_BLACK);
 
     Serial.printf("[Display] Free heap: %u | Max alloc block: %u\n",
                   ESP.getFreeHeap(),
@@ -100,23 +96,205 @@ void Display::begin() {
     if (buf) {
         _sprReady = true;
         _spr.setTextWrap(false);
+        _spr.fillSprite(C_BLACK);
+        _spr.pushSprite(0, 0);
+
+        // Turn on backlight now that screen is cleanly filled with black
+        hardware.setBacklight(85);
+
         Serial.printf("[Display] Sprite created OK! Depth: %d-bit (%d bytes)\n",
                       _spr.getColorDepth(),
                       SCREEN_W * SCREEN_H * (_spr.getColorDepth() / 8));
+
+        // Run Particle Convergence Boot Animation!
+        playBootAnimation();
     } else {
         Serial.println("[Display] ERROR: Both 16-bit and 8-bit Sprite alloc failed!");
         _sprReady = false;
+        hardware.setBacklight(85);
         _tft.setTextColor(TFT_RED, C_BLACK);
         _tft.drawString("RAM Error: Sprite failed!", SCREEN_W / 2, SCREEN_H / 2 + 40, 2);
     }
 }
 
-void Display::showBootStatus(const char* status) {
+// ─── FabX Logo & Boot Animation ──────────────────────────────────────
+void Display::drawFabXLogo(int16_t x, int16_t y) {
+    if (!_sprReady) return;
+    for (int16_t row = 0; row < FABX_LOGO_H; row++) {
+        for (int16_t col = 0; col < FABX_LOGO_W; col++) {
+            uint16_t color = pgm_read_word(&FABX_BITMAP[row * FABX_LOGO_W + col]);
+            if (color != 0x0000) {
+                _spr.drawPixel(x + col, y + row, color);
+            }
+        }
+    }
+}
+
+void Display::playBootAnimation() {
+    if (!_sprReady) return;
+
+    struct ParticleState {
+        float startX, startY;
+        int16_t targetX, targetY;
+        uint16_t color;
+        uint16_t delayMs;
+        uint16_t durationMs;
+    };
+
+    ParticleState* particles = (ParticleState*)malloc(sizeof(ParticleState) * FABX_PARTICLE_COUNT);
+    if (!particles) {
+        Serial.println("[Display] Boot animation malloc failed -> Fallback to static splash");
+        showBootStatus("Starting System...", 15);
+        return;
+    }
+
+    const int16_t logoX = (SCREEN_W - FABX_LOGO_W) / 2; // (320 - 136) / 2 = 92
+    const int16_t logoY = 46;
+
+    for (int i = 0; i < FABX_PARTICLE_COUNT; i++) {
+        FabXParticleTarget pt;
+        memcpy_P(&pt, &FABX_TARGETS[i], sizeof(FabXParticleTarget));
+
+        particles[i].targetX = logoX + pt.x;
+        particles[i].targetY = logoY + pt.y;
+        particles[i].color   = pt.color;
+
+        // Spawn particles outside the 4 edges of the screen
+        int edge = random(0, 4);
+        if (edge == 0) { // Top
+            particles[i].startX = (float)random(-30, SCREEN_W + 30);
+            particles[i].startY = (float)random(-50, -10);
+        } else if (edge == 1) { // Bottom
+            particles[i].startX = (float)random(-30, SCREEN_W + 30);
+            particles[i].startY = (float)random(SCREEN_H + 10, SCREEN_H + 50);
+        } else if (edge == 2) { // Left
+            particles[i].startX = (float)random(-50, -10);
+            particles[i].startY = (float)random(-30, SCREEN_H + 30);
+        } else { // Right
+            particles[i].startX = (float)random(SCREEN_W + 10, SCREEN_W + 50);
+            particles[i].startY = (float)random(-30, SCREEN_H + 30);
+        }
+
+        particles[i].delayMs    = random(0, 320);
+        particles[i].durationMs = random(550, 780);
+    }
+
+    unsigned long animStart = millis();
+    const unsigned long totalDuration = 1200; // 1.2s
+
+    while (millis() - animStart < totalDuration) {
+        unsigned long elapsed = millis() - animStart;
+
+        _spr.fillSprite(C_BLACK);
+
+        for (int i = 0; i < FABX_PARTICLE_COUNT; i++) {
+            if (elapsed < particles[i].delayMs) continue;
+
+            float t = (float)(elapsed - particles[i].delayMs) / (float)particles[i].durationMs;
+            if (t > 1.0f) t = 1.0f;
+
+            // Smooth cubic ease out: 1 - (1-t)^3
+            float ease = 1.0f - (1.0f - t) * (1.0f - t) * (1.0f - t);
+
+            int16_t curX = (int16_t)roundf(particles[i].startX + ease * (particles[i].targetX - particles[i].startX));
+            int16_t curY = (int16_t)roundf(particles[i].startY + ease * (particles[i].targetY - particles[i].startY));
+
+            if (t < 0.90f) {
+                // Moving particle: draw 2x2 glowing block
+                _spr.fillRect(curX, curY, 2, 2, particles[i].color);
+            } else {
+                // Settled particle: crisp 1px
+                _spr.drawPixel(curX, curY, particles[i].color);
+            }
+        }
+
+        _spr.pushSprite(0, 0);
+        delay(14); // ~60 FPS cap
+    }
+
+    free(particles);
+
+    // Audio click feedback upon logo lock
+    hardware.playClick();
+
+    // Lock-in Flash / Reveal
+    _spr.fillSprite(C_BLACK);
+    drawFabXLogo(logoX, logoY);
+    _spr.setTextDatum(MC_DATUM);
+    _spr.setTextColor(C_WHITE, C_BLACK);
+    _spr.drawString("S M A R T   D E S K", SCREEN_W / 2, 112, 2);
+    _spr.pushSprite(0, 0);
+    delay(40);
+
+    // Initial status display
+    showBootStatus("Starting System...", 15);
+}
+
+void Display::showBootStatus(const char* status, uint8_t progressPercent) {
     if (!status) return;
-    _tft.setTextDatum(MC_DATUM);
-    _tft.fillRect(0, SCREEN_H / 2, SCREEN_W, 60, C_BLACK);
-    _tft.setTextColor(C_CYAN, C_BLACK);
-    _tft.drawString(status, SCREEN_W / 2, SCREEN_H / 2 + 15, 2);
+
+    if (_sprReady) {
+        _spr.fillSprite(C_BLACK);
+
+        // 1. FabX Logo
+        const int16_t logoX = (SCREEN_W - FABX_LOGO_W) / 2;
+        const int16_t logoY = 46;
+        drawFabXLogo(logoX, logoY);
+
+        // 2. Subtitle: S M A R T   D E S K
+        _spr.setTextDatum(MC_DATUM);
+        _spr.setTextColor(C_WHITE, C_BLACK);
+        _spr.drawString("S M A R T   D E S K", SCREEN_W / 2, 112, 2);
+
+        // 3. High-tech Progress Bar
+        const int16_t barX = 45;
+        const int16_t barY = 152;
+        const int16_t barW = 230;
+        const int16_t barH = 5;
+
+        // Background track (dark slate)
+        _spr.fillRoundRect(barX, barY, barW, barH, 2, 0x18E3);
+        _spr.drawRoundRect(barX - 1, barY - 1, barW + 2, barH + 2, 3, 0x2965);
+
+        // Active fill (Gradient: Royal Blue 0x13BA -> Cyan 0x063F -> Neon Green 0x0672)
+        uint8_t pct = constrain(progressPercent, 5, 100);
+        int16_t fillW = (barW * pct) / 100;
+        if (fillW > 0) {
+            for (int16_t x = 0; x < fillW; x++) {
+                float r = (float)x / (float)barW;
+                uint16_t gradColor;
+                if (r < 0.6f) {
+                    gradColor = blendColor(0x13BA, 0x063F, (uint8_t)((r / 0.6f) * 255));
+                } else {
+                    gradColor = blendColor(0x063F, 0x0672, (uint8_t)(((r - 0.6f) / 0.4f) * 255));
+                }
+                _spr.drawFastVLine(barX + x, barY, barH, gradColor);
+            }
+            _spr.fillCircle(barX + fillW, barY + barH / 2, 2, C_WHITE);
+        }
+
+        // 4. Status text
+        _spr.setTextDatum(MC_DATUM);
+        _spr.setTextColor(C_CYAN, C_BLACK);
+        _spr.drawString(status, SCREEN_W / 2, 176, 2);
+
+        // 5. Tech info & footer
+        char pctBuf[32];
+        snprintf(pctBuf, sizeof(pctBuf), "BOOTLOADER  •  %d%%", pct);
+        _spr.setTextColor(0x8410, C_BLACK); // Muted slate gray
+        _spr.drawString(pctBuf, SCREEN_W / 2, 196, 1);
+
+        _spr.setTextColor(0x4208, C_BLACK);
+        _spr.drawString("FABX SMARTDESK V2  •  COMMERCIAL EDITION", SCREEN_W / 2, 222, 1);
+
+        _spr.pushSprite(0, 0);
+    } else {
+        // Fallback directly to TFT if sprite not ready
+        _tft.fillRect(0, 160, SCREEN_W, 60, C_BLACK);
+        _tft.setTextDatum(MC_DATUM);
+        _tft.setTextColor(C_CYAN, C_BLACK);
+        _tft.drawString(status, SCREEN_W / 2, 180, 2);
+    }
 }
 
 void Display::update() {
@@ -124,6 +302,9 @@ void Display::update() {
 
     // Duy trì bộ đếm Pomodoro chạy ngầm liên tục
     pomoTick();
+
+    // Duy trì kiểm tra Báo thức chạy ngầm liên tục
+    checkAlarmTick();
 
     unsigned long now = millis();
     if (now - _lastRender < DISPLAY_FPS_INTERVAL) return;
@@ -133,6 +314,24 @@ void Display::update() {
     if (touch.isCalibrating()) {
         renderCalibrationScreen();
         _spr.pushSprite(0, 0);
+        return;
+    }
+
+    // NẾU BÁO THỨC ĐANG KÊU: RENDER TOÀN MÀN HÌNH BÁO THỨC (Ưu tiên tuyệt đối)
+    if (_alarmRinging) {
+        renderAlarmRingingScreen();
+        _spr.pushSprite(0, 0);
+        return;
+    }
+
+    // NẾU ĐANG MỞ POPUP BÁO THỨC: ĐÓNG BĂNG VẼ LẠI NỀN ĐỂ CHỐNG NHẤP NHÁY TUYỆT ĐỐI
+    if (_activePopup == POPUP_ALARM) {
+        // Tự động đóng popup sau 3 giây nếu được mở từ thao tác bật chuông
+        if (_alarmAutoCloseTime > 0 && millis() > _alarmAutoCloseTime) {
+            _alarmAutoCloseTime = 0;
+            _activePopup = POPUP_NONE;
+            _lastRender = 0;
+        }
         return;
     }
 
@@ -154,6 +353,8 @@ void Display::update() {
         renderWeatherPopup();
     } else if (_activePopup == POPUP_LUNAR) {
         renderLunarPopup();
+    } else if (_activePopup == POPUP_ALARM) {
+        renderAlarmPopup();
     } else {
         renderDock();
     }
@@ -266,6 +467,13 @@ void Display::renderPage0_WeatherClock() {
     // Layer 3: Solid Electric Neon Cyan body (matching reference image)
     _spr.setTextColor(RGB565(0, 245, 255));
     _spr.drawString(timeBuf, clockCx, clockCy, 8);
+
+    // ── Alarm Bell Icon (Right next to clock digits, NO text time) ──
+    int16_t timeW = _spr.textWidth(timeBuf, 8);
+    int16_t bellX = clockCx + (timeW / 2) + 16;
+    if (bellX < 268) bellX = 268;
+    if (bellX > 298) bellX = 298;
+    drawBellIcon(bellX, 34, _alarmEnabled);
 
     // ────────────────────────────────────────────────────────────────
     // 3. DATE LINE — Centered with ample space (Y = 107, Font 2, Pure White)
@@ -658,6 +866,291 @@ void Display::renderLunarPopup() {
     _spr.setTextDatum(MR_DATUM);
     _spr.setTextColor(RGB565(255, 215, 0)); // Gold
     _spr.drawString(yrBuf, mx + mw - 20, my + 170, 2);
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  ALARM ENGINE & POPUP MODAL (100% Front-screen touch operated)
+// ═══════════════════════════════════════════════════════════════════════
+void Display::loadAlarmSettings() {
+    Preferences prefs;
+    prefs.begin("cyd_alarm", true);
+    _alarmEnabled = prefs.getBool("enabled", false);
+    _alarmHour    = prefs.getUChar("hour", 7);
+    _alarmMinute  = prefs.getUChar("min", 0);
+    prefs.end();
+    if (_alarmHour > 23) _alarmHour = 7;
+    if (_alarmMinute > 59) _alarmMinute = 0;
+    Serial.printf("[Alarm] Loaded: %s %02d:%02d\n",
+                  _alarmEnabled ? "BAT" : "TAT", _alarmHour, _alarmMinute);
+}
+
+void Display::saveAlarmSettings() {
+    Preferences prefs;
+    prefs.begin("cyd_alarm", false);
+    prefs.putBool("enabled", _alarmEnabled);
+    prefs.putUChar("hour", _alarmHour);
+    prefs.putUChar("min", _alarmMinute);
+    prefs.end();
+    Serial.printf("[Alarm] Saved: %s %02d:%02d\n",
+                  _alarmEnabled ? "BAT" : "TAT", _alarmHour, _alarmMinute);
+}
+
+void Display::checkAlarmTick() {
+    unsigned long now = millis();
+
+    // 1. Khi báo thức đang reo
+    if (_alarmRinging) {
+        // Tự tắt sau 3 phút nếu không có ai chạm màn hình (tránh nóng loa)
+        if (now - _alarmRingStart > 180000UL) {
+            dismissAlarm();
+            return;
+        }
+
+        // Tạo chuỗi âm báo thức cách quãng 900ms (non-blocking)
+        if (now - _lastAlarmBeepTick >= 900) {
+            _lastAlarmBeepTick = now;
+            hardware.playBeep(2400, 100);
+            delay(35);
+            hardware.playBeep(2800, 120);
+        }
+        return;
+    }
+
+    // 2. Kiểm tra kích hoạt báo thức
+    if (!_alarmEnabled) return;
+
+    time_t nowSec = time(NULL);
+    struct tm t;
+    localtime_r(&nowSec, &t);
+
+    // Xử lý snooze
+    if (_alarmSnoozed) {
+        if (nowSec >= _alarmSnoozeUntil) {
+            _alarmSnoozed = false;
+            triggerAlarm();
+        }
+        return;
+    }
+
+    // Kích hoạt theo giờ cài đặt (chỉ kích hoạt 1 lần mỗi ngày cho khung giờ đó)
+    if (t.tm_hour == _alarmHour && t.tm_min == _alarmMinute) {
+        if (_alarmLastTriggerDay != t.tm_yday) {
+            _alarmLastTriggerDay = t.tm_yday;
+            triggerAlarm();
+        }
+    }
+}
+
+void Display::triggerAlarm() {
+    _alarmRinging = true;
+    _alarmRingStart = millis();
+    _lastAlarmBeepTick = 0;
+    _alarmSnoozed = false;
+    _activePopup = POPUP_NONE;
+    wakeDock();
+    _lastRender = 0;
+    Serial.println("[Alarm] >>> TRIGGERED! Ringing started <<<");
+}
+
+void Display::dismissAlarm() {
+    _alarmRinging = false;
+    _alarmSnoozed = false;
+    hardware.playBeep(1800, 150);
+    _lastRender = 0;
+    Serial.println("[Alarm] Dismissed by user touch");
+}
+
+void Display::snoozeAlarm() {
+    _alarmRinging = false;
+    _alarmSnoozed = true;
+    _alarmSnoozeUntil = time(NULL) + 300; // Snooze 5 phút
+    hardware.playBeep(2200, 120);
+    _lastRender = 0;
+    Serial.println("[Alarm] Snoozed for 5 minutes");
+}
+
+void Display::drawBellIcon(int16_t cx, int16_t cy, bool isEnabled, uint16_t customColor) {
+    const uint16_t* bmp = isEnabled ? bell_icon_gold_20x20 : bell_icon_off_20x20;
+    int16_t startX = cx - 10;
+    int16_t startY = cy - 10;
+    for (int r = 0; r < 20; r++) {
+        for (int c = 0; c < 20; c++) {
+            uint16_t color = pgm_read_word(&bmp[r * 20 + c]);
+            if (color != 0x0000) {
+                if (customColor != 0) {
+                    _spr.drawPixel(startX + c, startY + r, customColor);
+                } else {
+                    _spr.drawPixel(startX + c, startY + r, color);
+                }
+            }
+        }
+    }
+}
+
+void Display::renderAlarmPopup() {
+    int16_t mx = 20;
+    int16_t my = 20;
+    int16_t mw = 280;
+    int16_t mh = 195;
+    int16_t mr = 16;
+
+    // Dark glass backing (Đồng nhất 100% với Weather & Lunar Popup)
+    _spr.fillRoundRect(mx, my, mw, mh, mr, RGB565(10, 15, 26));
+    _spr.drawRoundRect(mx, my, mw, mh, mr, RGB565(255, 215, 0));
+    _spr.drawRoundRect(mx + 1, my + 1, mw - 2, mh - 2, mr - 1, RGB565(180, 140, 20));
+    _spr.drawFastHLine(mx + mr, my, mw - mr * 2, C_WHITE);
+
+    // ── Header (Y = my + 16): Icon Chuông + Tiêu đề + Nút Đóng [ X ] ──────────────────
+    drawBellIcon(mx + 16, my + 16, _alarmEnabled);
+    _spr.setTextDatum(ML_DATUM);
+    _spr.setTextColor(RGB565(255, 215, 0));
+    _spr.drawString("CAI DAT BAO THUC", mx + 30, my + 16, 2);
+
+    // Close button [ X ] (Đồng nhất 100% với Weather & Lunar popup)
+    _spr.fillRoundRect(mx + mw - 26, my + 8, 18, 16, 4, RGB565(40, 50, 70));
+    _spr.setTextColor(C_WHITE);
+    _spr.setTextDatum(MC_DATUM);
+    _spr.drawString("X", mx + mw - 17, my + 16, 2);
+
+    // Top divider line (Y = my + 30) (Đồng nhất 100% với Weather & Lunar popup)
+    _spr.drawFastHLine(mx + 12, my + 30, mw - 24, RGB565(40, 60, 90));
+
+    // ── 1. KHU VỰC THỜI GIAN GIỜ : PHÚT (MŨI TÊN TỰ DO THEO ĐÚNG MẪU FIRST DESIGN, KHÔNG KHUNG BAO) ──
+    int16_t hx = 62, hw = 76;
+    int16_t mx2 = 182, mw2 = 76;
+
+    // A. Mũi tên LÊN ▲ (Tam giác phát sáng cyan thanh thoát, KHÔNG KHUNG BAO)
+    int16_t upY = 74;
+    // Giờ Lên
+    _spr.fillTriangle(hx + hw / 2 - 10, upY + 4, hx + hw / 2 + 10, upY + 4, hx + hw / 2, upY - 6, RGB565(0, 225, 255));
+    // Phút Lên
+    _spr.fillTriangle(mx2 + mw2 / 2 - 10, upY + 4, mx2 + mw2 / 2 + 10, upY + 4, mx2 + mw2 / 2, upY - 6, RGB565(0, 225, 255));
+
+    // B. Khung số Giờ & Phút (Bo góc mềm mại R = 10, số Font 4 cao 26px sang trọng, vừa vặn tuyệt đối)
+    int16_t boxY = 96, boxH = 54;
+    // Khung Giờ
+    _spr.fillRoundRect(hx, boxY, hw, boxH, 10, RGB565(12, 18, 30));
+    _spr.drawRoundRect(hx, boxY, hw, boxH, 10, RGB565(0, 180, 240));
+    char hBuf[8];
+    snprintf(hBuf, sizeof(hBuf), "%02d", _alarmHour);
+    _spr.setTextDatum(MC_DATUM);
+    _spr.setTextColor(C_WHITE);
+    _spr.drawString(hBuf, hx + hw / 2, boxY + boxH / 2, 4);
+
+    // Dấu hai chấm ":" phát sáng màu cyan ở giữa
+    _spr.fillCircle(160, 117, 3, RGB565(0, 230, 255));
+    _spr.fillCircle(160, 129, 3, RGB565(0, 230, 255));
+
+    // Khung Phút
+    _spr.fillRoundRect(mx2, boxY, mw2, boxH, 10, RGB565(12, 18, 30));
+    _spr.drawRoundRect(mx2, boxY, mw2, boxH, 10, RGB565(0, 180, 240));
+    char mBuf[8];
+    snprintf(mBuf, sizeof(mBuf), "%02d", _alarmMinute);
+    _spr.setTextDatum(MC_DATUM);
+    _spr.setTextColor(C_WHITE);
+    _spr.drawString(mBuf, mx2 + mw2 / 2, boxY + boxH / 2, 4);
+
+    // C. Mũi tên XUỐNG ▼ (Tam giác phát sáng cyan thanh thoát, KHÔNG KHUNG BAO)
+    int16_t downY = 170;
+    // Giờ Xuống
+    _spr.fillTriangle(hx + hw / 2 - 10, downY - 4, hx + hw / 2 + 10, downY - 4, hx + hw / 2, downY + 6, RGB565(0, 225, 255));
+    // Phút Xuống
+    _spr.fillTriangle(mx2 + mw2 / 2 - 10, downY - 4, mx2 + mw2 / 2 + 10, downY - 4, mx2 + mw2 / 2, downY + 6, RGB565(0, 225, 255));
+}
+
+void Display::renderAlarmTimeOnly() {
+    // Chỉ vẽ lại ô Giờ và ô Phút trong _spr để loại bỏ hoàn toàn nhấp nháy màn hình
+    int16_t hx = 62, hw = 76;
+    int16_t mx2 = 182, mw2 = 76;
+    int16_t boxY = 96, boxH = 54;
+
+    // 1. Ô Giờ (X: 62, W: 76)
+    _spr.fillRoundRect(hx, boxY, hw, boxH, 10, RGB565(12, 18, 30));
+    _spr.drawRoundRect(hx, boxY, hw, boxH, 10, RGB565(0, 180, 240));
+    char hBuf[8];
+    snprintf(hBuf, sizeof(hBuf), "%02d", _alarmHour);
+    _spr.setTextDatum(MC_DATUM);
+    _spr.setTextColor(C_WHITE);
+    _spr.drawString(hBuf, hx + hw / 2, boxY + boxH / 2, 4);
+
+    // 2. Hai chấm phát sáng ở giữa
+    _spr.fillCircle(160, 117, 3, RGB565(0, 230, 255));
+    _spr.fillCircle(160, 129, 3, RGB565(0, 230, 255));
+
+    // 3. Ô Phút (X: 182, W: 76)
+    _spr.fillRoundRect(mx2, boxY, mw2, boxH, 10, RGB565(12, 18, 30));
+    _spr.drawRoundRect(mx2, boxY, mw2, boxH, 10, RGB565(0, 180, 240));
+    char mBuf[8];
+    snprintf(mBuf, sizeof(mBuf), "%02d", _alarmMinute);
+    _spr.setTextDatum(MC_DATUM);
+    _spr.setTextColor(C_WHITE);
+    _spr.drawString(mBuf, mx2 + mw2 / 2, boxY + boxH / 2, 4);
+
+    _spr.pushSprite(0, 0);
+}
+
+void Display::renderAlarmToggleBtnOnly() {
+    // Không dùng nút toggle đáy nữa
+}
+
+void Display::renderAlarmRingingScreen() {
+    uint32_t nowMs = millis();
+    bool flash = (nowMs / 450) % 2;
+
+    // Phông nền đen thẫm viền đỏ nhấp nháy tạo sự chú ý mạnh mẽ
+    uint16_t bg = flash ? RGB565(48, 10, 18) : RGB565(12, 8, 16);
+    _spr.fillSprite(bg);
+
+    // Viền sáng chuyển động
+    uint16_t borderColor = flash ? C_GOLD : RGB565(240, 45, 60);
+    _spr.drawRoundRect(4, 4, 312, 232, 12, borderColor);
+    _spr.drawRoundRect(5, 5, 310, 230, 11, borderColor);
+
+    // 1. Icon Chuông to ở giữa đỉnh
+    int16_t bellY = 32;
+    drawBellIcon(160, bellY, true, C_GOLD);
+
+    // Hiệu ứng sóng âm lan tỏa từ chuông
+    if (flash) {
+        _spr.drawCircle(160, bellY, 18, C_GOLD);
+        _spr.drawCircle(160, bellY, 24, RGB565(255, 180, 0));
+    }
+
+    // 2. Dòng thông báo nổi bật
+    _spr.setTextDatum(MC_DATUM);
+    _spr.setTextColor(flash ? C_WHITE : C_GOLD);
+    _spr.drawString("BAO THUC!", 160, 68, 4);
+
+    // 3. Hiển thị giờ hiện tại to rõ Font 6
+    time_t now = time(NULL);
+    struct tm t;
+    localtime_r(&now, &t);
+    char curTime[16];
+    snprintf(curTime, sizeof(curTime), "%02d:%02d", t.tm_hour, t.tm_min);
+    _spr.setTextDatum(MC_DATUM);
+    _spr.setTextColor(RGB565(0, 240, 255));
+    _spr.drawString(curTime, 160, 112, 6);
+
+    // 4. Hai Nút Bấm Khổng Lồ Trên Màn Hình (100% On-Screen Touch, Không dùng nút BOOT / LED RGB phía sau)
+    // Nút Trái: BÁO LẠI (+5 PHÚT)
+    int16_t b1X = 14, b1Y = 160, b1W = 140, b1H = 64;
+    _spr.fillSmoothRoundRect(b1X, b1Y, b1W, b1H, 16, RGB565(245, 155, 20), bg);
+    _spr.drawRoundRect(b1X, b1Y, b1W, b1H, 16, C_WHITE);
+    _spr.setTextDatum(MC_DATUM);
+    _spr.setTextColor(RGB565(20, 20, 20));
+    _spr.drawString("BAO LAI", b1X + b1W / 2, b1Y + 22, 2);
+    _spr.setTextColor(RGB565(50, 40, 0));
+    _spr.drawString("+5 PHUT", b1X + b1W / 2, b1Y + 44, 2);
+
+    // Nút Phải: TẮT CHUÔNG
+    int16_t b2X = 166, b2Y = 160, b2W = 140, b2H = 64;
+    _spr.fillSmoothRoundRect(b2X, b2Y, b2W, b2H, 16, RGB565(225, 40, 55), bg);
+    _spr.drawRoundRect(b2X, b2Y, b2W, b2H, 16, C_WHITE);
+    _spr.setTextDatum(MC_DATUM);
+    _spr.setTextColor(C_WHITE);
+    _spr.drawString("TAT CHUONG", b2X + b2W / 2, b2Y + 22, 2);
+    _spr.setTextColor(RGB565(255, 200, 200));
+    _spr.drawString("DUNG HAN", b2X + b2W / 2, b2Y + 44, 2);
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -1167,7 +1660,80 @@ void Display::pomoTick() {
 }
 
 bool Display::handleTouch(uint16_t x, uint16_t y) {
-    // 1. If a popup modal is currently open, tap anywhere to close it!
+    // 0. NẾU BÁO THỨC ĐANG KÊU: XỬ LÝ 2 NÚT BẤM TO TRÊN MÀN HÌNH (100% Cảm ứng mặt trước, Không dùng nút BOOT / LED)
+    if (_alarmRinging) {
+        // Nút Trái: BÁO LẠI (+5 PHÚT) (x: 10..155, y: 150..235)
+        if (x >= 10 && x <= 155 && y >= 150) {
+            snoozeAlarm();
+            return true;
+        }
+        // Nút Phải: TẮT CHUÔNG (x: 160..310, y: 150..235)
+        if (x >= 160 && x <= 310 && y >= 150) {
+            dismissAlarm();
+            return true;
+        }
+        // Chạm vào bất kỳ vị trí nào khác trên màn hình khi đang reo cũng tắt chuông để an toàn
+        dismissAlarm();
+        return true;
+    }
+
+    // 1. POPUP BÁO THỨC (POPUP_ALARM): CÁC NÚT TƯƠNG TÁC BÊN TRONG MODAL
+    if (_activePopup == POPUP_ALARM) {
+        // A. Nút [X] đóng góc trên phải: Thu hẹp chính xác vùng nút [X] (x: 265..305, y: 15..50)
+        // Tuyệt đối không để lấn sang cột Phút (x: 170..262)
+        if (x >= 265 && x <= 305 && y >= 15 && y <= 50) {
+            saveAlarmSettings();
+            _activePopup = POPUP_NONE;
+            _alarmAutoCloseTime = 0;
+            _lastRender = 0;
+            return true;
+        }
+
+        // B. Cột GIỜ: Mũi tên LÊN ▲ / Nửa trên ô Giờ (x: 45..150, y: 50..126)
+        if (x >= 45 && x <= 150 && y >= 50 && y <= 126) {
+            _alarmAutoCloseTime = 0;
+            _alarmHour = (_alarmHour + 1) % 24;
+            renderAlarmTimeOnly();
+            return true;
+        }
+
+        // C. Cột GIỜ: Mũi tên XUỐNG ▼ / Nửa dưới ô Giờ (x: 45..150, y: 127..210)
+        if (x >= 45 && x <= 150 && y >= 127 && y <= 210) {
+            _alarmAutoCloseTime = 0;
+            _alarmHour = (_alarmHour + 23) % 24;
+            renderAlarmTimeOnly();
+            return true;
+        }
+
+        // D. Cột PHÚT: Mũi tên LÊN ▲ / Nửa trên ô Phút (x: 170..262, y: 50..126)
+        if (x >= 170 && x <= 262 && y >= 50 && y <= 126) {
+            _alarmAutoCloseTime = 0;
+            _alarmMinute = (_alarmMinute + 1) % 60;
+            renderAlarmTimeOnly();
+            return true;
+        }
+
+        // E. Cột PHÚT: Mũi tên XUỐNG ▼ / Nửa dưới ô Phút (x: 170..262, y: 127..210)
+        if (x >= 170 && x <= 262 && y >= 127 && y <= 210) {
+            _alarmAutoCloseTime = 0;
+            _alarmMinute = (_alarmMinute + 59) % 60;
+            renderAlarmTimeOnly();
+            return true;
+        }
+
+        // F. Chạm ngoài viền popup -> Tự động Lưu & Đóng popup
+        if (x < 15 || x > 305 || y < 15 || y > 220) {
+            saveAlarmSettings();
+            _activePopup = POPUP_NONE;
+            _alarmAutoCloseTime = 0;
+            _lastRender = 0;
+            return true;
+        }
+
+        return true; // Chạm vào các khoảng đệm bên trong popup không đóng vô cớ
+    }
+
+    // 2. CÁC POPUP KHÁC (Weather, Lunar): Chạm bất kỳ đâu để đóng
     if (_activePopup != POPUP_NONE) {
         _activePopup = POPUP_NONE;
         hardware.playClick();
@@ -1175,18 +1741,28 @@ bool Display::handleTouch(uint16_t x, uint16_t y) {
         return true;
     }
 
-    // 2. ƯU TIÊN TUYỆT ĐỐI CHO THANH DOCK: Khi Dock đang hiển thị, chạm vào vùng Dock (Y >= 185) luôn xử lý cho Dock!
-    if (_dockVisible && y >= 185) {
-        wakeDock(); // Reset 5s auto-hide timer
-        if (x < 94)                   { setPage(PAGE_CLOCK);    return true; }
-        else if (x >= 94 && x < 138)  { setPage(PAGE_CALENDAR); return true; }
-        else if (x >= 138 && x < 182) { setPage(PAGE_FINANCE);  return true; }
-        else if (x >= 182 && x < 226) { setPage(PAGE_POMODORO); return true; }
-        else if (x >= 226)            { nextTheme(); wakeDock(); return true; }
-        return true;
+    // 3. ƯU TIÊN TUYỆT ĐỐI CHO THANH DOCK:
+    // Khi thanh Dock đang hiển thị:
+    if (_dockVisible) {
+        if (y >= 185) {
+            // Chạm vào vùng Dock -> Xử lý chức năng chuyển trang / đổi theme
+            wakeDock(); // Reset 5s auto-hide timer
+            if (x < 94)                   { setPage(PAGE_CLOCK);    return true; }
+            else if (x >= 94 && x < 138)  { setPage(PAGE_CALENDAR); return true; }
+            else if (x >= 138 && x < 182) { setPage(PAGE_FINANCE);  return true; }
+            else if (x >= 182 && x < 226) { setPage(PAGE_POMODORO); return true; }
+            else if (x >= 226)            { nextTheme(); wakeDock(); return true; }
+            return true;
+        } else {
+            // Nhấn ra ngoài vùng Dock (Y < 185) -> TẮT THANH DOCK NGAY
+            // Cảm ứng của các chức năng màn hình lúc này CHƯA được kích hoạt
+            _dockVisible = false;
+            _lastRender = 0; // Vẽ lại màn hình với Dock đã ẩn
+            return true;
+        }
     }
 
-    // 3. If on Calendar page and tapping in the top Title Card (Y <= 50)
+    // 4. If on Calendar page and tapping in the top Title Card (Y <= 50)
     if (_currentPage == PAGE_CALENDAR && y <= 50) {
         if (x <= 66) {
             prevCalMonth();
@@ -1206,20 +1782,55 @@ bool Display::handleTouch(uint16_t x, uint16_t y) {
         }
     }
 
-    // 4. If on Clock page (PAGE_CLOCK), tap on Cards to open detailed Popups
-    // GIỚI HẠN CHẶT CHẼ TRONG THÂN CARD (Y: 126..194)
-    // Chạm từ Y >= 195 trở xuống hoàn toàn dành cho việc bật Dock, KHÔNG BAO GIỜ bị bật nhầm popup!
-    if (_currentPage == PAGE_CLOCK && y >= 126 && y <= 194) {
-        if (x >= 10 && x <= 156) {
-            _activePopup = POPUP_WEATHER;
-            hardware.playClick();
-            _lastRender = 0; // Trigger instant redraw
+    // 5. If on Clock page (PAGE_CLOCK):
+    if (_currentPage == PAGE_CLOCK) {
+        // 5a. Chạm vào BIỂU TƯỢNG CHUÔNG (X: 245..315, Y: 15..70) -> Bật / Tắt nhanh chuông báo
+        if (x >= 245 && x <= 315 && y >= 15 && y <= 70) {
+            if (!_alarmEnabled) {
+                // Đang TẮT -> BẬT lên và hiện popup báo giờ báo thức trong 3s để user biết
+                _alarmEnabled = true;
+                saveAlarmSettings();
+                _alarmAutoCloseTime = millis() + 3000;
+                _activePopup = POPUP_ALARM;
+                renderPage0_WeatherClock();
+                renderAlarmPopup();
+                _spr.pushSprite(0, 0);
+                return true;
+            } else {
+                // Đang BẬT -> TẮT đi ngay lập tức
+                _alarmEnabled = false;
+                saveAlarmSettings();
+                _alarmAutoCloseTime = 0;
+                _activePopup = POPUP_NONE;
+                _lastRender = 0;
+                return true;
+            }
+        }
+
+        // 5b. Chạm vào VÙNG GIỮA ĐỒNG HỒ (Quanh dấu : giữa giờ và phút, X: 115..205, Y: 15..95) -> Mở Cài Đặt Giờ
+        if (x >= 115 && x <= 205 && y >= 15 && y <= 95) {
+            loadAlarmSettings();
+            _alarmAutoCloseTime = 0; // Mở thủ công thì không tự đóng sau 3s
+            _activePopup = POPUP_ALARM;
+            renderPage0_WeatherClock();
+            renderAlarmPopup();
+            _spr.pushSprite(0, 0);
             return true;
-        } else if (x >= 164 && x <= 310) {
-            _activePopup = POPUP_LUNAR;
-            hardware.playClick();
-            _lastRender = 0; // Trigger instant redraw
-            return true;
+        }
+
+        // 5b. Chạm vào 2 Thẻ Kính Thời Tiết & Âm Lịch (Y: 126..194)
+        if (y >= 126 && y <= 194) {
+            if (x >= 10 && x <= 156) {
+                _activePopup = POPUP_WEATHER;
+                hardware.playClick();
+                _lastRender = 0;
+                return true;
+            } else if (x >= 164 && x <= 310) {
+                _activePopup = POPUP_LUNAR;
+                hardware.playClick();
+                _lastRender = 0;
+                return true;
+            }
         }
     }
 
