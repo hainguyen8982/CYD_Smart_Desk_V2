@@ -212,6 +212,12 @@ static void drawMiniCal(TFT_eSprite& spr, int16_t x, int16_t y, uint16_t color) 
     spr.drawPixel(x + 1, y - 4, color);
 }
 
+static void drawMiniHeart(TFT_eSprite& spr, int16_t x, int16_t y, uint16_t color) {
+    spr.fillCircle(x - 2, y - 2, 2, color);
+    spr.fillCircle(x + 2, y - 2, 2, color);
+    spr.fillTriangle(x - 4, y - 1, x + 4, y - 1, x, y + 4, color);
+}
+
 // ═══════════════════════════════════════════════════════════════════════
 //  PAGE 0 — WEATHER CLOCK (Matches user reference image)
 // ═══════════════════════════════════════════════════════════════════════
@@ -1305,6 +1311,7 @@ void Display::drawDockIconTheme(int16_t cx, int16_t cy, bool isActive) {
 //  PAGE 1 — LUNAR MONTH CALENDAR (Interactive Month Navigation)
 // ═══════════════════════════════════════════════════════════════════════
 void Display::renderPage1_Calendar() {
+    // 1. Tông xuyệt tông 100% với Page 0 (Nền vũ trụ Obsidian sâu thẳm)
     drawBackground();
 
     time_t now = time(NULL);
@@ -1321,55 +1328,85 @@ void Display::renderPage1_Calendar() {
         _calMonth = curMonth;
     }
 
-    // ── 1. TITLE CARD WITH INTERACTIVE NAVIGATION BUTTONS (H=36px) ───
-    drawGlassCard(12, 8, 296, 36, 10);
+    // ── 2. QUYỂN LỊCH ĐỂ BÀN 3 TỜ XẾP CHỒNG (Hợp nhất mép phải) ───────────
+    int16_t calX = 14, calY = 8, calW = 292, calH = 216, calR = 10;
+    int16_t calRight = calX + calW; // 306 — Mép phải hợp nhất 1 đường duy nhất
 
-    // [ < ] Prev Month Button
-    _spr.fillRoundRect(18, 12, 34, 28, 6, theme.card);
-    _spr.drawRoundRect(18, 12, 34, 28, 6, theme.cardBorder);
-    _spr.fillTriangle(37, 18, 37, 34, 28, 26, theme.accent); // Left arrow
+    // Tờ thứ 3 (Dưới cùng): Nhô ra 4px bên trái, 6px ở đáy, mép phải đồng phẳng
+    int16_t x3 = calX - 4, y3 = calY + 6, w3 = calRight - x3;
+    _spr.fillRoundRect(x3, y3, w3, calH, calR, RGB565(8, 12, 20));
+    _spr.drawRoundRect(x3, y3, w3, calH, calR, RGB565(28, 40, 58));
 
-    // [ > ] Next Month Button
-    _spr.fillRoundRect(264, 12, 34, 28, 6, theme.card);
-    _spr.drawRoundRect(264, 12, 34, 28, 6, theme.cardBorder);
-    _spr.fillTriangle(279, 18, 279, 34, 288, 26, theme.accent); // Right arrow
+    // Tờ thứ 2 (Ở giữa): Nhô ra 2px bên trái, 3px ở đáy, mép phải đồng phẳng
+    int16_t x2 = calX - 2, y2 = calY + 3, w2 = calRight - x2;
+    _spr.fillRoundRect(x2, y2, w2, calH, calR, RGB565(13, 17, 28));
+    _spr.drawRoundRect(x2, y2, w2, calH, calR, RGB565(36, 52, 76));
 
-    // Center Month Title (Font 2) & Status Subtitle (Font 1)
+    // Tờ thứ 1 (Trang trên cùng): Obsidian Paper sâu thẳm
+    _spr.fillRoundRect(calX, calY, calW, calH, calR, RGB565(17, 22, 35));
+    _spr.drawRoundRect(calX, calY, calW, calH, calR, RGB565(48, 68, 102));
+
+    // Gáy sổ lịch bọc da Đỏ Đô (Kéo dài xuống Y=41, cắt ngang chính giữa các thanh lò xo Y=37..46)
+    _spr.fillRoundRect(calX, calY, calW, 34, calR, RGB565(120, 22, 36));
+    _spr.fillRect(calX, calY + 18, calW, 16, RGB565(120, 22, 36)); // Phẳng mép dưới tại Y=41 (chia đôi gáy lò xo)
+
+    // 6 Khoen lò xo kim loại (Spiral Rings) — Có khoảng thở trên/dưới rõ ràng
+    for (int k = 0; k < 6; k++) {
+        int16_t kx = 64 + k * 38;
+        // Lỗ đục trên giấy
+        _spr.fillCircle(kx + 2, 42, 3, RGB565(8, 10, 16));
+        // Khoen kim loại bạc (H=10px, từ Y=37 đến Y=46)
+        _spr.fillRoundRect(kx, 37, 4, 10, 2, RGB565(180, 195, 215));
+        // Ánh sáng specular highlight trắng
+        _spr.drawFastVLine(kx + 1, 38, 8, C_WHITE);
+    }
+
+    // ── 3. NÚT ĐIỀU HƯỚNG & TIÊU ĐỀ TRÊN GÁY LỊCH (Y=10..34) ──────────
+    // Nút [ < ] Prev Month: Tâm (30, 23), Mũi tên tam giác có trọng tâm chính xác (30.0, 23.0)
+    _spr.fillCircle(30, 23, 11, RGB565(80, 15, 26));
+    _spr.drawCircle(30, 23, 11, RGB565(170, 45, 65));
+    _spr.fillTriangle(26, 23, 32, 18, 32, 28, RGB565(255, 225, 235));
+
+    // Nút [ > ] Next Month: Tâm (290, 23), Mũi tên tam giác có trọng tâm chính xác (290.0, 23.0)
+    _spr.fillCircle(290, 23, 11, RGB565(80, 15, 26));
+    _spr.drawCircle(290, 23, 11, RGB565(170, 45, 65));
+    _spr.fillTriangle(294, 23, 288, 18, 288, 28, RGB565(255, 225, 235));
+
+    // Tiêu đề Tháng • Năm (Chữ vàng ánh kim dập nổi)
     _spr.setTextDatum(MC_DATUM);
-    _spr.setTextColor(theme.accent);
+    _spr.setTextColor(RGB565(255, 245, 220));
     char titleBuf[32];
-    snprintf(titleBuf, sizeof(titleBuf), "THANG %02d / %d", _calMonth, _calYear);
-    _spr.drawString(titleBuf, 160, 20, 2);
+    snprintf(titleBuf, sizeof(titleBuf), "THANG %02d  •  %d", _calMonth, _calYear);
+    _spr.drawString(titleBuf, 160, 17, 2);
 
+    // Dòng phụ: Thông tin Âm lịch chi tiết hôm nay (cách đỉnh gáy lò xo 4px)
     bool isCurrentMonth = (_calYear == curYear && _calMonth == curMonth);
     char subBuf[48];
     if (isCurrentMonth) {
         LunarDate todayLunar = LunarCalendar::convertSolar2Lunar(curDay, curMonth, curYear);
-        snprintf(subBuf, sizeof(subBuf), "Hom nay: %02d/%02d AL - Nam %s", 
+        snprintf(subBuf, sizeof(subBuf), "Hom nay: %02d/%02d AL  -  Nam %s", 
                  todayLunar.day, todayLunar.month, todayLunar.yearCanChi);
-        _spr.setTextColor(RGB565(140, 210, 255));
+        _spr.setTextColor(RGB565(245, 215, 150)); // Gold dịu
     } else {
         LunarDate midLunar = LunarCalendar::convertSolar2Lunar(15, _calMonth, _calYear);
         snprintf(subBuf, sizeof(subBuf), "Nam %s  •  [Cham ve hom nay]", midLunar.yearCanChi);
         _spr.setTextColor(RGB565(255, 200, 100));
     }
-    _spr.drawString(subBuf, 160, 33, 1);
+    _spr.drawString(subBuf, 160, 29, 1);
 
-    // ── 2. CALENDAR GRID CARD (Extended to H=178px down to Y=226) ────
-    drawGlassCard(12, 48, 296, 178, 10);
-
-    // Day of week headers (T2 to CN)
+    // ── 4. THANH THỨ (T2 to CN, cách đáy gáy lò xo 4px) ───────────────
     const char* daysOfWeek[] = { "T2", "T3", "T4", "T5", "T6", "T7", "CN" };
     for (int col = 0; col < 7; col++) {
-        int16_t hx = 46 + col * 38;
-        if (col == 6)      _spr.setTextColor(RGB565(255, 120, 120)); // CN (Sunday) in soft red
-        else if (col == 5) _spr.setTextColor(RGB565(140, 220, 255)); // T7 (Saturday) in soft cyan
-        else               _spr.setTextColor(theme.accentSec);
+        int16_t hx = 34 + col * 42;
+        if (col == 6)      _spr.setTextColor(RGB565(255, 110, 110)); // CN (Sunday) Đỏ San Hô
+        else if (col == 5) _spr.setTextColor(RGB565(130, 215, 255)); // T7 Cyan nhạt
+        else               _spr.setTextColor(RGB565(140, 170, 205)); // Ngày trong tuần màu Slate
         _spr.drawString(daysOfWeek[col], hx, 58, 2);
     }
-    _spr.drawFastHLine(20, 69, 280, theme.cardBorder);
+    // Đường chỉ mỏng tinh tế ngăn cách thanh thứ
+    _spr.drawFastHLine(24, 69, 272, RGB565(32, 46, 68));
 
-    // Calculate days in viewed month
+    // ── 5. CALENDAR MATRIX CALCULATION ────────────────────────────────
     int daysInMonth = 31;
     if (_calMonth == 4 || _calMonth == 6 || _calMonth == 9 || _calMonth == 11) {
         daysInMonth = 30;
@@ -1378,72 +1415,84 @@ void Display::renderPage1_Calendar() {
         daysInMonth = isLeapYear ? 29 : 28;
     }
 
-    // Sakamoto's algorithm to get day of week for day 1 (0 = Sunday, 1 = Monday, ...)
     static const int tMap[] = { 0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4 };
     int yCalc = _calYear;
     if (_calMonth < 3) yCalc -= 1;
     int wday1 = (yCalc + yCalc / 4 - yCalc / 100 + yCalc / 400 + tMap[_calMonth - 1] + 1) % 7;
-    int startCol = (wday1 + 6) % 7; // Convert to Monday = 0, ..., Sunday = 6
+    int startCol = (wday1 + 6) % 7; // Monday = 0, ..., Sunday = 6
 
     int totalSlots = startCol + daysInMonth;
-    int numRows = (totalSlots + 6) / 7; // 4, 5, or 6 rows
+    int numRows = (totalSlots + 6) / 7; // 4, 5, hoặc 6 hàng
 
-    // Dynamic row spacing: 5 rows gets 28px height, 6 rows gets 24px height
-    int16_t rowH = (numRows <= 5) ? 28 : 24;
-    int16_t gridStartY = (numRows <= 5) ? 75 : 73;
+    // Dynamic row spacing
+    int16_t rowH = (numRows <= 5) ? 29 : 24;
+    int16_t gridStartY = (numRows <= 5) ? 82 : 79;
 
-    // Render calendar grid with distinct vertical separation between Solar & Lunar dates
+    // ── 6. LƯỚI NGÀY (Căn đối xứng chuẩn xác toán học) ───────────────
     for (int d = 1; d <= daysInMonth; d++) {
         int slot = startCol + (d - 1);
         int col = slot % 7;
         int row = slot / 7;
-        int16_t cx = 46 + col * 38;
+        int16_t cx = 34 + col * 42;
         int16_t cy = gridStartY + row * rowH;
 
         LunarDate ld = LunarCalendar::convertSolar2Lunar(d, _calMonth, _calYear);
         bool isToday = (d == curDay && isCurrentMonth);
 
-        int16_t cellH = rowH - 3;
-        int16_t solarY = cy + (rowH == 28 ? 8 : 6);
-        int16_t lunarY = cy + (rowH == 28 ? 19 : 15);
+        // Chuỗi ngày âm lịch
+        char lStr[8];
+        if (ld.day == 1) snprintf(lStr, sizeof(lStr), "1/%d", ld.month);
+        else snprintf(lStr, sizeof(lStr), "%d", ld.day);
+
+        // Đo đạc kích thước chính xác theo pixel của từng con số
+        char sBuf[8];
+        snprintf(sBuf, sizeof(sBuf), "%d", d);
+        int16_t sW = _spr.textWidth(sBuf, 2);
+        int16_t lW = _spr.textWidth(lStr, 1);
+        int16_t gap = 2;
+        int16_t totalW = sW + gap + lW;
+
+        // Căn giữa tuyệt đối cụm (Dương lịch + Âm lịch) quanh trục tâm cx
+        int16_t startX = cx - totalW / 2;
+        int16_t solarX = startX;
+        int16_t solarY = cy - 8;
+        int16_t lunarX = startX + sW + gap;
+        int16_t lunarY = cy;
 
         if (isToday) {
-            // Highlight today with filled accent pill
-            _spr.fillRoundRect(cx - 16, cy, 32, cellH, 6, theme.accent);
-            _spr.setTextColor(theme.bg);
-            _spr.drawNumber(d, cx, solarY, 2);
+            // Hôm nay: Ô sáng bo cong tròn mềm mại, đệm đối xứng 100% cả 4 phía
+            int16_t boxW = totalW + 10;
+            int16_t boxH = (numRows <= 5) ? 24 : 20;
+            int16_t boxX = cx - boxW / 2;
+            int16_t boxY = cy - boxH / 2;
+            int16_t cornerR = (boxH >= 24) ? 8 : 7;
 
-            // Lunar date inside today pill
-            char lStr[8];
-            if (ld.day == 1) snprintf(lStr, sizeof(lStr), "1/%d", ld.month);
-            else snprintf(lStr, sizeof(lStr), "%d", ld.day);
-            _spr.setTextColor(RGB565(30, 30, 30));
-            _spr.drawString(lStr, cx, lunarY, 1);
+            // Bo 4 góc tròn mịn (anti-aliased smooth rounded corners)
+            _spr.fillSmoothRoundRect(boxX, boxY, boxW, boxH, cornerR, theme.green, RGB565(17, 22, 35));
+
+            // Số Dương Lịch (Font 2, TL_DATUM)
+            _spr.setTextDatum(TL_DATUM);
+            _spr.setTextColor(RGB565(12, 24, 18));
+            _spr.drawString(sBuf, solarX, solarY, 2);
+
+            // Số Âm Lịch (Font 1, TL_DATUM — góc dưới phải)
+            _spr.setTextColor(RGB565(18, 48, 28));
+            _spr.drawString(lStr, lunarX, lunarY, 1);
         } else {
-            // Subtle plate background for all days
-            _spr.fillRoundRect(cx - 16, cy, 32, cellH, 4, theme.card);
+            // Ngày thường
+            _spr.setTextDatum(TL_DATUM);
+            if (col == 6)      _spr.setTextColor(RGB565(255, 120, 120)); // CN Đỏ San Hô
+            else if (col == 5) _spr.setTextColor(RGB565(140, 220, 255)); // T7 Cyan nhạt
+            else               _spr.setTextColor(C_WHITE);               // Ngày trong tuần trắng sáng
+            _spr.drawString(sBuf, solarX, solarY, 2);
 
-            // Solar day (Font 2)
-            if (col == 6)      _spr.setTextColor(RGB565(255, 120, 120)); // Sunday red
-            else if (col == 5) _spr.setTextColor(RGB565(140, 220, 255)); // Saturday cyan
-            else               _spr.setTextColor(theme.textMain);
-            _spr.drawNumber(d, cx, solarY, 2);
-
-            // Lunar day (Font 1)
-            char lStr[8];
-            if (ld.day == 1) {
-                // Highlight Mùng 1 in bright gold
-                snprintf(lStr, sizeof(lStr), "1/%d", ld.month);
-                _spr.setTextColor(RGB565(255, 200, 0));
-            } else if (ld.day == 15) {
-                // Highlight Ngày Rằm in bright gold
-                snprintf(lStr, sizeof(lStr), "15");
-                _spr.setTextColor(RGB565(255, 200, 0));
+            // Số Âm Lịch (Font 1, TL_DATUM)
+            if (ld.day == 1 || ld.day == 15) {
+                _spr.setTextColor(RGB565(255, 215, 0)); // Gold rực rỡ
             } else {
-                snprintf(lStr, sizeof(lStr), "%d", ld.day);
-                _spr.setTextColor(theme.textDim);
+                _spr.setTextColor(RGB565(110, 140, 175)); // Xám Slate
             }
-            _spr.drawString(lStr, cx, lunarY, 1);
+            _spr.drawString(lStr, lunarX, lunarY, 1);
         }
     }
 }
