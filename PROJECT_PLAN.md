@@ -67,18 +67,19 @@ Dự án tham chiếu `ESP32_CYD_Smart_Desk_Studio_Pro` đang sử dụng 3 API 
 * Card Ngoại tệ: Tỉ giá USD, EUR.
 * Biểu đồ sóng 7 ngày (7-Day Sparkline Area Chart).
 
-### Trang 3: Trạm Tập trung Pomodoro Chuyên dụng (Dedicated Focus Station)
-* **Toàn màn hình ($320\times 240$):** Tận dụng tối đa không gian cho trải nghiệm tập trung làm việc chuyên sâu.
-* **Đồng hồ Vòng cung Tròn phát sáng (Glowing Circular Arc Gauge, $R \approx 60\text{px}$):**
-  * Cung tròn đổi màu: Đỏ Cam Neon (Focus 25m) và Xanh Ngọc Mint (Break 5m).
-  * Vòng tròn tiến độ vẽ mịn (Smooth Arc) giảm dần/tăng dần theo từng giây.
-  * Tâm vòng hiển thị đếm ngược mm:ss to rõ (Font 7 hoặc Font số mượt mà).
-* **Quản lý Phiên làm việc (Session Tracker):**
-  * Dãy chấm biểu thị tiến độ (ví dụ: Session 1/4, 2/4...).
-  * Chuyển đổi linh hoạt giữa các chế độ: Focus (25m), Short Break (5m), Long Break (15m).
-* **Cụm điều khiển an toàn ($Y \le 180$):**
-  * Nút to bản: `START` / `PAUSE` / `RESET` dễ bấm cho cảm ứng điện trở, hoàn toàn không chạm nhầm vào Dock.
-  * Phản hồi âm thanh còi buzzer click khi bấm và chuông bip-bip khi hoàn thành phiên.
+### Trang 3: Trạm Tập trung Pomodoro Chuyên dụng (Dedicated Focus Station — Landscape Layout)
+* **Toàn màn hình ($320\times 240$):** Bố cục ngang chia đôi (Split Layout) tận dụng trọn vẹn tỉ lệ màn hình CYD.
+* **Nửa trái (Hero Progress Dial, $R = 60\text{px}$, tâm $X=86, Y=118$):**
+  * Vòng tròn tiến độ quét mềm mịn 360° với knob phát sáng.
+  * Mascot Chú Cà Chua đỏ rực rỡ mập mạp, mắt anime long lanh, nụ cười ngọt ngào và má hồng đào đặt ở trung tâm vòng tròn.
+  * Chạm trực tiếp vào chú Cà chua để Bắt đầu/Tạm dừng nhanh chóng.
+* **Nửa phải (Bảng điều khiển & Thời gian, tâm $X=232$):**
+  * Dòng trạng thái nhỏ trang nhã (Font 2).
+  * Đồng hồ số đếm ngược Font 6 cực to ($48\text{px}$), sắc nét, dễ quan sát từ xa.
+  * Cụm nút công thái học dạng viên thuốc ($Y=138 \dots 174$): `BAT DAU` / `TAM DUNG` / `TIEP TUC` / `DAT LAI`.
+* **Khu vực Dock an toàn tuyệt đối ($Y \ge 185 \dots 240$):**
+  * Toàn bộ thành phần Pomodoro kết thúc trước $Y = 178$.
+  * Khoảng trống $\ge 55\text{px}$ phía dưới đáy màn hình giúp chạm mở Dock cực nhạy, không bao giờ chạm nhầm.
 
 ---
 

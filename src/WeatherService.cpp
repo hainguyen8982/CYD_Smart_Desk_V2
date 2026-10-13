@@ -9,7 +9,7 @@
 WeatherService weather;
 
 WeatherService::WeatherService()
-    : _lastFetch(0), _timeSynced(false), _cityDetected(false),
+    : _lastFetch(0), _lastNtpAttempt(0), _timeSynced(false), _cityDetected(false),
       _lat(10.8231f), _lon(106.6297f) {
     memset(&_data, 0, sizeof(_data));
     strncpy(_data.city, "TP. HCM", sizeof(_data.city)); // Default to Saigon coordinates
@@ -33,7 +33,25 @@ WeatherService::WeatherService()
 void WeatherService::begin() {
     _connectWiFi();
     if (isConnected()) {
+        display.showBootStatus("Syncing NTP Time...");
         _syncTime();
+
+        // Chờ nhanh tối đa 4s để đồng bộ giờ ngay lúc khởi động
+        unsigned long startWait = millis();
+        while (millis() - startWait < 4000) {
+            time_t now = time(NULL);
+            if (now > 1600000000) {
+                _timeSynced = true;
+                struct tm t;
+                localtime_r(&now, &t);
+                Serial.printf("[NTP] Time synced on boot: %02d:%02d:%02d\n", t.tm_hour, t.tm_min, t.tm_sec);
+                display.showBootStatus("Time Synced!");
+                delay(300);
+                break;
+            }
+            delay(150);
+        }
+
         _detectCityFromIP();
         _fetchWeather();
     }
@@ -41,12 +59,28 @@ void WeatherService::begin() {
 
 void WeatherService::update() {
     if (!isConnected()) return;
-    if (!_timeSynced) _syncTime();
+
+    if (!_timeSynced) {
+        time_t now = time(NULL);
+        if (now > 1600000000) {
+            _timeSynced = true;
+            struct tm t;
+            localtime_r(&now, &t);
+            Serial.printf("[NTP] Time synced in background: %02d:%02d:%02d\n", t.tm_hour, t.tm_min, t.tm_sec);
+        } else {
+            unsigned long nowMs = millis();
+            if (nowMs - _lastNtpAttempt >= 10000 || _lastNtpAttempt == 0) {
+                _syncTime();
+            }
+        }
+    }
 
     unsigned long now = millis();
     if (now - _lastFetch >= WEATHER_FETCH_INTERVAL || _lastFetch == 0) {
-        _fetchWeather();
-        _lastFetch = now;
+        if (_timeSynced) {
+            _fetchWeather();
+            _lastFetch = now;
+        }
     }
 }
 
@@ -125,25 +159,9 @@ void WeatherService::_connectWiFi() {
 }
 
 void WeatherService::_syncTime() {
-    Serial.println("[NTP] Syncing time...");
-    display.showBootStatus("Syncing NTP Time...");
-    configTime(TIMEZONE_OFFSET_SEC, 0, NTP_SERVER, "time.nist.gov");
-
-    // Wait up to 8 seconds for time sync
-    for (int i = 0; i < 16; i++) {
-        time_t now = time(NULL);
-        if (now > 1600000000) {
-            _timeSynced = true;
-            struct tm t;
-            localtime_r(&now, &t);
-            Serial.printf("[NTP] Time synced: %02d:%02d:%02d\n", t.tm_hour, t.tm_min, t.tm_sec);
-            display.showBootStatus("Time Synced!");
-            delay(300);
-            return;
-        }
-        delay(500);
-    }
-    Serial.println("[NTP] Time sync timeout");
+    Serial.println("[NTP] Configuring NTP time sync (Google, Cloudflare, pool.ntp.org)...");
+    configTime(TIMEZONE_OFFSET_SEC, 0, "time.google.com", "time.cloudflare.com", "pool.ntp.org");
+    _lastNtpAttempt = millis();
 }
 
 void WeatherService::_detectCityFromIP() {

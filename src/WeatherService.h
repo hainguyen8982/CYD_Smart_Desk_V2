@@ -76,6 +76,7 @@ private:
 
     WeatherData _data;
     unsigned long _lastFetch;
+    unsigned long _lastNtpAttempt;
     bool _timeSynced;
     bool _cityDetected;
     float _lat;

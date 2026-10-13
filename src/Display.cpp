@@ -1245,8 +1245,8 @@ bool Display::handleTouch(uint16_t x, uint16_t y) {
             }
         }
 
-        // B. Center Tomato / Dial & Time area (X: 90..230, Y: 36..180) - Chạm đổi trạng thái Chạy/Tạm dừng
-        if (x >= 90 && x <= 230 && y >= 36 && y <= 180) {
+        // B. Chạm vào Vòng tròn / Mascot Cà chua bên trái (X: 15..156, Y: 45..194) -> Đổi Chạy / Tạm dừng
+        if (x >= 15 && x <= 156 && y >= 45 && y <= 194) {
             if (_pomoState == POMO_RUNNING) {
                 pomoPause();
             } else {
@@ -1257,53 +1257,45 @@ bool Display::handleTouch(uint16_t x, uint16_t y) {
             return true;
         }
 
-        // C. Bottom Action Buttons (Y: 188..234 — Tận dụng tối đa đáy màn hình)
-        if (y >= 188 && y <= 234) {
+        // C. Cụm nút điều khiển bên phải (X: 156..315, Y: 148..194)
+        // Kết thúc tại Y=194, cách ly 100% với vùng mở Dock (Y >= 196)
+        if (x >= 156 && x <= 315 && y >= 148 && y <= 194) {
             if (_pomoState == POMO_STOPPED) {
-                // Nút BẮT ĐẦU ở giữa (X: 80..240)
-                if (x >= 80 && x <= 240) {
-                    pomoStart();
-                    hardware.playClick();
-                    _lastRender = 0;
-                    return true;
-                }
+                pomoStart();
+                hardware.playClick();
+                _lastRender = 0;
+                return true;
             } else if (_pomoState == POMO_RUNNING) {
-                // Trái: TẠM DỪNG (X: 35..155)
-                if (x >= 35 && x <= 155) {
+                // Trái: TẠM DỪNG (X: 156..234)
+                if (x <= 234) {
                     pomoPause();
-                    hardware.playClick();
-                    _lastRender = 0;
-                    return true;
                 }
-                // Phải: ĐẶT LẠI (X: 165..285)
-                else if (x >= 165 && x <= 285) {
+                // Phải: ĐẶT LẠI (X: 235..315)
+                else {
                     pomoReset();
-                    hardware.playClick();
-                    _lastRender = 0;
-                    return true;
                 }
+                hardware.playClick();
+                _lastRender = 0;
+                return true;
             } else if (_pomoState == POMO_PAUSED) {
-                // Trái: TIẾP TỤC (X: 35..155)
-                if (x >= 35 && x <= 155) {
+                // Trái: TIẾP TỤC (X: 156..234)
+                if (x <= 234) {
                     pomoStart();
-                    hardware.playClick();
-                    _lastRender = 0;
-                    return true;
                 }
-                // Phải: ĐẶT LẠI (X: 165..285)
-                else if (x >= 165 && x <= 285) {
+                // Phải: ĐẶT LẠI (X: 235..315)
+                else {
                     pomoReset();
-                    hardware.playClick();
-                    _lastRender = 0;
-                    return true;
                 }
+                hardware.playClick();
+                _lastRender = 0;
+                return true;
             }
         }
     }
 
-    // 6. Khi Dock đang ẩn, chạm vào vùng dưới màn hình (Y >= 195) sẽ đánh thức Dock
+    // 6. Khi Dock đang ẩn, chạm vào vùng dưới màn hình (Y >= 196) sẽ đánh thức Dock
     if (!_dockVisible) {
-        if (y >= 195) {
+        if (y >= 196) {
             wakeDock();
             return true;
         }
@@ -1698,89 +1690,92 @@ void Display::renderPage2_Finance() {
 
 // ═══════════════════════════════════════════════════════════════════════
 // ═══════════════════════════════════════════════════════════════════════
-//  POMODORO MASCOT & PAGE 3 (Vertical Centered Layout — Option B)
+//  POMODORO MASCOT & PAGE 3 (Landscape Split Layout — Option 3)
+//  Trái: Vòng tròn lớn (R=60) ôm chú Cà chua Mascot sinh động
+//  Phải: Đồng hồ số đếm ngược to đậm (Font 6) + Nút bấm công thái học
 // ═══════════════════════════════════════════════════════════════════════
 
 void Display::drawTomatoMascot(int16_t cx, int16_t cy, bool isFocus) {
     // 1. Bóng đổ mềm mại dưới chân chú cà chua
-    _spr.fillSmoothCircle(cx - 7, cy + 20, 6, RGB565(16, 22, 34), theme.bg);
-    _spr.fillSmoothCircle(cx + 7, cy + 20, 6, RGB565(16, 22, 34), theme.bg);
-    _spr.fillRect(cx - 7, cy + 16, 14, 8, RGB565(16, 22, 34));
+    _spr.fillSmoothCircle(cx - 9, cy + 27, 7, RGB565(15, 20, 30), theme.bg);
+    _spr.fillSmoothCircle(cx + 9, cy + 27, 7, RGB565(15, 20, 30), theme.bg);
+    _spr.fillRect(cx - 9, cy + 22, 18, 9, RGB565(15, 20, 30));
 
-    // 2. Thân quả cà chua mập mạp, mũm mĩm (Plump Tomato Body)
-    uint16_t bodyColor = RGB565(245, 80, 75);  // Đỏ tươi mọng
-    // Hai má tròn tạo độ béo
-    _spr.fillSmoothCircle(cx - 8, cy + 1, 19, bodyColor, theme.bg);
-    _spr.fillSmoothCircle(cx + 8, cy + 1, 19, bodyColor, theme.bg);
-    _spr.fillSmoothCircle(cx, cy + 3, 18, bodyColor, theme.bg);
-    _spr.fillRect(cx - 8, cy - 14, 16, 30, bodyColor);
+    // 2. Thân quả cà chua mập mạp (ĐỎ TƯƠI NGUYÊN BẢN, B=0 TUYỆT ĐỐI)
+    uint16_t bodyColor = RGB565(255, 30, 0);  // Đỏ cờ / Đỏ cà chua chín rực rỡ
+    _spr.fillSmoothCircle(cx - 12, cy + 1, 26, bodyColor, theme.bg);
+    _spr.fillSmoothCircle(cx + 12, cy + 1, 26, bodyColor, theme.bg);
+    _spr.fillSmoothCircle(cx, cy + 5, 25, bodyColor, theme.bg);
+    _spr.fillRect(cx - 12, cy - 18, 24, 40, bodyColor);
 
-    // 3. Vệt sáng phản chiếu (Specular Highlight) góc trên bên trái
-    _spr.fillSmoothCircle(cx - 12, cy - 6, 4, RGB565(255, 155, 150), bodyColor);
-    _spr.fillSmoothCircle(cx - 9, cy - 9, 3, RGB565(255, 185, 180), bodyColor);
+    // 3. Vệt sáng phản chiếu (Specular Highlight) màu cam đỏ ấm
+    _spr.fillSmoothCircle(cx - 15, cy - 8, 5, RGB565(255, 120, 80), bodyColor);
+    _spr.fillSmoothCircle(cx - 10, cy - 13, 3, RGB565(255, 160, 120), bodyColor);
 
     // 4. Cuống và đài lá xanh biếc trên đầu (Green Leaves & Stem)
-    uint16_t stemColor = RGB565(35, 115, 60);  // Cuống xanh đậm
-    uint16_t leafColor = RGB565(55, 185, 85);  // Lá xanh tươi
-    _spr.fillRoundRect(cx - 2, cy - 22, 4, 8, 2, stemColor);
+    uint16_t stemColor = RGB565(20, 110, 40);  // Cuống xanh đậm
+    uint16_t leafColor = RGB565(35, 190, 60);  // Lá xanh tươi
+    _spr.fillRoundRect(cx - 3, cy - 29, 6, 11, 2, stemColor);
     // 3 cánh lá sao xòe ra
-    _spr.fillTriangle(cx - 1, cy - 14, cx - 14, cy - 19, cx - 3, cy - 14, leafColor);
-    _spr.fillTriangle(cx + 1, cy - 14, cx + 14, cy - 19, cx + 3, cy - 14, leafColor);
-    _spr.fillTriangle(cx - 6, cy - 14, cx + 6, cy - 14, cx, cy - 8, RGB565(65, 205, 100));
+    _spr.fillTriangle(cx - 1, cy - 18, cx - 18, cy - 25, cx - 4, cy - 18, leafColor);
+    _spr.fillTriangle(cx + 1, cy - 18, cx + 18, cy - 25, cx + 4, cy - 18, leafColor);
+    _spr.fillTriangle(cx - 8, cy - 18, cx + 8, cy - 18, cx, cy - 10, RGB565(50, 215, 85));
 
     // 5. Khuôn mặt anime dễ thương (Cute Anime Face)
-    uint16_t eyeColor = RGB565(25, 25, 35);
+    uint16_t eyeColor = RGB565(20, 20, 28);
     if (isFocus) {
         // Đang tập trung: Mắt to tròn long lanh, miệng cười tươi
         // Mắt trái
-        _spr.fillSmoothCircle(cx - 9, cy + 2, 4, eyeColor, bodyColor);
-        _spr.drawPixel(cx - 10, cy + 1, C_WHITE);
-        _spr.drawPixel(cx - 9,  cy + 1, C_WHITE);
+        _spr.fillSmoothCircle(cx - 13, cy + 3, 5, eyeColor, bodyColor);
+        _spr.drawPixel(cx - 14, cy + 2, C_WHITE);
+        _spr.drawPixel(cx - 13, cy + 2, C_WHITE);
         // Mắt phải
-        _spr.fillSmoothCircle(cx + 9, cy + 2, 4, eyeColor, bodyColor);
-        _spr.drawPixel(cx + 8, cy + 1, C_WHITE);
-        _spr.drawPixel(cx + 9, cy + 1, C_WHITE);
+        _spr.fillSmoothCircle(cx + 13, cy + 3, 5, eyeColor, bodyColor);
+        _spr.drawPixel(cx + 12, cy + 2, C_WHITE);
+        _spr.drawPixel(cx + 13, cy + 2, C_WHITE);
 
         // Miệng cười ngọt ngào :)
-        _spr.drawPixel(cx - 3, cy + 8, RGB565(55, 20, 25));
-        _spr.drawPixel(cx - 2, cy + 9, RGB565(55, 20, 25));
-        _spr.drawPixel(cx - 1, cy + 10, RGB565(55, 20, 25));
-        _spr.drawPixel(cx,     cy + 10, RGB565(55, 20, 25));
-        _spr.drawPixel(cx + 1, cy + 10, RGB565(55, 20, 25));
-        _spr.drawPixel(cx + 2, cy + 9, RGB565(55, 20, 25));
-        _spr.drawPixel(cx + 3, cy + 8, RGB565(55, 20, 25));
+        _spr.drawPixel(cx - 4, cy + 12, RGB565(55, 15, 15));
+        _spr.drawPixel(cx - 3, cy + 13, RGB565(55, 15, 15));
+        _spr.drawPixel(cx - 2, cy + 13, RGB565(55, 15, 15));
+        _spr.drawPixel(cx - 1, cy + 13, RGB565(55, 15, 15));
+        _spr.drawPixel(cx,     cy + 13, RGB565(55, 15, 15));
+        _spr.drawPixel(cx + 1, cy + 13, RGB565(55, 15, 15));
+        _spr.drawPixel(cx + 2, cy + 13, RGB565(55, 15, 15));
+        _spr.drawPixel(cx + 3, cy + 13, RGB565(55, 15, 15));
+        _spr.drawPixel(cx + 4, cy + 12, RGB565(55, 15, 15));
     } else {
         // Đang giải lao: Mắt híp cười thư giãn (^ ^)
-        _spr.drawLine(cx - 12, cy + 3, cx - 9, cy, RGB565(45, 20, 25));
-        _spr.drawLine(cx - 9, cy, cx - 6, cy + 3, RGB565(45, 20, 25));
-        _spr.drawLine(cx + 6, cy + 3, cx + 9, cy, RGB565(45, 20, 25));
-        _spr.drawLine(cx + 9, cy, cx + 12, cy + 3, RGB565(45, 20, 25));
+        _spr.drawLine(cx - 16, cy + 5, cx - 11, cy, RGB565(45, 15, 15));
+        _spr.drawLine(cx - 11, cy, cx - 6, cy + 5, RGB565(45, 15, 15));
+        _spr.drawLine(cx + 6, cy + 5, cx + 11, cy, RGB565(45, 15, 15));
+        _spr.drawLine(cx + 11, cy, cx + 16, cy + 5, RGB565(45, 15, 15));
 
         // Miệng cười nhẹ
-        _spr.drawFastHLine(cx - 3, cy + 9, 7, RGB565(55, 20, 25));
+        _spr.drawFastHLine(cx - 4, cy + 13, 9, RGB565(55, 15, 15));
     }
 
-    // 6. Đôi má hồng đào bẽn lẽn (Cute Blush Cheeks)
-    _spr.fillSmoothCircle(cx - 16, cy + 6, 3, RGB565(255, 130, 140), bodyColor);
-    _spr.fillSmoothCircle(cx + 16, cy + 6, 3, RGB565(255, 130, 140), bodyColor);
+    // 6. Đôi má ửng cam hồng (Warm Blush Cheeks)
+    _spr.fillSmoothCircle(cx - 22, cy + 8, 4, RGB565(255, 95, 60), bodyColor);
+    _spr.fillSmoothCircle(cx + 22, cy + 8, 4, RGB565(255, 95, 60), bodyColor);
 }
 
 void Display::renderPage3_Pomodoro() {
     drawBackground();
 
     // ── 1. THANH CHỌN CHẾ ĐỘ DẠNG VIÊN THUỐC HỢP NHẤT (Top Segmented Capsule) ──
-    // Y = 8..30 (H=22px), Capsule nền tối bo tròn X = 40..280 (W=240px)
-    int16_t capX = 40, capY = 8, capW = 240, capH = 22, capR = 11;
+    // Y = 8..28 (H=20px), Capsule nền tối bo tròn X = 45..275 (W=230px)
+    int16_t capX = 45, capY = 8, capW = 230, capH = 20, capR = 10;
     _spr.fillSmoothRoundRect(capX, capY, capW, capH, capR, RGB565(20, 26, 38), theme.bg);
     _spr.drawRoundRect(capX, capY, capW, capH, capR, RGB565(36, 48, 68));
 
-    const char* tabNames[] = { "TAP TRUNG", "NGHI NGAN", "NGHI DAI" };
-    int16_t segX[] = { 42, 122, 202 };
-    int16_t segW[] = { 78, 78, 76 };
+    const char* tabNames[] = { "TAP TRUNG", "NGHI 5P", "NGHI 15P" };
+    int16_t segX[] = { 47, 123, 199 };
+    int16_t segW[] = { 75, 75, 74 };
 
     uint16_t modeColors[] = {
-        RGB565(255, 80, 75),   // Focus: Tomato / Coral Red
-        RGB565(40, 215, 145),  // Short Break: Mint Green
+        RGB565(255, 30, 0),    // Focus: Đỏ Cà Chua nguyên bản
+        RGB565(35, 210, 140),  // Short Break: Mint Green
         RGB565(55, 175, 255)   // Long Break: Sky Blue
     };
     uint16_t activeColor = modeColors[_pomoMode];
@@ -1788,7 +1783,7 @@ void Display::renderPage3_Pomodoro() {
     for (int i = 0; i < 3; i++) {
         bool isActive = (_pomoMode == i);
         if (isActive) {
-            _spr.fillSmoothRoundRect(segX[i], capY + 1, segW[i], capH - 2, 9, activeColor, RGB565(20, 26, 38));
+            _spr.fillSmoothRoundRect(segX[i], capY + 1, segW[i], capH - 2, 8, activeColor, RGB565(20, 26, 38));
             _spr.setTextDatum(MC_DATUM);
             _spr.setTextColor(C_WHITE);
             _spr.drawString(tabNames[i], segX[i] + segW[i] / 2, capY + capH / 2, 1);
@@ -1799,16 +1794,17 @@ void Display::renderPage3_Pomodoro() {
         }
     }
 
-    // ── 2. VÒNG CUNG TIẾN ĐỘ & CHÚ CÀ CHUA POMODORO (Center Hero Ring) ─────
-    int16_t cx = 160, ringCy = 84;
-    int16_t outerR = 48, innerR = 44;
+    // ── 2. NỬA TRÁI: VÒNG TRÒN TIẾN ĐỘ LỚN & CHÚ CÀ CHUA (Hero Left Dial) ──────
+    // Tâm (cx=88, cy=126), Bán kính ngoài R=68, R trong=61 (X: 20..156, Y: 58..194)
+    int16_t cx = 88, ringCy = 126;
+    int16_t outerR = 68, innerR = 61;
 
-    // Vòng ray nền mờ
-    _spr.drawArc(cx, ringCy, outerR, innerR, 0, 360, RGB565(32, 42, 58), theme.bg, true);
+    // Vòng ray nền MÀU XÁM TRUNG TÍNH (Neutral Slate Gray, TUYỆT ĐỐI KHÔNG XANH NAVY)
+    _spr.drawArc(cx, ringCy, outerR, innerR, 0, 360, RGB565(75, 75, 75), theme.bg, true);
 
-    // Vẽ chú Cà chua Mascot ở trung tâm vòng tròn
+    // Vẽ chú Cà chua Mascot lớn dễ thương ở trung tâm vòng tròn
     bool isFocusMode = (_pomoMode == POMO_FOCUS);
-    drawTomatoMascot(cx, ringCy + 2, isFocusMode);
+    drawTomatoMascot(cx, ringCy + 1, isFocusMode);
 
     // Tính % tiến độ
     float progress = 0.0f;
@@ -1827,7 +1823,7 @@ void Display::renderPage3_Pomodoro() {
         _spr.drawArc(cx, ringCy, outerR, innerR, startAng, endAng, activeColor, theme.bg, true);
     }
 
-    // Chấm bi Knob ở đầu mút cung tròn (giống nguyên mẫu ảnh 100%)
+    // Chấm bi Knob ở đầu mút cung tròn
     float angRad = (180.0f + (float)sweepDeg) * 0.0174532925f; // deg to rad
     float midR = (outerR + innerR) * 0.5f;
     int16_t knobX = cx - (int16_t)(sinf(angRad) * midR);
@@ -1836,59 +1832,67 @@ void Display::renderPage3_Pomodoro() {
     _spr.fillSmoothCircle(knobX, knobY, 5, activeColor, theme.bg);
     _spr.fillSmoothCircle(knobX, knobY, 2, C_WHITE, activeColor);
 
-    // ── 3. ĐỒNG HỒ SỐ ĐẾM NGƯỢC (mm:ss) VÀ THÔNG TIN HIỆP ───────────────
+    // ── 3. NỬA PHẢI: ĐỒNG HỒ SỐ ĐẾM NGƯỢC SIÊU TO & BẢNG NÚT BẤM (Right Panel) ─
+    int16_t cx2 = 236;
+
+    // Dòng trạng thái nhỏ trang nhã (Status tag)
+    const char* statusDesc = "DANG TAP TRUNG";
+    if (_pomoState == POMO_STOPPED) {
+        statusDesc = (_pomoMode == POMO_FOCUS) ? "SAN SANG TAP TRUNG" : "SAN SANG NGHI";
+    } else if (_pomoState == POMO_PAUSED) {
+        statusDesc = "DANG TAM DUNG";
+    } else {
+        if (_pomoMode == POMO_SHORT_BREAK) statusDesc = "NGHI NGAN 5 PHUT";
+        else if (_pomoMode == POMO_LONG_BREAK) statusDesc = "NGHI DAI 15 PHUT";
+    }
+    _spr.setTextDatum(MC_DATUM);
+    _spr.setTextColor(activeColor);
+    _spr.drawString(statusDesc, cx2, 48, 2);
+
+    // Đồng hồ số đếm ngược Font 6 cực to, sắc nét, nổi bật hoàn toàn (Y=104)
     char timeBuf[16];
     snprintf(timeBuf, sizeof(timeBuf), "%02d:%02d", _pomoRemainingSec / 60, _pomoRemainingSec % 60);
     _spr.setTextDatum(MC_DATUM);
     _spr.setTextColor(C_WHITE);
-    _spr.drawString(timeBuf, cx, 150, 6); // Font 6: Chữ số to đậm, sắc nét
+    _spr.drawString(timeBuf, cx2, 104, 6);
 
-    // Dòng thông tin hiệp và trạng thái (Y=175)
-    char infoBuf[40];
-    const char* stStr = (_pomoState == POMO_RUNNING) ? "Dang chay..." :
-                        (_pomoState == POMO_PAUSED)  ? "Tam dung" : "San sang";
-    snprintf(infoBuf, sizeof(infoBuf), "HIEP %d/4  •  %s", _pomoSession, stStr);
-    _spr.setTextDatum(MC_DATUM);
-    _spr.setTextColor(RGB565(140, 165, 195));
-    _spr.drawString(infoBuf, cx, 175, 1);
-
-    // ── 4. CỤM NÚT ĐIỀU KHIỂN DƯỚI ĐÁY (Y=192..228 — Tận dụng trọn vẹn màn hình) ──
-    int16_t btnY = 192, btnH = 36;
+    // ── 4. CỤM NÚT ĐIỀU KHIỂN CÔNG THÁI HỌC (Y = 152..194, H = 42px — Rộng rãi, kết thúc tại Y=194) ──
+    int16_t btnY = 152, btnH = 42;
 
     if (_pomoState == POMO_STOPPED) {
-        // Nút Start to dài ở giữa (giống ảnh mẫu)
-        int16_t bX = 90, bW = 140;
-        _spr.fillSmoothRoundRect(bX, btnY, bW, btnH, 18, activeColor, theme.bg);
+        // Nút Start lớn bo tròn viên thuốc (Radius 21)
+        int16_t bX = 162, bW = 148;
+        _spr.fillSmoothRoundRect(bX, btnY, bW, btnH, 21, activeColor, theme.bg);
         _spr.setTextDatum(MC_DATUM);
         _spr.setTextColor(C_WHITE);
-        _spr.drawString("BAT DAU", bX + bW / 2, btnY + btnH / 2, 4);
+        _spr.drawString("BAT DAU", bX + bW / 2, btnY + btnH / 2, 2);
     } else if (_pomoState == POMO_RUNNING) {
         // Nút Trái: TAM DUNG
-        int16_t b1X = 42, b1W = 110;
-        _spr.fillSmoothRoundRect(b1X, btnY, b1W, btnH, 18, RGB565(245, 180, 45), theme.bg);
+        int16_t b1X = 158, b1W = 74;
+        _spr.fillSmoothRoundRect(b1X, btnY, b1W, btnH, 16, RGB565(245, 180, 45), theme.bg);
         _spr.setTextDatum(MC_DATUM);
         _spr.setTextColor(RGB565(20, 20, 25));
         _spr.drawString("TAM DUNG", b1X + b1W / 2, btnY + btnH / 2, 2);
 
         // Nút Phải: DAT LAI
-        int16_t b2X = 168, b2W = 110;
-        _spr.fillSmoothRoundRect(b2X, btnY, b2W, btnH, 18, RGB565(30, 40, 58), theme.bg);
-        _spr.drawRoundRect(b2X, btnY, b2W, btnH, 18, RGB565(55, 75, 105));
+        int16_t b2X = 236, b2W = 74;
+        _spr.fillSmoothRoundRect(b2X, btnY, b2W, btnH, 16, RGB565(35, 42, 52), theme.bg);
+        _spr.drawRoundRect(b2X, btnY, b2W, btnH, 16, RGB565(65, 78, 95));
         _spr.setTextDatum(MC_DATUM);
         _spr.setTextColor(RGB565(220, 230, 245));
         _spr.drawString("DAT LAI", b2X + b2W / 2, btnY + btnH / 2, 2);
     } else if (_pomoState == POMO_PAUSED) {
         // Nút Trái: TIEP TUC
-        int16_t b1X = 42, b1W = 110;
-        _spr.fillSmoothRoundRect(b1X, btnY, b1W, btnH, 18, RGB565(35, 215, 140), theme.bg);
+        int16_t b1X = 158, b1W = 74;
+        _spr.fillSmoothRoundRect(b1X, btnY, b1W, btnH, 16, RGB565(35, 215, 140), theme.bg);
         _spr.setTextDatum(MC_DATUM);
         _spr.setTextColor(RGB565(15, 25, 20));
         _spr.drawString("TIEP TUC", b1X + b1W / 2, btnY + btnH / 2, 2);
 
         // Nút Phải: DAT LAI
-        int16_t b2X = 168, b2W = 110;
-        _spr.fillSmoothRoundRect(b2X, btnY, b2W, btnH, 18, RGB565(180, 35, 50), theme.bg);
-        _spr.drawRoundRect(b2X, btnY, b2W, btnH, 18, RGB565(220, 60, 80));
+        int16_t b2X = 236, b2W = 74;
+        _spr.fillSmoothRoundRect(b2X, btnY, b2W, btnH, 16, RGB565(180, 35, 50), theme.bg);
+        _spr.drawRoundRect(b2X, btnY, b2W, btnH, 16, RGB565(220, 60, 80));
         _spr.setTextDatum(MC_DATUM);
         _spr.setTextColor(C_WHITE);
         _spr.drawString("DAT LAI", b2X + b2W / 2, btnY + btnH / 2, 2);
