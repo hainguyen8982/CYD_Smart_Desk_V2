@@ -58,11 +58,11 @@ private:
     // ── Smart Dock & Calibration ─────────────────────────────
     void renderDock();
     void renderCalibrationScreen();
-    void drawDockIconHome(int16_t cx, int16_t cy, uint16_t color);
-    void drawDockIconCalendar(int16_t cx, int16_t cy, uint16_t color);
-    void drawDockIconFinance(int16_t cx, int16_t cy, uint16_t color);
-    void drawDockIconPomodoro(int16_t cx, int16_t cy, uint16_t color);
-    void drawDockIconTheme(int16_t cx, int16_t cy, uint16_t color);
+    void drawDockIconHome(int16_t cx, int16_t cy, bool isActive);
+    void drawDockIconCalendar(int16_t cx, int16_t cy, bool isActive);
+    void drawDockIconFinance(int16_t cx, int16_t cy, bool isActive);
+    void drawDockIconPomodoro(int16_t cx, int16_t cy, bool isActive);
+    void drawDockIconTheme(int16_t cx, int16_t cy, bool isActive);
 
     // ── Background & Visual Elements ─────────────────────────
     void drawBackground();

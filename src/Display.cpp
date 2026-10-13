@@ -731,14 +731,14 @@ bool Display::handleTouch(uint16_t x, uint16_t y) {
         return false;
     }
 
-    // Dock is visible -> hit test buttons (5 slots, 42px wide each)
+    // Dock is visible -> hit test buttons (5 slots, 44px wide each)
     if (y >= 180) {
         wakeDock(); // Reset 5s auto-hide timer
-        if (x < 97)                   { setPage(PAGE_CLOCK);    return true; }
-        else if (x >= 97 && x < 139)  { setPage(PAGE_CALENDAR); return true; }
-        else if (x >= 139 && x < 181) { setPage(PAGE_FINANCE);  return true; }
-        else if (x >= 181 && x < 223) { setPage(PAGE_POMODORO); return true; }
-        else if (x >= 223)            { nextTheme(); wakeDock(); return true; }
+        if (x < 94)                   { setPage(PAGE_CLOCK);    return true; }
+        else if (x >= 94 && x < 138)  { setPage(PAGE_CALENDAR); return true; }
+        else if (x >= 138 && x < 182) { setPage(PAGE_FINANCE);  return true; }
+        else if (x >= 182 && x < 226) { setPage(PAGE_POMODORO); return true; }
+        else if (x >= 226)            { nextTheme(); wakeDock(); return true; }
         return true;
     }
 
@@ -805,115 +805,127 @@ void Display::renderDock() {
         return;
     }
 
-    // Centered Floating Glossy Obsidian & Crystal Edge Capsule Dock
-    int16_t dockX = 55;
-    int16_t dockY = 198;
-    int16_t dockW = 210;
-    int16_t dockH = 34;
-    int16_t dockR = 17;
+    // Centered Floating Solid Obsidian Dock Capsule (Seamless, no split line)
+    int16_t dockX = 50;
+    int16_t dockY = 196;
+    int16_t dockW = 220;
+    int16_t dockH = 36;
+    int16_t dockR = 18;
 
-    // 1. Soft ambient outer shadow (gives floating 3D lift)
-    _spr.fillRoundRect(dockX - 1, dockY + 1, dockW + 2, dockH + 2, dockR + 1, RGB565(4, 6, 12));
+    // 1. Soft outer shadow (floating 3D lift)
+    _spr.fillRoundRect(dockX - 1, dockY + 1, dockW + 2, dockH + 2, dockR + 1, RGB565(2, 4, 8));
 
-    // 2. Glossy Obsidian Deep Glass Base
-    _spr.fillRoundRect(dockX, dockY, dockW, dockH, dockR, RGB565(10, 14, 22));
+    // 2. Uniform Deep Obsidian Glass Base (100% solid, NO horizontal color split)
+    _spr.fillRoundRect(dockX, dockY, dockW, dockH, dockR, RGB565(12, 16, 26));
 
-    // 3. Curved specular sheen on top half (genuine glossy reflection)
-    _spr.fillRoundRect(dockX + 2, dockY + 1, dockW - 4, (dockH / 2) - 1, dockR - 2, RGB565(24, 34, 52));
+    // 3. Crisp outer border
+    _spr.drawRoundRect(dockX, dockY, dockW, dockH, dockR, RGB565(40, 58, 86));
 
-    // 4. Crystal Bezel Border (Diamond-cut edge)
-    _spr.drawRoundRect(dockX, dockY, dockW, dockH, dockR, RGB565(45, 68, 100));
+    // 4. Subtle specular highlight on top edge
+    _spr.drawFastHLine(dockX + dockR, dockY, dockW - dockR * 2, RGB565(140, 190, 245));
 
-    // 5. Double Crystal Light Reflection on top edge (Diamond highlight)
-    _spr.drawFastHLine(dockX + dockR, dockY, dockW - dockR * 2, RGB565(225, 245, 255)); // Pure ice-white crystal line
-    _spr.drawFastHLine(dockX + dockR + 2, dockY + 1, dockW - dockR * 2 - 4, RGB565(130, 190, 255)); // Soft refraction line
-
-    // 5 Vector Icon Slots
+    // 5 Vector Icon Slots (spaced 44px apart)
     for (int i = 0; i < 5; i++) {
-        int16_t cx = dockX + 21 + i * 42;
-        int16_t cy = dockY + dockH / 2 - 1;
+        int16_t cx = dockX + 22 + i * 44;
+        int16_t cy = dockY + dockH / 2;
         bool isActive = (i < 4 && _currentPage == i);
 
         if (isActive) {
-            // Active state: Glowing theme pill capsule
-            _spr.fillRoundRect(cx - 16, dockY + 3, 32, 28, 14, RGB565(18, 30, 48));
-            _spr.drawRoundRect(cx - 16, dockY + 3, 32, 28, 14, theme.accent);
+            // Glowing neon pill behind active icon
+            _spr.fillRoundRect(cx - 17, dockY + 3, 34, 30, 15, RGB565(22, 36, 58));
+            _spr.drawRoundRect(cx - 17, dockY + 3, 34, 30, 15, theme.accent);
 
-            // Apple macOS style active underglow indicator bar
-            _spr.fillRoundRect(cx - 7, dockY + dockH - 4, 14, 2, 1, theme.accent);
-            _spr.drawFastHLine(cx - 4, dockY + dockH - 4, 8, C_WHITE); // Bright center sparkle in indicator
+            // Active Underglow Indicator Bar at bottom of dock
+            _spr.fillRoundRect(cx - 8, dockY + dockH - 4, 16, 2, 1, theme.accent);
+            _spr.drawFastHLine(cx - 4, dockY + dockH - 4, 8, C_WHITE);
         }
 
-        // Crisp platinum silver for inactive, radiant theme.accent for active
-        uint16_t iconColor = isActive ? theme.accent : RGB565(200, 218, 238);
-
         switch (i) {
-            case 0: drawDockIconHome(cx, cy, iconColor); break;
-            case 1: drawDockIconCalendar(cx, cy, iconColor); break;
-            case 2: drawDockIconFinance(cx, cy, iconColor); break;
-            case 3: drawDockIconPomodoro(cx, cy, iconColor); break;
-            case 4: drawDockIconTheme(cx, cy, iconColor); break;
+            case 0: drawDockIconHome(cx, cy, isActive); break;
+            case 1: drawDockIconCalendar(cx, cy, isActive); break;
+            case 2: drawDockIconFinance(cx, cy, isActive); break;
+            case 3: drawDockIconPomodoro(cx, cy, isActive); break;
+            case 4: drawDockIconTheme(cx, cy, isActive); break;
         }
     }
 }
 
-// ─── Dock Vector Icons (Sharp Unified Minimalist Vector Glyphs) ──────
-void Display::drawDockIconHome(int16_t cx, int16_t cy, uint16_t color) {
-    // Modern geometric roof with clean overhang
-    _spr.fillTriangle(cx, cy - 8, cx - 9, cy - 1, cx + 9, cy - 1, color);
-    // House body
-    _spr.fillRoundRect(cx - 7, cy - 1, 14, 9, 2, color);
-    // Clean door cutout (reveals obsidian dock background)
-    _spr.fillRoundRect(cx - 2, cy + 1, 5, 7, 1, RGB565(10, 14, 22));
+// ─── Dock Vector Icons (Rich, Vibrant Multi-Color Icons) ─────────────
+void Display::drawDockIconHome(int16_t cx, int16_t cy, bool isActive) {
+    // Ống khói màu xám bạc
+    _spr.fillRect(cx + 4, cy - 8, 2, 4, RGB565(170, 185, 205));
+    // Mái ngói đỏ cam rực rỡ
+    _spr.fillTriangle(cx, cy - 8, cx - 10, cy, cx + 10, cy, RGB565(255, 75, 55));
+    _spr.drawLine(cx, cy - 9, cx - 10, cy - 1, RGB565(255, 140, 110)); // Viền mái sáng
+    // Thân nhà màu trắng kem
+    _spr.fillRoundRect(cx - 7, cy, 14, 9, 1, C_WHITE);
+    // Cánh cửa màu vàng gold ấm áp
+    _spr.fillRoundRect(cx - 3, cy + 2, 6, 7, 1, RGB565(255, 210, 0));
+    _spr.drawPixel(cx + 1, cy + 5, RGB565(120, 60, 0)); // Tay nắm cửa
 }
 
-void Display::drawDockIconCalendar(int16_t cx, int16_t cy, uint16_t color) {
-    // Modern desk calendar body
-    _spr.fillRoundRect(cx - 8, cy - 6, 16, 14, 2, color);
-    // Header cutout groove
-    _spr.drawFastHLine(cx - 6, cy - 2, 12, RGB565(10, 14, 22));
-    // Top metallic ring loops
-    _spr.fillRoundRect(cx - 5, cy - 9, 2, 4, 1, color);
-    _spr.fillRoundRect(cx + 3, cy - 9, 2, 4, 1, color);
-    // 4 clean date dots
-    _spr.fillRect(cx - 5, cy + 1, 3, 2, RGB565(10, 14, 22));
-    _spr.fillRect(cx + 2, cy + 1, 3, 2, RGB565(10, 14, 22));
-    _spr.fillRect(cx - 5, cy + 4, 3, 2, RGB565(10, 14, 22));
-    _spr.fillRect(cx + 2, cy + 4, 3, 2, RGB565(10, 14, 22));
+void Display::drawDockIconCalendar(int16_t cx, int16_t cy, bool isActive) {
+    // Thân lịch màu trắng tinh
+    _spr.fillRoundRect(cx - 8, cy - 5, 16, 14, 2, C_WHITE);
+    // Gáy lịch trên màu đỏ tươi rực rỡ
+    _spr.fillRoundRect(cx - 8, cy - 7, 16, 5, 1, RGB565(255, 50, 50));
+    // 2 khuyên sắt móc lịch màu bạc
+    _spr.fillRoundRect(cx - 5, cy - 9, 2, 4, 1, RGB565(220, 230, 245));
+    _spr.fillRoundRect(cx + 3, cy - 9, 2, 4, 1, RGB565(220, 230, 245));
+    // 4 ô ngày màu sắc sinh động (Cyan, Gold, Green)
+    _spr.fillRect(cx - 5, cy + 1, 3, 2, RGB565(0, 200, 255));
+    _spr.fillRect(cx + 2, cy + 1, 3, 2, RGB565(0, 200, 255));
+    _spr.fillRect(cx - 5, cy + 4, 3, 2, RGB565(255, 185, 0)); // Ngày nổi bật
+    _spr.fillRect(cx + 2, cy + 4, 3, 2, RGB565(0, 230, 118)); // Ngày hoàn thành
 }
 
-void Display::drawDockIconFinance(int16_t cx, int16_t cy, uint16_t color) {
-    // 3 ascending solid financial growth bars
-    _spr.fillRoundRect(cx - 7, cy + 2, 3, 6, 1, color);
-    _spr.fillRoundRect(cx - 2, cy - 2, 3, 10, 1, color);
-    _spr.fillRoundRect(cx + 3, cy - 6, 3, 14, 1, color);
-    // Dynamic upward trendline with arrow tip
-    _spr.drawLine(cx - 7, cy + 1, cx - 2, cy - 3, color);
-    _spr.drawLine(cx - 2, cy - 3, cx + 6, cy - 9, color);
-    _spr.fillTriangle(cx + 7, cy - 11, cx + 4, cy - 8, cx + 8, cy - 7, color);
+void Display::drawDockIconFinance(int16_t cx, int16_t cy, bool isActive) {
+    // 3 cột tăng trưởng màu Xanh lục bảo (Emerald Green)
+    _spr.fillRoundRect(cx - 8, cy + 2, 4, 7, 1, RGB565(0, 235, 120));
+    _spr.fillRoundRect(cx - 2, cy - 2, 4, 11, 1, RGB565(0, 235, 120));
+    _spr.fillRoundRect(cx + 4, cy - 6, 4, 15, 1, RGB565(0, 235, 120));
+    // Vạch sáng trên đỉnh mỗi cột
+    _spr.drawFastHLine(cx - 7, cy + 2, 2, RGB565(180, 255, 210));
+    _spr.drawFastHLine(cx - 1, cy - 2, 2, RGB565(180, 255, 210));
+    _spr.drawFastHLine(cx + 5, cy - 6, 2, RGB565(180, 255, 210));
+    // Đường xu hướng vút lên màu Vàng Gold
+    _spr.drawLine(cx - 8, cy + 1, cx - 2, cy - 3, RGB565(255, 215, 0));
+    _spr.drawLine(cx - 2, cy - 3, cx + 7, cy - 9, RGB565(255, 215, 0));
+    _spr.drawLine(cx - 8, cy + 2, cx + 7, cy - 8, RGB565(255, 215, 0));
+    // Mũi tên nhọn hướng lên
+    _spr.fillTriangle(cx + 8, cy - 11, cx + 4, cy - 7, cx + 8, cy - 6, RGB565(255, 215, 0));
 }
 
-void Display::drawDockIconPomodoro(int16_t cx, int16_t cy, uint16_t color) {
-    // Minimalist luxury chronograph body
-    _spr.drawCircle(cx, cy + 1, 7, color);
-    _spr.drawCircle(cx, cy + 1, 6, color);
-    // Crown button
-    _spr.fillRoundRect(cx - 2, cy - 8, 4, 2, 1, color);
-    // Clock hands (pointing to 10:10)
-    _spr.drawPixel(cx, cy + 1, color);
-    _spr.drawLine(cx, cy + 1, cx - 3, cy - 3, color);
-    _spr.drawLine(cx, cy + 1, cx + 3, cy - 1, color);
+void Display::drawDockIconPomodoro(int16_t cx, int16_t cy, bool isActive) {
+    // Quả cà chua màu Đỏ Pomodoro tươi rói
+    _spr.fillCircle(cx, cy + 1, 8, RGB565(255, 45, 40));
+    // Núm bấm trên màu bạc sáng
+    _spr.fillRoundRect(cx - 2, cy - 9, 5, 3, 1, RGB565(230, 240, 255));
+    // Mặt đồng hồ màu trắng sữa bên trong
+    _spr.fillCircle(cx, cy + 1, 6, RGB565(255, 245, 240));
+    // Trục kim
+    _spr.drawPixel(cx, cy + 1, RGB565(40, 40, 40));
+    // Kim giờ (đen) và kim phút (xanh cyan)
+    _spr.drawLine(cx, cy + 1, cx, cy - 3, RGB565(30, 30, 30));
+    _spr.drawLine(cx, cy + 1, cx + 3, cy - 1, RGB565(0, 180, 240));
+    // 4 vạch số cam đỏ ở 12h, 3h, 6h, 9h
+    _spr.drawPixel(cx, cy - 4, RGB565(255, 80, 60));
+    _spr.drawPixel(cx + 5, cy + 1, RGB565(255, 80, 60));
+    _spr.drawPixel(cx, cy + 6, RGB565(255, 80, 60));
+    _spr.drawPixel(cx - 5, cy + 1, RGB565(255, 80, 60));
 }
 
-void Display::drawDockIconTheme(int16_t cx, int16_t cy, uint16_t color) {
-    // Artist palette body
-    _spr.fillCircle(cx, cy, 7, color);
-    // Thumb hole cutout
-    _spr.fillCircle(cx + 2, cy + 2, 2, RGB565(10, 14, 22));
-    // 3 clean pigment dots
-    _spr.fillCircle(cx - 3, cy - 2, 1, RGB565(10, 14, 22));
-    _spr.fillCircle(cx + 1, cy - 3, 1, RGB565(10, 14, 22));
-    _spr.fillCircle(cx - 3, cy + 2, 1, RGB565(10, 14, 22));
+void Display::drawDockIconTheme(int16_t cx, int16_t cy, bool isActive) {
+    // Bảng màu họa sĩ màu Gỗ Vàng Ấm
+    _spr.fillCircle(cx, cy, 8, RGB565(235, 200, 150));
+    _spr.drawCircle(cx, cy, 8, RGB565(180, 145, 95));
+    // Lỗ xỏ ngón tay cái màu nền
+    _spr.fillCircle(cx + 3, cy + 3, 2, RGB565(12, 16, 26));
+    // 4 giọt sơn rực rỡ tươi sáng
+    _spr.fillCircle(cx - 4, cy - 3, 2, RGB565(255, 40, 40));  // Đỏ tươi
+    _spr.fillCircle(cx + 2, cy - 4, 2, RGB565(255, 220, 0)); // Vàng chanh
+    _spr.fillCircle(cx - 4, cy + 3, 2, RGB565(0, 215, 255)); // Cyan rực
+    _spr.fillCircle(cx + 3, cy - 1, 2, RGB565(40, 230, 90)); // Xanh lá mạ
 }
 
 // ═══════════════════════════════════════════════════════════════════════
