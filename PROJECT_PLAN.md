@@ -47,35 +47,38 @@ Dự án tham chiếu `ESP32_CYD_Smart_Desk_Studio_Pro` đang sử dụng 3 API 
 
 ## 3. THIẾT KẾ 4 TRANG TÍNH NĂNG CHÍNH
 
-### Trang 0: Đồng hồ Thời tiết (Weather Clock Dashboard)
+### Trang 0: Đồng hồ Thời tiết & Báo thức (Weather Clock Dashboard & Alarm)
 * **Thời gian:** Giờ:Phút (font số lớn hiện đại, hiệu ứng neon đổ bóng), Giây nhấp nháy tinh tế.
-* **Lịch Dương:** Thứ, Ngày tháng năm đầy đủ.
-* **Lịch Âm (Việt Nam):** Ngày/tháng Âm lịch, Can Chi ngày (thuật toán thiên văn Hồ Ngọc Đức chuẩn 100%).
-* **Card Thời tiết:**
-  * Nhiệt độ thực tế, độ ẩm (%RH), sức gió (km/h), chỉ số UV index.
-  * Icon thời tiết vector động (Mặt trời tỏa tia, mây chuyển động, giọt mưa rơi).
+* **Biểu tượng Báo thức (Alarm Indicator):**
+  * Icon chuông nhỏ tinh tế `🔔 07:00` đặt cạnh số đồng hồ chính (Sáng vàng khi BẬT, xám mờ khi TẮT).
+  * **Tương tác chạm thông minh:** Chạm vào cụm Card Đồng hồ chính (hitbox siêu rộng $300\times 110\text{ px}$) sẽ kích hoạt **POPUP_ALARM** modal:
+    * Công tắc gạt Toggle Bật/Tắt nhanh.
+    * 4 nút điều chỉnh Giờ và Phút to bản `[ + ]` / `[ - ]` cách ly an toàn khỏi thanh Dock.
+    * Nút thử chuông (Test buzzer click) và đồng bộ lưu tức thì vào NVS Flash / Web Dashboard.
+* **Lịch Dương & Lịch Âm:** Thứ, Ngày tháng năm đầy đủ, Can Chi ngày (thuật toán thiên văn Hồ Ngọc Đức chuẩn 100%).
+* **Card Thời tiết & Lịch âm:** Chạm mở popup chi tiết (Weather Forecast & Lunar Horoscopes).
 
 ### Trang 1: Lịch Tháng Âm - Dương Toàn cảnh (Full Month Lunar Calendar)
-* Lưới 7 cột (Thứ 2 đến Chủ Nhật).
-* **Mỗi ô ngày:** Số Dương lịch to đậm ở trên, số Âm lịch nhỏ ở góc dưới.
-* **Điểm nhấn văn hóa:** Đánh dấu màu vàng nổi bật cho ngày Mùng 1 và ngày Rằm (15 Âm lịch).
-* Nút chuyển Tháng trước / Tháng sau to bản ($\ge 44\text{px}$) ở góc trên.
+* Quyển lịch để bàn gáy da Đỏ Đô + gáy lò xo kim loại 6 khoen.
+* 3 tờ giấy Obsidian xếp lớp chân thực (Stepped Paper Stack), căn lề toán học đối xứng cho ngày hiện tại và góc bo tròn mịn.
 
 ### Trang 2: Bảng Tài chính & Biểu đồ Sóng 7 ngày (Finance & 7-Day Sparkline)
-* **Card Giá vàng SJC:** Giá Mua – Bán (triệu đ/lượng) kèm nhãn biến động (mũi tên xanh tăng / đỏ giảm).
-* **Card Ngoại tệ:** Hiển thị 2 cặp tiền tệ được chọn (mặc định USD/VND và EUR/VND, cấu hình được qua Web).
-* **Biểu đồ sóng 7 ngày (7-Day Sparkline Area Chart):**
-  * Đường cong mượt nối 7 mốc giá trị trong tuần.
-  * Phủ dải màu gradient mờ dưới chân biểu đồ (Area Fill) phong cách giao diện tài chính hiện đại.
+* Card Giá vàng SJC: Mua – Bán (triệu đ/lượng) kèm độ biến động.
+* Card Ngoại tệ: Tỉ giá USD, EUR.
+* Biểu đồ sóng 7 ngày (7-Day Sparkline Area Chart).
 
-### Trang 3: Pomodoro Timer & Báo thức (Alarm Clock)
-* **Pomodoro:**
-  * Đồng hồ vòng cung tròn (Circular Progress Arc Gauge) hiển thị tiến độ 25 phút làm việc / 5 phút nghỉ ngơi.
-  * Nút bấm to: **START / PAUSE / RESET**.
-  * Còi buzzer kêu báo hiệu khi chuyển phiên làm việc.
-* **Báo thức (Alarm):**
-  * Cài đặt giờ báo thức (Giờ : Phút) trực tiếp hoặc qua Web Server.
-  * Phát chuông báo động nhẹ nhàng khi đến giờ.
+### Trang 3: Trạm Tập trung Pomodoro Chuyên dụng (Dedicated Focus Station)
+* **Toàn màn hình ($320\times 240$):** Tận dụng tối đa không gian cho trải nghiệm tập trung làm việc chuyên sâu.
+* **Đồng hồ Vòng cung Tròn phát sáng (Glowing Circular Arc Gauge, $R \approx 60\text{px}$):**
+  * Cung tròn đổi màu: Đỏ Cam Neon (Focus 25m) và Xanh Ngọc Mint (Break 5m).
+  * Vòng tròn tiến độ vẽ mịn (Smooth Arc) giảm dần/tăng dần theo từng giây.
+  * Tâm vòng hiển thị đếm ngược mm:ss to rõ (Font 7 hoặc Font số mượt mà).
+* **Quản lý Phiên làm việc (Session Tracker):**
+  * Dãy chấm biểu thị tiến độ (ví dụ: Session 1/4, 2/4...).
+  * Chuyển đổi linh hoạt giữa các chế độ: Focus (25m), Short Break (5m), Long Break (15m).
+* **Cụm điều khiển an toàn ($Y \le 180$):**
+  * Nút to bản: `START` / `PAUSE` / `RESET` dễ bấm cho cảm ứng điện trở, hoàn toàn không chạm nhầm vào Dock.
+  * Phản hồi âm thanh còi buzzer click khi bấm và chuông bip-bip khi hoàn thành phiên.
 
 ---
 

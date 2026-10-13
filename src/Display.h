@@ -67,6 +67,32 @@ private:
     void          nextCalMonth();
     void          resetCalMonth();
 
+    // ── Pomodoro Focus Engine ─────────────────────────────────
+    enum PomoMode {
+        POMO_FOCUS = 0,       // 25 phút
+        POMO_SHORT_BREAK = 1, // 5 phút
+        POMO_LONG_BREAK = 2   // 15 phút
+    };
+    enum PomoState {
+        POMO_STOPPED = 0,
+        POMO_RUNNING = 1,
+        POMO_PAUSED = 2
+    };
+
+    PomoMode      _pomoMode;
+    PomoState     _pomoState;
+    uint16_t      _pomoTotalSec;
+    uint16_t      _pomoRemainingSec;
+    uint8_t       _pomoSession;       // 1..4
+    unsigned long _pomoLastSecTick;
+
+    void          pomoSetMode(PomoMode mode);
+    void          pomoStart();
+    void          pomoPause();
+    void          pomoReset();
+    void          pomoTick();
+    void          drawTomatoMascot(int16_t cx, int16_t cy, bool isFocus);
+
     // ── Page renderers ───────────────────────────────────────
     void renderPage0_WeatherClock();
     void renderPage1_Calendar();
