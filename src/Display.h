@@ -15,7 +15,8 @@ enum ActivePage {
     PAGE_CLOCK = 0,
     PAGE_CALENDAR = 1,
     PAGE_FINANCE = 2,
-    PAGE_POMODORO = 3
+    PAGE_POMODORO = 3,
+    PAGE_SETTINGS = 4
 };
 
 class Display {
@@ -24,7 +25,7 @@ public:
     void begin();
     void update();
     void playBootAnimation();
-    void drawFabXLogo(int16_t x, int16_t y);
+    void drawFabXLogo(int16_t x, int16_t y, uint8_t bloomAlpha = 0);
     void showBootStatus(const char* status, uint8_t progressPercent = 0);
 
     // ── Navigation & Touch ────────────────────────────────────
@@ -33,15 +34,14 @@ public:
     bool handleTouch(uint16_t x, uint16_t y);
     void wakeDock();
 
-    // ── Custom Wallpaper ──────────────────────────────────────
-    void notifyWallpaperUpdated();
-    bool hasWallpaper() const { return _hasWallpaper; }
-    static bool tjpgRenderCallback(int16_t x, int16_t y, uint16_t w, uint16_t h, uint16_t* bitmap);
+    // ── Alarm API ─────────────────────────────────────────────
+    void setAlarm(uint8_t h, uint8_t m, bool enabled, const char* msg = nullptr);
+    uint8_t getAlarmHour() const { return _alarmHour; }
+    uint8_t getAlarmMinute() const { return _alarmMinute; }
+    bool isAlarmEnabled() const { return _alarmEnabled; }
+    const char* getAlarmMessage() const { return _alarmMessage; }
 
 private:
-    bool          _hasWallpaper;
-    bool          _wpCheckNeeded;
-
     TFT_eSPI      _tft;
     TFT_eSprite   _spr;           // Full-screen double-buffer sprite
     bool          _sprReady;
@@ -57,15 +57,28 @@ private:
         POPUP_NONE = 0,
         POPUP_WEATHER,
         POPUP_LUNAR,
-        POPUP_ALARM
+        POPUP_ALARM,
+        POPUP_FINANCE_GOLD,
+        POPUP_FINANCE_CURRENCY
     };
     PopupState    _activePopup;
+    uint8_t       _currencyTab;        // 0 = USD, 1 = EUR
+    uint8_t       _settingsTab;        // 0 = Theme, 1 = Sound, 2 = System
     void          renderWeatherPopup();
     void          renderLunarPopup();
     void          renderAlarmPopup();
     void          renderAlarmTimeOnly();
     void          renderAlarmToggleBtnOnly();
     void          renderAlarmRingingScreen();
+    void          renderFinanceGoldPopup();
+    void          renderFinanceCurrencyPopup();
+    void          drawPopupCloseButton(int16_t x = 282, int16_t y = 10);
+    void          drawFinanceSparkline(int16_t x, int16_t y, int16_t w, int16_t h,
+                                       const float* pts, uint8_t count, uint16_t color, bool areaFill);
+    void          drawFinanceMicroBars(int16_t x, int16_t y, int16_t w, int16_t h,
+                                       const float* deltas, uint8_t count);
+    void          drawFinanceBadge(int16_t x, int16_t y, int16_t w, int16_t h,
+                                   const char* text, bool isPositive);
 
     // ── Alarm Engine ──────────────────────────────────────────
     bool          _alarmEnabled;
@@ -77,7 +90,9 @@ private:
     bool          _alarmSnoozed;
     time_t        _alarmSnoozeUntil;
     int           _alarmLastTriggerDay;
+    int           _alarmLastTriggerMin;
     unsigned long _alarmAutoCloseTime;
+    char          _alarmMessage[48];
 
     void          loadAlarmSettings();
     void          saveAlarmSettings();
@@ -125,6 +140,8 @@ private:
     void renderPage1_Calendar();
     void renderPage2_Finance();
     void renderPage3_Pomodoro();
+    void renderPage4_Settings();
+    bool handleTouchSettings(int16_t x, int16_t y);
 
     // ── Smart Dock & Calibration ─────────────────────────────
     void renderDock();

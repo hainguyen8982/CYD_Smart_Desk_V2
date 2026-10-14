@@ -3,16 +3,16 @@
 // ═══════════════════════════════════════════════════════════════════════
 #include "WebDashboard.h"
 #include "Display.h"
+#include "FinanceService.h"
 #include "HardwareManager.h"
 #include "Theme.h"
 #include "WeatherService.h"
-#include <WiFi.h>
-#include <LittleFS.h>
 #include <ArduinoJson.h>
+#include <ESPmDNS.h>
+#include <LittleFS.h>
+#include <WiFi.h>
 
 WebDashboard webDashboard;
-
-static File s_wpUploadFile;
 
 // HTML/CSS/JS Dashboard page stored in PROGMEM
 static const char INDEX_HTML[] PROGMEM = R"rawliteral(<!DOCTYPE html>
@@ -51,16 +51,7 @@ body { background: var(--bg); color: var(--text); padding: 16px; min-height: 100
 .card { background: var(--card); border: 1px solid var(--card-border); border-radius: 18px; padding: 18px; backdrop-filter: blur(12px); box-shadow: 0 8px 24px rgba(0,0,0,0.3); }
 .card-title { font-size: 14px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
 
-/* CYD Screen Mockup & Preview */
-.screen-frame { width: 100%; aspect-ratio: 4 / 3; max-height: 220px; background: #000; border-radius: 12px; border: 2px solid #2A364F; position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; margin-bottom: 12px; box-shadow: inset 0 0 20px rgba(0,0,0,0.8); }
-.screen-preview { width: 100%; height: 100%; object-fit: cover; display: block; }
-.screen-overlay { position: absolute; inset: 0; pointer-events: none; border-radius: 10px; border: 1px solid rgba(255,255,255,0.08); background: linear-gradient(180deg, rgba(255,255,255,0.06) 0%, transparent 40%); display: flex; flex-direction: column; justify-content: space-between; padding: 8px; }
-.overlay-clock { font-size: 26px; font-weight: 800; color: #fff; text-shadow: 0 0 10px #00E5FF; text-align: center; }
-.overlay-dock { align-self: center; background: rgba(12, 16, 26, 0.85); border: 1px solid rgba(56, 94, 144, 0.4); border-radius: 12px; padding: 3px 12px; font-size: 10px; color: var(--accent); }
-
-/* File Picker & Buttons */
-.upload-btn-wrap { position: relative; overflow: hidden; display: inline-block; width: 100%; }
-.file-input { position: absolute; left: 0; top: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
+/* Action Buttons */
 .btn { width: 100%; padding: 13px; border-radius: 12px; border: none; font-size: 14px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s; }
 .btn-primary { background: linear-gradient(135deg, #00B4D8, #0077B6); color: #fff; box-shadow: 0 4px 14px rgba(0, 180, 216, 0.3); }
 .btn-primary:active { transform: scale(0.98); opacity: 0.9; }
@@ -74,6 +65,10 @@ body { background: var(--bg); color: var(--text); padding: 16px; min-height: 100
 .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
 .btn-chip { background: #131C2D; border: 1px solid var(--card-border); color: var(--text); padding: 10px 6px; border-radius: 10px; font-size: 12px; font-weight: 500; cursor: pointer; text-align: center; }
 .btn-chip.active { background: var(--accent); color: #070B14; font-weight: 700; border-color: var(--accent); box-shadow: 0 0 10px var(--accent-glow); }
+
+/* Select Control */
+.select-control { width: 100%; padding: 10px 12px; border-radius: 10px; background: #131C2D; border: 1px solid var(--card-border); color: #fff; font-size: 13px; font-weight: 500; outline: none; }
+.select-control:focus { border-color: var(--accent); }
 
 /* Slider */
 .slider-wrap { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
@@ -94,49 +89,95 @@ input[type=range] { width: 100%; accent-color: var(--accent); height: 6px; borde
       <div class="brand-icon">V2</div>
       <div>
         <div class="brand-title">CYD SmartDesk</div>
-        <div class="brand-sub">Bàn làm việc thông minh 2.8"</div>
+        <div class="brand-sub">Màn hình để bàn thông minh</div>
       </div>
     </div>
     <div class="badge-online" id="statusBadge">Trực tuyến</div>
   </div>
 
-  <!-- Wallpaper Section -->
+
+
+  <!-- Currency Settings Section -->
   <div class="card">
     <div class="card-title">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
-      Tùy chỉnh hình nền (Wallpaper)
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v12M17 10H9.5a2.5 2.5 0 0 0 0 5H14a2.5 2.5 0 0 1 0 5H7"/></svg>
+      Cấu hình Ngoại tệ
     </div>
-
-    <!-- Live Preview Frame -->
-    <div class="screen-frame">
-      <img id="previewImg" class="screen-preview" src="/current-wallpaper" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'320\' height=\'240\'><rect fill=\'%23070B14\' width=\'320\' height=\'240\'/><circle cx=\'280\' cy=\'30\' r=\'50\' fill=\'%232A4C7A\'/><circle cx=\'45\' cy=\'20\' r=\'30\' fill=\'%23E879F9\'/><text fill=\'%23475569\' x=\'160\' y=\'130\' font-size=\'14\' text-anchor=\'middle\' font-family=\'sans-serif\'>Mặc định (Chưa tải ảnh)</text></svg>'">
-      <div class="screen-overlay">
-        <div class="overlay-clock">08:30</div>
-        <div class="overlay-dock">⊞ Smart Dock</div>
+    <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 12px;">
+      Tùy chọn 2 đồng ngoại tệ bạn muốn theo dõi trên màn hình để bàn:
+    </div>
+    <div class="grid-2" style="margin-bottom: 12px;">
+      <div>
+        <div style="font-size: 11px; color: var(--text-dim); margin-bottom: 6px;">Ngoại tệ 1 (Mục trên):</div>
+        <select id="cur1Select" class="select-control">
+          <option value="USD">USD — Đô la Mỹ</option>
+          <option value="EUR">EUR — Euro</option>
+          <option value="CAD">CAD — Đô la Canada</option>
+          <option value="JPY">JPY — Yên Nhật</option>
+          <option value="GBP">GBP — Bảng Anh</option>
+          <option value="AUD">AUD — Đô la Úc</option>
+          <option value="SGD">SGD — Đô la Singapore</option>
+          <option value="CNY">CNY — Nhân dân tệ</option>
+          <option value="KRW">KRW — Won Hàn Quốc</option>
+          <option value="CHF">CHF — Franc Thụy Sĩ</option>
+          <option value="THB">THB — Baht Thái</option>
+        </select>
+      </div>
+      <div>
+        <div style="font-size: 11px; color: var(--text-dim); margin-bottom: 6px;">Ngoại tệ 2 (Mục dưới):</div>
+        <select id="cur2Select" class="select-control">
+          <option value="CAD">CAD — Đô la Canada</option>
+          <option value="EUR">EUR — Euro</option>
+          <option value="USD">USD — Đô la Mỹ</option>
+          <option value="JPY">JPY — Yên Nhật</option>
+          <option value="GBP">GBP — Bảng Anh</option>
+          <option value="AUD">AUD — Đô la Úc</option>
+          <option value="SGD">SGD — Đô la Singapore</option>
+          <option value="CNY">CNY — Nhân dân tệ</option>
+          <option value="KRW">KRW — Won Hàn Quốc</option>
+          <option value="CHF">CHF — Franc Thụy Sĩ</option>
+          <option value="THB">THB — Baht Thái</option>
+        </select>
       </div>
     </div>
+    <button class="btn btn-accent" onclick="saveCurrencies()">
+      Lưu cấu hình ngoại tệ
+    </button>
+  </div>
 
-    <div id="fileInfo" style="font-size: 11px; color: var(--text-dim); text-align: center; margin-bottom: 12px;">
-      Chọn bất kỳ ảnh nào trên điện thoại — Trình duyệt sẽ tự động cắt & tối ưu chuẩn 320×240.
+  <!-- Alarm & Smart Reminder Section -->
+  <div class="card">
+    <div class="card-title">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+      Báo thức & Lời nhắc SmartDesk
+    </div>
+    <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 12px;">
+      Thiết lập giờ báo thức và lời nhắn hiển thị trên màn hình để bàn:
     </div>
 
-    <div style="display: flex; flex-direction: column; gap: 8px;">
-      <div class="upload-btn-wrap">
-        <button class="btn btn-primary">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-          Chọn ảnh từ điện thoại / máy tính
-        </button>
-        <input type="file" id="wpInput" class="file-input" accept="image/*">
-      </div>
-
-      <button id="applyBtn" class="btn btn-accent" disabled onclick="uploadWallpaper()">
-        Áp dụng hình nền cho màn hình
-      </button>
-
-      <button class="btn btn-danger" onclick="deleteWallpaper()">
-        Khôi phục hình nền mặc định
-      </button>
+    <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 12px;">
+      <input type="time" id="alarmTimeInput" class="select-control" style="font-size: 17px; font-weight: 600; padding: 6px 10px; width: 130px; text-align: center;">
+      <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; user-select: none;">
+        <input type="checkbox" id="alarmEnInput" style="width: 18px; height: 18px; accent-color: var(--accent);">
+        <span>Kích hoạt báo thức</span>
+      </label>
     </div>
+
+    <div style="margin-bottom: 10px;">
+      <div style="font-size: 11px; color: var(--text-dim); margin-bottom: 4px;">Nội dung lời nhắc / thông báo khi chuông reo:</div>
+      <input type="text" id="alarmMsgInput" class="select-control" placeholder="VD: Uống nước, Vận động, Họp online..." maxlength="36" style="width: 100%;">
+    </div>
+
+    <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px;">
+      <button class="btn-chip" style="font-size: 11px; padding: 3px 8px;" onclick="setQuickMsg('Uong nuoc & Thu gian')">💧 Uống nước</button>
+      <button class="btn-chip" style="font-size: 11px; padding: 3px 8px;" onclick="setQuickMsg('Dung day & Vuon vai')">🏃 Vận động</button>
+      <button class="btn-chip" style="font-size: 11px; padding: 3px 8px;" onclick="setQuickMsg('Nghi ngoi mat 5 phut')">☕ Nghỉ ngơi</button>
+      <button class="btn-chip" style="font-size: 11px; padding: 3px 8px;" onclick="setQuickMsg('Het gio lam viec!')">💼 Tan ca</button>
+    </div>
+
+    <button class="btn btn-accent" onclick="saveAlarmSettings()">
+      Lưu cài đặt báo thức
+    </button>
   </div>
 
   <!-- Remote Control Section -->
@@ -147,19 +188,24 @@ input[type=range] { width: 100%; accent-color: var(--accent); height: 6px; borde
     </div>
 
     <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 8px;">Chuyển trang hiển thị:</div>
-    <div class="grid-4" id="pageButtons">
+    <div id="pageButtons" style="display:grid; grid-template-columns: repeat(5, 1fr); gap: 6px;">
       <button class="btn-chip" onclick="switchPage(0)">Đồng hồ</button>
       <button class="btn-chip" onclick="switchPage(1)">Lịch âm</button>
       <button class="btn-chip" onclick="switchPage(2)">Tài chính</button>
       <button class="btn-chip" onclick="switchPage(3)">Pomodoro</button>
+      <button class="btn-chip" onclick="switchPage(4)">⚙️ Cài đặt</button>
     </div>
 
-    <div style="font-size: 12px; color: var(--text-dim); margin: 14px 0 8px;">Giao diện (Theme):</div>
+    <div style="font-size: 12px; color: var(--text-dim); margin: 14px 0 8px;">Bộ sưu tập Giao diện (Theme):</div>
     <div class="grid-2" id="themeButtons">
       <button class="btn-chip" onclick="switchTheme(0)">Cyber Neon</button>
       <button class="btn-chip" onclick="switchTheme(1)">Minimal Obsidian</button>
       <button class="btn-chip" onclick="switchTheme(2)">Sunset Amber</button>
       <button class="btn-chip" onclick="switchTheme(3)">Cyberpunk</button>
+      <button class="btn-chip" onclick="switchTheme(4)">💜 Pastel Lavender</button>
+      <button class="btn-chip" onclick="switchTheme(5)">❄️ Nordic Frost</button>
+      <button class="btn-chip" onclick="switchTheme(6)">🌸 Sakura Blossom</button>
+      <button class="btn-chip" onclick="switchTheme(7)">🌿 Emerald Forest</button>
     </div>
 
     <div class="slider-wrap">
@@ -171,13 +217,61 @@ input[type=range] { width: 100%; accent-color: var(--accent); height: 6px; borde
     </div>
   </div>
 
+  <!-- Sound & Audio Settings Section -->
+  <div class="card">
+    <div class="card-title">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+      Âm thanh & Điệu chuông (Loa GPIO 26)
+    </div>
+    <div class="grid-2">
+      <div>
+        <label style="font-size: 12px; color: var(--text-dim); display: block; margin-bottom: 6px;">Âm chạm cảm ứng:</label>
+        <select class="select-control" id="touchSndSelect" onchange="changeSound()">
+          <option value="0">Tắt âm (Mute)</option>
+          <option value="1">Cơ bản (Click)</option>
+          <option value="2">Giọt nước (Water)</option>
+          <option value="3">Tiếng bíp (Beep)</option>
+          <option value="4">Tiếng chim (Chirp)</option>
+        </select>
+      </div>
+      <div>
+        <label style="font-size: 12px; color: var(--text-dim); display: block; margin-bottom: 6px;">Điệu chuông báo thức:</label>
+        <select class="select-control" id="alarmMelodySelect" onchange="changeSound()">
+          <option value="0">Classic Alarm</option>
+          <option value="1">Melodic Chime</option>
+          <option value="2">Cyber Rhythm</option>
+          <option value="3">Gentle Morning</option>
+        </select>
+      </div>
+    </div>
+    <div style="margin-top: 12px;">
+      <button class="btn btn-primary" onclick="testAlarmMelody()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        Phát thử chuông báo thức
+      </button>
+    </div>
+  </div>
+
+  <!-- Network & WiFi Section -->
+  <div class="card">
+    <div class="card-title">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>
+      Cài đặt Mạng & WiFi
+    </div>
+    <div style="font-size: 12px; color: var(--text-dim); line-height: 1.7; margin-bottom: 12px;">
+      <div>• Tên miền mDNS: <b style="color:var(--accent);">http://smartdesk.local</b></div>
+      <div>• Địa chỉ IP hiện tại: <span id="wifiIp" style="color:#fff;">...</span> (Sóng: <span id="wifiRssi">...</span> dBm)</div>
+    </div>
+    <button class="btn btn-outline" style="border-color:var(--danger); color:var(--danger); width:100%;" onclick="resetWifi()">
+      Đổi mạng WiFi / Chuyển mạng mới
+    </button>
+  </div>
+
 </div>
 
 <div id="toast">Thông báo</div>
 
 <script>
-let currentBlob = null;
-
 function showToast(msg, isSuccess = true) {
   const t = document.getElementById('toast');
   t.textContent = msg;
@@ -186,94 +280,48 @@ function showToast(msg, isSuccess = true) {
   setTimeout(() => t.classList.remove('show'), 2500);
 }
 
-// Client-side auto-crop & resize to 320x240 JPEG
-document.getElementById('wpInput').addEventListener('change', function(e) {
-  const file = e.target.files[0];
-  if (!file) return;
-
-  const reader = new FileReader();
-  reader.onload = function(evt) {
-    const img = new Image();
-    img.onload = function() {
-      const canvas = document.createElement('canvas');
-      canvas.width = 320;
-      canvas.height = 240;
-      const ctx = canvas.getContext('2d');
-
-      // Cover aspect ratio
-      const scale = Math.max(320 / img.width, 240 / img.height);
-      const w = img.width * scale;
-      const h = img.height * scale;
-      const x = (320 - w) / 2;
-      const y = (240 - h) / 2;
-
-      ctx.drawImage(img, x, y, w, h);
-
-      canvas.toBlob(function(blob) {
-        currentBlob = blob;
-        document.getElementById('previewImg').src = canvas.toDataURL('image/jpeg', 0.85);
-        document.getElementById('fileInfo').innerHTML = `Đã tối ưu: <b>${(blob.size / 1024).toFixed(1)} KB</b> (320×240) • Sẵn sàng tải lên!`;
-        document.getElementById('fileInfo').style.color = 'var(--accent)';
-        document.getElementById('applyBtn').disabled = false;
-        showToast('Đã chuẩn bị ảnh 320×240 thành công!');
-      }, 'image/jpeg', 0.85);
-    };
-    img.src = evt.target.result;
-  };
-  reader.readAsDataURL(file);
-});
-
-async function uploadWallpaper() {
-  if (!currentBlob) return;
-  const btn = document.getElementById('applyBtn');
-  btn.disabled = true;
-  btn.textContent = 'Đang tải lên...';
-  showToast('Đang truyền ảnh tới CYD qua WiFi...');
-
-  const formData = new FormData();
-  formData.append('wallpaper', currentBlob, 'wallpaper.jpg');
-
-  try {
-    const res = await fetch('/upload-wallpaper', { method: 'POST', body: formData });
-    if (res.ok) {
-      showToast('Đã áp dụng hình nền thành công!');
-      btn.textContent = 'Áp dụng hình nền cho màn hình';
-      btn.disabled = false;
-    } else {
-      showToast('Lỗi khi tải ảnh lên!', false);
-      btn.disabled = false;
-    }
-  } catch (err) {
-    showToast('Lỗi kết nối WiFi!', false);
-    btn.disabled = false;
-  }
-}
-
-async function deleteWallpaper() {
-  if (!confirm('Bạn có chắc muốn xóa ảnh nền và khôi phục hiệu ứng mặc định?')) return;
-  try {
-    const res = await fetch('/delete-wallpaper', { method: 'POST' });
-    if (res.ok) {
-      showToast('Đã khôi phục hình nền mặc định!');
-      document.getElementById('previewImg').src = '';
-      document.getElementById('applyBtn').disabled = true;
-      document.getElementById('fileInfo').textContent = 'Đang sử dụng hiệu ứng mặc định (Obsidian + Neon Blobs).';
-    }
-  } catch (err) {
-    showToast('Lỗi khi xóa ảnh!', false);
-  }
-}
-
-async function switchPage(pageId) {
-  await fetch(`/api/page?id=${pageId}`);
+let pageDebounce = null;
+function switchPage(pageId) {
   highlightPage(pageId);
-  showToast(`Đã chuyển sang trang ${pageId}`);
+  const pageNames = ['Đồng hồ', 'Lịch âm', 'Tài chính', 'Pomodoro', 'Cài đặt'];
+  showToast(`Đã chuyển: ${pageNames[pageId] || pageId}`);
+  clearTimeout(pageDebounce);
+  pageDebounce = setTimeout(() => {
+    fetch(`/api/page?id=${pageId}`).catch(() => {});
+  }, 80);
 }
 
-async function switchTheme(themeId) {
-  await fetch(`/api/theme?id=${themeId}`);
+let soundDebounce = null;
+function changeSound() {
+  const touch = document.getElementById('touchSndSelect').value;
+  const melody = document.getElementById('alarmMelodySelect').value;
+  clearTimeout(soundDebounce);
+  soundDebounce = setTimeout(() => {
+    fetch(`/api/sound?touch=${touch}&melody=${melody}`)
+      .then(r => r.json())
+      .then(() => showToast('Đã lưu cấu hình âm thanh!'))
+      .catch(() => showToast('Lỗi lưu âm thanh', false));
+  }, 100);
+}
+
+function testAlarmMelody() {
+  showToast('Đang phát thử chuông trên loa...');
+  fetch('/api/sound?test=1').catch(() => {});
+}
+
+const THEME_NAMES = [
+  'Cyber Neon', 'Minimal Obsidian', 'Sunset Amber', 'Cyberpunk',
+  'Pastel Lavender', 'Nordic Frost', 'Sakura Blossom', 'Emerald Forest'
+];
+
+let themeDebounce = null;
+function switchTheme(themeId) {
   highlightTheme(themeId);
-  showToast(`Đã chuyển Theme ${themeId}`);
+  showToast(`Đã đổi: ${THEME_NAMES[themeId] || themeId}`);
+  clearTimeout(themeDebounce);
+  themeDebounce = setTimeout(() => {
+    fetch(`/api/theme?id=${themeId}`).catch(() => {});
+  }, 100);
 }
 
 let brightTimeout = null;
@@ -295,6 +343,50 @@ function highlightTheme(id) {
   btns.forEach((b, idx) => b.classList.toggle('active', idx === id));
 }
 
+async function saveCurrencies() {
+  const c1 = document.getElementById('cur1Select').value;
+  const c2 = document.getElementById('cur2Select').value;
+  showToast(`Đang cập nhật tỉ giá ${c1} & ${c2}...`);
+  try {
+    const res = await fetch(`/api/currency?c1=${c1}&c2=${c2}`);
+    if (res.ok) {
+      showToast(`Đã đổi tỉ giá sang ${c1} & ${c2}!`);
+    } else {
+      showToast('Lỗi cập nhật ngoại tệ!', false);
+    }
+  } catch (e) {
+    showToast('Lỗi kết nối!', false);
+  }
+}
+
+function setQuickMsg(text) {
+  document.getElementById('alarmMsgInput').value = text;
+}
+
+async function saveAlarmSettings() {
+  const timeVal = document.getElementById('alarmTimeInput').value;
+  const en = document.getElementById('alarmEnInput').checked ? 1 : 0;
+  const msg = encodeURIComponent(document.getElementById('alarmMsgInput').value.trim());
+
+  let h = 7, m = 0;
+  if (timeVal) {
+    const parts = timeVal.split(':');
+    h = parseInt(parts[0], 10);
+    m = parseInt(parts[1], 10);
+  }
+
+  try {
+    const res = await fetch(`/api/alarm?h=${h}&m=${m}&en=${en}&msg=${msg}`);
+    if (res.ok) {
+      showToast('Đã lưu cài đặt báo thức thành công!');
+    } else {
+      showToast('Lỗi khi lưu báo thức', false);
+    }
+  } catch (e) {
+    showToast('Lỗi kết nối WiFi!', false);
+  }
+}
+
 async function fetchStatus() {
   try {
     const res = await fetch('/status');
@@ -303,7 +395,45 @@ async function fetchStatus() {
     highlightTheme(data.theme);
     document.getElementById('brightSlider').value = data.brightness;
     document.getElementById('brightVal').textContent = data.brightness + '%';
+    if (data.cur1) document.getElementById('cur1Select').value = data.cur1;
+    if (data.cur2) document.getElementById('cur2Select').value = data.cur2;
+    if (data.ip) document.getElementById('wifiIp').textContent = data.ip;
+    if (data.rssi !== undefined) document.getElementById('wifiRssi').textContent = data.rssi;
+
+    if (data.alarmHour !== undefined && data.alarmMinute !== undefined) {
+      const hh = String(data.alarmHour).padStart(2, '0');
+      const mm = String(data.alarmMinute).padStart(2, '0');
+      const timeInp = document.getElementById('alarmTimeInput');
+      if (timeInp && !timeInp.matches(':focus')) timeInp.value = `${hh}:${mm}`;
+    }
+    if (data.alarmEnabled !== undefined) {
+      const enInp = document.getElementById('alarmEnInput');
+      if (enInp && !enInp.matches(':focus')) enInp.checked = data.alarmEnabled;
+    }
+    if (data.alarmMsg !== undefined) {
+      const msgInp = document.getElementById('alarmMsgInput');
+      if (msgInp && !msgInp.matches(':focus') && !msgInp.value) msgInp.value = data.alarmMsg;
+    }
+    if (data.touchSound !== undefined) {
+      const s = document.getElementById('touchSndSelect');
+      if (s && !s.matches(':focus')) s.value = data.touchSound;
+    }
+    if (data.alarmMelody !== undefined) {
+      const m = document.getElementById('alarmMelodySelect');
+      if (m && !m.matches(':focus')) m.value = data.alarmMelody;
+    }
   } catch (e) {}
+}
+
+function resetWifi() {
+  if (confirm("Xác nhận đổi mạng WiFi?\n\nThiết bị sẽ xóa mật khẩu WiFi hiện tại và khởi động lại vào điểm phát sóng 'CYD-SmartDesk-V2' (192.168.4.1) để bạn kết nối WiFi mới.")) {
+    fetch('/api/wifi/reset', { method: 'POST' })
+      .then(res => res.json())
+      .then(d => {
+        alert("Đang khởi động lại...\nVui lòng kết nối vào WiFi 'CYD-SmartDesk-V2' trên điện thoại để cài đặt.");
+      })
+      .catch(e => showToast("Lỗi gửi lệnh", false));
+  }
 }
 
 fetchStatus();
@@ -315,121 +445,157 @@ fetchStatus();
 WebDashboard::WebDashboard() : _server(80), _running(false) {}
 
 void WebDashboard::begin() {
-    if (_running) return;
-    _setupRoutes();
-    _server.begin();
-    _running = true;
-    Serial.printf("[WebDashboard] HTTP Server started at http://%s/\n", WiFi.localIP().toString().c_str());
+  if (_running)
+    return;
+  _setupRoutes();
+  _server.begin();
+  _running = true;
+
+  // Vô hiệu hóa WiFi Modem Sleep để phản hồi Web tức thì (không bị lag/delay
+  // sau khi idle)
+  WiFi.setSleep(false);
+
+  // Kích hoạt mDNS responder: cho phép truy cập qua http://smartdesk.local/
+  if (MDNS.begin("smartdesk")) {
+    MDNS.addService("http", "tcp", 80);
+    Serial.println("[mDNS] Responder started at http://smartdesk.local/");
+  } else {
+    Serial.println("[mDNS] Failed to start responder");
+  }
+
+  Serial.printf("[WebDashboard] HTTP Server started at http://%s/ (or "
+                "http://smartdesk.local/)\n",
+                WiFi.localIP().toString().c_str());
 }
 
 void WebDashboard::update() {
-    // ESPAsyncWebServer is asynchronous, no loop polling needed
+  // ESPAsyncWebServer is asynchronous, no loop polling needed
 }
 
 void WebDashboard::_setupRoutes() {
-    // ── GET /: Serve mobile dashboard ──────────────────────────────
-    _server.on("/", HTTP_GET, [](AsyncWebServerRequest* request) {
-        request->send_P(200, "text/html", INDEX_HTML);
-    });
+  // ── GET /: Serve mobile dashboard ──────────────────────────────
+  _server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
+    request->send_P(200, "text/html", INDEX_HTML);
+  });
 
-    // ── GET /current-wallpaper: Serve current image from LittleFS ──
-    _server.on("/current-wallpaper", HTTP_GET, [](AsyncWebServerRequest* request) {
-        if (LittleFS.exists("/wallpaper.jpg")) {
-            request->send(LittleFS, "/wallpaper.jpg", "image/jpeg");
-        } else {
-            request->send(404, "text/plain", "No wallpaper set");
-        }
-    });
+  // ── GET /status: System telemetry ─────────────────────────────
+  _server.on("/status", HTTP_GET, [](AsyncWebServerRequest *request) {
+    JsonDocument doc;
+    doc["ip"] = WiFi.localIP().toString();
+    doc["rssi"] = WiFi.RSSI();
+    doc["freeHeap"] = ESP.getFreeHeap();
+    doc["page"] = display.getPage();
+    doc["theme"] = getThemeIndex();
+    doc["themeName"] = getThemeName();
+    doc["brightness"] = hardware.getBacklight();
+    const WeatherData &w = weather.getData();
+    doc["city"] = w.city;
+    doc["temp"] = w.temp;
+    doc["cur1"] = finance.getCur1();
+    doc["cur2"] = finance.getCur2();
+    doc["alarmHour"] = display.getAlarmHour();
+    doc["alarmMinute"] = display.getAlarmMinute();
+    doc["alarmEnabled"] = display.isAlarmEnabled();
+    doc["alarmMsg"] = display.getAlarmMessage();
+    doc["touchSound"] = hardware.getTouchSound();
+    doc["alarmMelody"] = hardware.getAlarmMelody();
 
-    // ── POST /upload-wallpaper: Receive & save 320x240 JPEG ────────
-    _server.on("/upload-wallpaper", HTTP_POST,
-        [](AsyncWebServerRequest* request) {
-            request->send(200, "application/json", "{\"success\":true}");
-        },
-        [](AsyncWebServerRequest* request, String filename, size_t index, uint8_t* data, size_t len, bool final) {
-            if (index == 0) {
-                Serial.printf("[WebDashboard] Start receiving wallpaper upload: %s\n", filename.c_str());
-                if (LittleFS.exists("/wallpaper.jpg")) {
-                    LittleFS.remove("/wallpaper.jpg");
-                }
-                s_wpUploadFile = LittleFS.open("/wallpaper.jpg", "w");
-            }
-            if (s_wpUploadFile) {
-                s_wpUploadFile.write(data, len);
-            }
-            if (final) {
-                if (s_wpUploadFile) {
-                    s_wpUploadFile.close();
-                    Serial.printf("[WebDashboard] Wallpaper saved! Total bytes: %u\n", index + len);
-                }
-                display.notifyWallpaperUpdated();
-            }
-        }
-    );
+    String res;
+    serializeJson(doc, res);
+    request->send(200, "application/json", res);
+  });
 
-    // ── POST /delete-wallpaper: Remove custom wallpaper ────────────
-    _server.on("/delete-wallpaper", HTTP_POST, [](AsyncWebServerRequest* request) {
-        if (LittleFS.exists("/wallpaper.jpg")) {
-            LittleFS.remove("/wallpaper.jpg");
-            display.notifyWallpaperUpdated();
-            Serial.println("[WebDashboard] Wallpaper deleted, reverted to default");
-            request->send(200, "application/json", "{\"success\":true,\"message\":\"Wallpaper deleted\"}");
-        } else {
-            request->send(200, "application/json", "{\"success\":true,\"message\":\"No wallpaper was active\"}");
-        }
-    });
+  // ── GET /api/alarm?h=X&m=Y&en=Z&msg=... ─────────────────────────
+  _server.on("/api/alarm", HTTP_GET, [](AsyncWebServerRequest *request) {
+    uint8_t h = request->hasParam("h")
+                    ? (uint8_t)request->getParam("h")->value().toInt()
+                    : display.getAlarmHour();
+    uint8_t m = request->hasParam("m")
+                    ? (uint8_t)request->getParam("m")->value().toInt()
+                    : display.getAlarmMinute();
+    bool en = request->hasParam("en")
+                  ? (request->getParam("en")->value() == "1" ||
+                     request->getParam("en")->value() == "true")
+                  : display.isAlarmEnabled();
+    String msg =
+        request->hasParam("msg") ? request->getParam("msg")->value() : "";
+    display.setAlarm(h, m, en, msg.length() > 0 ? msg.c_str() : nullptr);
+    request->send(200, "application/json", "{\"success\":true}");
+  });
 
-    // ── GET /status: System telemetry ─────────────────────────────
-    _server.on("/status", HTTP_GET, [](AsyncWebServerRequest* request) {
-        JsonDocument doc;
-        doc["ip"]           = WiFi.localIP().toString();
-        doc["rssi"]         = WiFi.RSSI();
-        doc["freeHeap"]     = ESP.getFreeHeap();
-        doc["page"]         = display.getPage();
-        doc["theme"]        = getThemeIndex();
-        doc["themeName"]    = getThemeName();
-        doc["brightness"]   = hardware.getBacklight();
-        doc["hasWallpaper"] = LittleFS.exists("/wallpaper.jpg");
-        const WeatherData& w = weather.getData();
-        doc["city"]         = w.city;
-        doc["temp"]         = w.temp;
+  // ── GET /api/page?id=X ─────────────────────────────────────────
+  _server.on("/api/page", HTTP_GET, [](AsyncWebServerRequest *request) {
+    if (request->hasParam("id")) {
+      uint8_t p = (uint8_t)request->getParam("id")->value().toInt();
+      request->send(200, "application/json", "{\"success\":true}");
+      display.setPage(p);
+    } else {
+      request->send(400, "application/json", "{\"error\":\"Missing id\"}");
+    }
+  });
 
-        String res;
-        serializeJson(doc, res);
-        request->send(200, "application/json", res);
-    });
+  // ── GET /api/theme?id=X ────────────────────────────────────────
+  _server.on("/api/theme", HTTP_GET, [](AsyncWebServerRequest *request) {
+    if (request->hasParam("id")) {
+      uint8_t id = (uint8_t)request->getParam("id")->value().toInt();
+      request->send(200, "application/json", "{\"success\":true}");
+      applyThemePreset(id);
+      saveTheme();
+    } else {
+      request->send(400, "application/json", "{\"error\":\"Missing id\"}");
+    }
+  });
 
-    // ── GET /api/page?id=X ─────────────────────────────────────────
-    _server.on("/api/page", HTTP_GET, [](AsyncWebServerRequest* request) {
-        if (request->hasParam("id")) {
-            uint8_t p = (uint8_t)request->getParam("id")->value().toInt();
-            display.setPage(p);
-            request->send(200, "application/json", "{\"success\":true}");
-        } else {
-            request->send(400, "application/json", "{\"error\":\"Missing id\"}");
-        }
-    });
+  // ── GET /api/brightness?val=X ──────────────────────────────────
+  _server.on("/api/brightness", HTTP_GET, [](AsyncWebServerRequest *request) {
+    if (request->hasParam("val")) {
+      uint8_t val = (uint8_t)request->getParam("val")->value().toInt();
+      hardware.setAutoBrightness(false);
+      hardware.setBacklight(val);
+      request->send(200, "application/json", "{\"success\":true}");
+    } else {
+      request->send(400, "application/json", "{\"error\":\"Missing val\"}");
+    }
+  });
 
-    // ── GET /api/theme?id=X ────────────────────────────────────────
-    _server.on("/api/theme", HTTP_GET, [](AsyncWebServerRequest* request) {
-        if (request->hasParam("id")) {
-            uint8_t id = (uint8_t)request->getParam("id")->value().toInt();
-            applyThemePreset(id);
-            request->send(200, "application/json", "{\"success\":true}");
-        } else {
-            request->send(400, "application/json", "{\"error\":\"Missing id\"}");
-        }
-    });
+  // ── GET /api/currency?c1=X&c2=Y ───────────────────────────────
+  _server.on("/api/currency", HTTP_GET, [](AsyncWebServerRequest *request) {
+    String c1 =
+        request->hasParam("c1") ? request->getParam("c1")->value() : "USD";
+    String c2 =
+        request->hasParam("c2") ? request->getParam("c2")->value() : "EUR";
+    finance.setCurrencies(c1.c_str(), c2.c_str());
+    request->send(200, "application/json", "{\"success\":true}");
+  });
 
-    // ── GET /api/brightness?val=X ──────────────────────────────────
-    _server.on("/api/brightness", HTTP_GET, [](AsyncWebServerRequest* request) {
-        if (request->hasParam("val")) {
-            uint8_t val = (uint8_t)request->getParam("val")->value().toInt();
-            hardware.setAutoBrightness(false);
-            hardware.setBacklight(val);
-            request->send(200, "application/json", "{\"success\":true}");
-        } else {
-            request->send(400, "application/json", "{\"error\":\"Missing val\"}");
-        }
-    });
+  // ── GET /api/sound?touch=X&melody=Y&test=1 ─────────────────────
+  _server.on("/api/sound", HTTP_GET, [](AsyncWebServerRequest *request) {
+    if (request->hasParam("touch")) {
+      uint8_t t = (uint8_t)request->getParam("touch")->value().toInt();
+      hardware.setTouchSound(t);
+      hardware.playTouchSound();
+    }
+    if (request->hasParam("melody")) {
+      uint8_t m = (uint8_t)request->getParam("melody")->value().toInt();
+      hardware.setAlarmMelody(m);
+    }
+    if (request->hasParam("test")) {
+      hardware.playAlarmMelody();
+    }
+    hardware.saveSoundSettings();
+    request->send(200, "application/json", "{\"success\":true}");
+  });
+
+  // ── POST /api/wifi/reset: Reset WiFi credentials & restart into AP mode ──
+  _server.on("/api/wifi/reset", HTTP_POST, [](AsyncWebServerRequest *request) {
+    request->send(200, "application/json",
+                  "{\"success\":true,\"message\":\"Dang xoa WiFi va khoi dong "
+                  "vao AP mode...\"}");
+    Serial.println("[WebDashboard] User requested WiFi Reset -> Erasing NVS "
+                   "and restarting into AP mode...");
+    delay(600);
+    WiFi.disconnect(true, true);
+    delay(200);
+    ESP.restart();
+  });
 }

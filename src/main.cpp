@@ -14,6 +14,7 @@
 #include "TouchManager.h"
 #include "Display.h"
 #include "WeatherService.h"
+#include "FinanceService.h"
 #include "WebDashboard.h"
 
 void setup() {
@@ -42,7 +43,14 @@ void setup() {
     // 5. Connect WiFi, sync NTP, fetch weather
     weather.begin();
 
-    // 6. Start Web Dashboard for mobile wallpaper upload & controls
+    // 6. Initialize & fetch real-time finance market rates
+    finance.begin();
+    if (weather.isConnected()) {
+        display.showBootStatus("Fetching Market Rates...", 96);
+        finance.fetchNow();
+    }
+
+    // 7. Start Web Dashboard for mobile controls & settings
     if (weather.isConnected()) {
         display.showBootStatus("Starting Dashboard...", 98);
         webDashboard.begin();
@@ -88,12 +96,15 @@ void loop() {
     // 4. Update weather data periodically
     weather.update();
 
-    // 5. Maintain Web Dashboard server
+    // 5. Update finance rates periodically (every 15m)
+    finance.update();
+
+    // 6. Maintain Web Dashboard server
     if (weather.isConnected() && !webDashboard.isRunning()) {
         webDashboard.begin();
     }
     webDashboard.update();
 
-    // 6. Render display & dock (internally rate-limited to ~30 FPS)
+    // 7. Render display & dock (internally rate-limited to ~30 FPS)
     display.update();
 }

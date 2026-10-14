@@ -33,6 +33,7 @@ void initTheme();
 void saveTheme();
 void applyThemePreset(uint8_t index);
 void nextTheme();
+void prevTheme();
 const char* getThemeName();
 uint8_t getThemeIndex();
 

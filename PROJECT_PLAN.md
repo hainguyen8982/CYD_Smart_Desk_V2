@@ -136,7 +136,8 @@ graph TD
 - [x] **Giai đoạn 2:** Xây dựng `TouchManager` (Calibration, bộ lọc nhiễu, Hitbox $\ge 40\text{px}$, âm click còi) + Thanh Dock tự ẩn 5s.
 - [x] **Giai đoạn 3:** Hoàn thiện Page 0 (Đồng hồ neon + Thời tiết thực + Âm lịch Việt Nam + Báo thức Alarm chuông vàng cảm ứng mặt trước).
 - [x] **Giai đoạn 4:** Hoàn thiện Page 1 (Lịch tháng Âm - Dương đầy đủ).
-- [x] **Giai đoạn 5:** Tích hợp API Tài chính (Vàng SJC 7 ngày + Ngoại tệ) và vẽ biểu đồ sóng Sparkline mượt mà.
+- [x] **Giai đoạn 5:** Triển khai `FinanceService` tích hợp 3 API trực tuyến thực tế (Vàng SJC & mảng 7 ngày `Vang.today`, Tỉ giá ngoại tệ `ExchangeRate-API`, Vàng thế giới Kitco & Bitcoin `Binance`) kèm bộ nhớ đệm NVS Flash dự phòng khi offline.
 - [x] **Giai đoạn 6:** Hoàn thiện Page 3 (Pomodoro Split Layout + Chú cà chua Tomato Mascot + Nút công thái học).
-- [ ] **Giai đoạn 7:** Web Portal nội bộ (Cấu hình WiFi, đổi Thành phố, chọn Ngoại tệ, đổi Theme) + Auto-Brightness qua LDR.
-- [ ] **Giai đoạn 8:** Tối ưu hóa, stress test 48h không tràn RAM, bàn giao mã nguồn thương mại hoàn chỉnh.
+- [x] **Giai đoạn 7A:** Web Portal cấu hình cặp ngoại tệ tùy chọn linh hoạt (USD, EUR, CAD, JPY, GBP, AUD, SGD, CNY, KRW, CHF, THB) đồng bộ NVS Flash & màn hình thời gian thực.
+- [ ] **Giai đoạn 7B:** Web Portal nâng cao (Cấu hình Báo thức từ xa, chỉnh Thành phố/WiFi, bật/tắt Auto-Brightness LDR) & Popup Cài đặt nhanh trên Dock.
+- [ ] **Giai đoạn 8:** Tối ưu hóa, stress test 48h không tràn RAM, đóng gói thương mại hoàn chỉnh.
