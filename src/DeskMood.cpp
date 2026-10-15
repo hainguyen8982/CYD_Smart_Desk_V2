@@ -59,8 +59,8 @@ const char* DeskMood::getName(MoodType m) const {
         case MOOD_HAPPY:       return "Vui ve";
         case MOOD_FOCUS:       return "Tap trung";
         case MOOD_BUG:         return "Dang buc minh";
-        case MOOD_LOW_BATTERY: return "Can nang luong";
-        case MOOD_CHILL:       return "Dang chan / Chill";
+        case MOOD_LOW_BATTERY: return "Sap nguon";
+        case MOOD_CHILL:       return "Dang chan";
         case MOOD_TGIF:        return "Cuoi tuan / Quay";
         default:               return "Vui ve";
     }
@@ -83,9 +83,9 @@ const char* DeskMood::getTag(MoodType m, uint8_t lang) const {
         switch (m) {
             case MOOD_HAPPY:       return "VUI VE";
             case MOOD_FOCUS:       return "TAP TRUNG CAO DO";
-            case MOOD_BUG:         return "DANG BUC MINH!";
-            case MOOD_LOW_BATTERY: return "CAN NANG LUONG 0%";
-            case MOOD_CHILL:       return "DANG CHAN / CHILL";
+            case MOOD_BUG:         return "DANG CAY CU!";
+            case MOOD_LOW_BATTERY: return "SAP NGUON 0%";
+            case MOOD_CHILL:       return "DANG CHAN / BO PHO";
             case MOOD_TGIF:        return "QUAY THOI - CUOI TUAN!";
             default:               return "VUI VE";
         }
@@ -94,8 +94,8 @@ const char* DeskMood::getTag(MoodType m, uint8_t lang) const {
             case MOOD_HAPPY:       return "HAPPY & CHILL";
             case MOOD_FOCUS:       return "DEEP WORK - FOCUS";
             case MOOD_BUG:         return "VERY ANGRY / DND!";
-            case MOOD_LOW_BATTERY: return "LOW BATTERY 0%";
-            case MOOD_CHILL:       return "BORED / SUPER CHILL";
+            case MOOD_LOW_BATTERY: return "SHUTDOWN 0%";
+            case MOOD_CHILL:       return "BORED & EXHAUSTED";
             case MOOD_TGIF:        return "PARTY TIME - TGIF!";
             default:               return "HAPPY & CHILL";
         }
@@ -109,7 +109,7 @@ const char* DeskMood::getMessage(MoodType m, uint8_t lang) const {
             case MOOD_FOCUS:       return "Dang chay deadline * Xin dung lam phien!";
             case MOOD_BUG:         return "Dang cay cu * Tiep can can than keo quau!";
             case MOOD_LOW_BATTERY: return "Nao sap sap nguon * Can nap tra sua gap!";
-            case MOOD_CHILL:       return "Cu binh tinh ma lam * Van su tuy duyen";
+            case MOOD_CHILL:       return "Qua la chan chuong * Chung nao moi tan ca?";
             case MOOD_TGIF:        return "Sap tan ca roi * Toi nay xoa het deadline!";
             default:               return "Chuc mot ngay lam viec tran day nang luong!";
         }
@@ -119,7 +119,7 @@ const char* DeskMood::getMessage(MoodType m, uint8_t lang) const {
             case MOOD_FOCUS:       return "In deep focus * Please do not interrupt!";
             case MOOD_BUG:         return "Dangerously angry * Approach with caution!";
             case MOOD_LOW_BATTERY: return "Brain at 0% * Needs milk tea recharge!";
-            case MOOD_CHILL:       return "Keep calm & let it flow * No rush today";
+            case MOOD_CHILL:       return "Completely bored * When is shift ending?";
             case MOOD_TGIF:        return "Weekend is here * Time to celebrate!";
             default:               return "Have a wonderful productive day!";
         }
@@ -201,31 +201,34 @@ void DeskMood::renderPage(TFT_eSprite& spr, uint8_t lang, uint16_t themeBg) {
     const uint16_t* memeBmp = getMemeBitmap((uint8_t)_pack, (uint8_t)_mood);
     drawMemeBitmap160(spr, cx - MEME_BITMAP_W / 2, cy - MEME_BITMAP_H / 2, memeBmp);
 
-    // 2b. NÚT ĐỔI BỘ MEME GÓC TRÊN BÊN PHẢI (4 GÓC BO TRÒN CAPSULE, KHÔNG VÁT CẠNH)
-    int16_t pBtnW = 98;
-    int16_t pBtnH = 22;
-    int16_t pBtnX = 320 - pBtnW - 8; // X = 214..312
+    // 2b. NÚT ĐỔI BỘ MEME GÓC TRÊN BÊN PHẢI (ICON 2 MŨI TÊN XOAY TRÒN, 4 GÓC BO TRÒN R=8, KHÔNG VÁT CẠNH)
+    int16_t pBtnW = 28;
+    int16_t pBtnH = 28;
+    int16_t pBtnX = 320 - pBtnW - 8; // X = 284..312 (Cách xa meme > 44px, 100% không đè lên tranh)
     int16_t pBtnY = 8;
-    int16_t pBtnR = pBtnH / 2; // Bo tròn 4 góc r=11 mềm mại, tuyệt đối không vát cạnh
+    int16_t pBtnR = 8; // Bo tròn 4 góc r=8 mềm mại, chuẩn Rounded Container, tuyệt đối không vát cạnh
 
     // Đổ bóng & Nền kính đen mờ (Obsidian Frosted Glass)
     spr.fillSmoothRoundRect(pBtnX, pBtnY + 2, pBtnW, pBtnH, pBtnR, RGB565(2, 4, 8), themeBg);
     spr.fillSmoothRoundRect(pBtnX, pBtnY, pBtnW, pBtnH, pBtnR, RGB565(18, 24, 36), themeBg);
     spr.drawRoundRect(pBtnX, pBtnY, pBtnW, pBtnH, pBtnR, RGB565(55, 70, 95));
 
-    // Chấm chỉ thị neon theo mood
+    // Vẽ icon 2 mũi tên xoay tròn (Cycle / Swap) màu accent neon
     uint16_t accent = getAccentColor(_mood);
-    spr.fillSmoothCircle(pBtnX + 10, pBtnY + pBtnH / 2, 3, accent, RGB565(18, 24, 36));
+    int16_t icx = pBtnX + 14;
+    int16_t icy = pBtnY + 14;
 
-    // Tên gói meme đang hiển thị (Mochi Guy / Cute Star / Cute Bunny)
-    spr.setTextDatum(ML_DATUM);
-    spr.setTextColor(RGB565(220, 230, 245));
-    spr.drawString(getPackName(_pack), pBtnX + 18, pBtnY + pBtnH / 2, 2);
+    // Mũi tên trên (quay sang phải rồi chúc xuống):
+    spr.drawFastHLine(icx - 5, icy - 5, 8, accent);
+    spr.drawFastVLine(icx - 6, icy - 4, 4, accent);
+    spr.drawLine(icx, icy - 8, icx + 3, icy - 5, accent);
+    spr.drawLine(icx, icy - 2, icx + 3, icy - 5, accent);
 
-    // Mũi tên chuyển đổi '>' neon
-    spr.setTextDatum(MR_DATUM);
-    spr.setTextColor(accent);
-    spr.drawString(">", pBtnX + pBtnW - 6, pBtnY + pBtnH / 2, 2);
+    // Mũi tên dưới (quay sang trái rồi hất lên):
+    spr.drawFastHLine(icx - 2, icy + 5, 8, accent);
+    spr.drawFastVLine(icx + 6, icy + 1, 4, accent);
+    spr.drawLine(icx, icy + 8, icx - 3, icy + 5, accent);
+    spr.drawLine(icx, icy + 2, icx - 3, icy + 5, accent);
 
     // 3. BIỂN BÁO NEON TỰ ĐỘNG SCALE BÓNG CHUẨN XÁC THEO ĐỘ DÀI TEXT (Y = 166..194)
     const char* tagStr = getTag(_mood, lang);
@@ -272,8 +275,8 @@ void DeskMood::renderPage(TFT_eSprite& spr, uint8_t lang, uint16_t themeBg) {
 //  TOUCH TRỰC TIẾP TRÊN MEME ĐỂ XOAY VÒNG CHUYỂN TRẠNG THÁI
 // ═══════════════════════════════════════════════════════════════════════
 bool DeskMood::handleTouch(int16_t x, int16_t y) {
-    // 1. Chạm vào nút Đổi Bộ Meme (Góc trên bên phải: X >= 200 && Y <= 40)
-    if (x >= 200 && y <= 40) {
+    // 1. Chạm vào nút Icon Đổi Bộ Meme (Góc trên bên phải: X >= 265 && Y <= 46)
+    if (x >= 265 && y <= 46) {
         nextPack(); // Đổi Mochi Guy -> Cute Star -> Cute Bunny -> Mochi Guy
         hardware.playClick();
         return true;
