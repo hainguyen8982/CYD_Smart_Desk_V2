@@ -46,6 +46,12 @@ public:
     const char* getMessage(MoodType m, uint8_t lang) const;
     uint16_t    getAccentColor(MoodType m) const;
 
+    // Custom Status Management (Tự đặt câu trạng thái riêng)
+    bool isCustom() const { return _useCustom; }
+    const char* getCustomTag() const { return _customTag; }
+    const char* getCustomMessage() const { return _customMessage; }
+    void setCustom(bool enabled, const char* tag = nullptr, const char* msg = nullptr);
+
     void renderPage(TFT_eSprite& spr, uint8_t lang, uint16_t themeBg);
     bool handleTouch(int16_t x, int16_t y);
 
@@ -56,6 +62,9 @@ private:
 
     MoodType _mood;
     MoodPack _pack;
+    bool     _useCustom;
+    char     _customTag[24];      // Max 20 chars + null
+    char     _customMessage[40];  // Max 36 chars + null
 };
 
 extern DeskMood deskMood;

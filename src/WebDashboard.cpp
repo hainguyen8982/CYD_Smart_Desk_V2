@@ -60,11 +60,12 @@ body { background: var(--bg); color: var(--text); padding: 16px; min-height: 100
 .btn-primary:active { transform: scale(0.98); opacity: 0.9; }
 .btn-accent { background: linear-gradient(135deg, #00E5FF, #00A3FF); color: #070B14; font-weight: 700; box-shadow: 0 4px 14px var(--accent-glow); }
 .btn-accent:disabled { background: #1C2638; color: #475569; box-shadow: none; cursor: not-allowed; }
-.btn-danger { background: rgba(255, 59, 48, 0.15); color: var(--danger); border: 1px solid rgba(255, 59, 48, 0.3); margin-top: 8px; }
-.btn-danger:active { background: rgba(255, 59, 48, 0.25); }
+.btn-outline { background: transparent; border: 1px solid var(--card-border); color: var(--text-dim); }
+.btn-outline:active { background: rgba(255, 255, 255, 0.05); }
 
 /* Action Grid */
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
 .btn-chip { background: #131C2D; border: 1px solid var(--card-border); color: var(--text); padding: 10px 6px; border-radius: 10px; font-size: 12px; font-weight: 500; cursor: pointer; text-align: center; }
 .btn-chip.active { background: var(--accent); color: #070B14; font-weight: 700; border-color: var(--accent); box-shadow: 0 0 10px var(--accent-glow); }
@@ -256,6 +257,79 @@ input[type=range] { width: 100%; accent-color: var(--accent); height: 6px; borde
     </div>
   </div>
 
+  <!-- Desk Mood & Signboard Section -->
+  <div class="card">
+    <div class="card-title">
+      <span style="font-size: 18px;">🎭</span>
+      <span data-i18n="sec_mood_title">Tâm trạng & Biển hiệu Bàn làm việc (Desk Mood)</span>
+    </div>
+
+    <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 8px;" data-i18n="sec_pack_sub">Bộ Meme Nhân Vật (Meme Pack):</div>
+    <div class="grid-3" id="packButtons" style="margin-bottom: 14px;">
+      <button class="btn-chip" onclick="switchPack(0)">🥟 Mochi Guy</button>
+      <button class="btn-chip" onclick="switchPack(1)">⭐ Bé Sao Vàng</button>
+      <button class="btn-chip" onclick="switchPack(2)">🐰 Bé Thỏ Trắng</button>
+    </div>
+
+    <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 8px;" data-i18n="sec_mood_sub">Tâm trạng bàn làm việc (Desk Mood):</div>
+    <div class="grid-2" id="moodButtons" style="margin-bottom: 16px;">
+      <button class="btn-chip" onclick="switchMood(0)">🟢 Vui vẻ</button>
+      <button class="btn-chip" onclick="switchMood(1)">🔴 Tập trung cao</button>
+      <button class="btn-chip" onclick="switchMood(2)">⚡ Đang bực mình</button>
+      <button class="btn-chip" onclick="switchMood(3)">🟡 Sập nguồn 0%</button>
+      <button class="btn-chip" onclick="switchMood(4)">🟣 Đang chán</button>
+      <button class="btn-chip" onclick="switchMood(5)">🎉 Cuối tuần / Quẩy</button>
+    </div>
+
+    <!-- Custom Status Toggle & Inputs -->
+    <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 14px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+        <label for="customMoodToggle" style="font-size: 13px; font-weight: 600; color: #fff; cursor: pointer;" data-i18n="mood_custom_toggle">Tùy chỉnh Tiêu đề & Thông điệp riêng</label>
+        <input type="checkbox" id="customMoodToggle" onchange="toggleCustomMood(this.checked)" style="width: 18px; height: 18px; accent-color: var(--accent); cursor: pointer;">
+      </div>
+      <div style="font-size: 11px; color: var(--text-dim); line-height: 1.5; margin-bottom: 12px;" data-i18n="mood_custom_hint">
+        • Tắt: Dùng nội dung mặc định theo Meme (tự động Song ngữ VI/EN).<br>
+        • Bật: Hiển thị chính xác những gì bạn nhập bên dưới.
+      </div>
+
+      <div id="customMoodInputs" style="display: none;">
+        <div style="margin-bottom: 12px;">
+          <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--text-dim); margin-bottom: 4px;">
+            <span data-i18n="mood_tag_label">Tiêu đề bảng Neon (Tối đa 20 ký tự, in HOA):</span>
+            <span id="customTagCount" style="color: var(--accent); font-weight: 600;">0/20</span>
+          </div>
+          <input type="text" id="customTagInput" class="select-control" maxlength="20" placeholder="VD: DANG DI HOP, THEM CA PHE..." oninput="updateMoodCounters()" style="width: 100%; text-transform: uppercase;">
+        </div>
+
+        <div style="margin-bottom: 12px;">
+          <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--text-dim); margin-bottom: 4px;">
+            <span data-i18n="mood_msg_label">Câu nhắn phía dưới (Tối đa 36 ký tự):</span>
+            <span id="customMsgCount" style="color: var(--accent); font-weight: 600;">0/36</span>
+          </div>
+          <input type="text" id="customMsgInput" class="select-control" maxlength="36" placeholder="VD: Ve sau 30p * Gap thi goi dien nhe!" oninput="updateMoodCounters()" style="width: 100%;">
+        </div>
+
+        <!-- Quick suggestions -->
+        <div style="font-size: 11px; color: var(--text-dim); margin-bottom: 6px;" data-i18n="mood_quick_label">Gợi ý nhanh:</div>
+        <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px;">
+          <button class="btn-chip" style="font-size: 11px; padding: 4px 8px;" onclick="setQuickMood('DANG DI HOP', 'Ve sau 30p * Can thi goi dien!')">💼 Đang họp</button>
+          <button class="btn-chip" style="font-size: 11px; padding: 4px 8px;" onclick="setQuickMood('DANG FIX BUG', 'Xin dung lam phien * Dang tap trung!')">⚡ Fix bug</button>
+          <button class="btn-chip" style="font-size: 11px; padding: 4px 8px;" onclick="setQuickMood('THEM CA PHE', 'Ai di ca phe khong? Minh bao!')">☕ Uống cà phê</button>
+          <button class="btn-chip" style="font-size: 11px; padding: 4px 8px;" onclick="setQuickMood('DI AN TRUA', 'Nghi trua roi * 13h quay lai lam viec!')">🍱 Đi ăn trưa</button>
+          <button class="btn-chip" style="font-size: 11px; padding: 4px 8px;" onclick="setQuickMood('DANG SPRINT', 'Tap trung 100% * Khong tiep khach!')">🚀 Chạy Sprint</button>
+        </div>
+
+        <div style="display: flex; gap: 8px;">
+          <button class="btn btn-accent" style="flex: 2;" onclick="saveCustomMood()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+            <span data-i18n="btn_save_mood">Lưu Trạng Thái</span>
+          </button>
+          <button class="btn btn-outline" style="flex: 1;" onclick="resetDefaultMood()" data-i18n="btn_reset_mood">Mặc định</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Sound & Audio Settings Section -->
   <div class="card">
     <div class="card-title">
@@ -346,10 +420,20 @@ const I18N = {
     wifi_mdns: "• Tên miền mDNS: ",
     wifi_ip_prefix: "• Địa chỉ IP hiện tại: ",
     wifi_rssi_prefix: " (Sóng: ",
+    sec_mood_title: "Tâm trạng & Biển hiệu Bàn làm việc (Desk Mood)",
     sec_pack_sub: "Bộ Meme Nhân Vật (Meme Pack):",
     t_pack: "Đã chọn bộ meme: ",
     sec_mood_sub: "Tâm trạng bàn làm việc (Desk Mood):",
     t_mood: "Đã đổi tâm trạng: ",
+    mood_custom_toggle: "Tùy chỉnh Tiêu đề & Thông điệp riêng",
+    mood_custom_hint: "• Tắt: Dùng nội dung mặc định theo Meme (tự động Song ngữ VI/EN).<br>• Bật: Hiển thị chính xác những gì bạn nhập bên dưới.",
+    mood_tag_label: "Tiêu đề bảng Neon (Tối đa 20 ký tự, in HOA):",
+    mood_msg_label: "Câu nhắn phía dưới (Tối đa 36 ký tự):",
+    mood_quick_label: "Gợi ý nhanh:",
+    btn_save_mood: "Lưu Trạng Thái",
+    btn_reset_mood: "Mặc định",
+    t_mood_saved: "Đã lưu trạng thái tùy chỉnh!",
+    t_mood_default: "Đã khôi phục nội dung mặc định (Song ngữ)!",
     btn_reset_wifi: "Đổi mạng WiFi / Chuyển mạng mới",
     p0: "Đồng hồ", p1: "Lịch âm", p2: "Tài chính", p3: "Pomodoro", p4: "Tâm trạng", p5: "⚙️ Cài đặt",
     t_page: "Đã chuyển: ",
@@ -398,10 +482,20 @@ const I18N = {
     sec_pet_title: "Pomodoro Companion (Desk Pet)",
     sec_pet_sub: "Select your companion in the center of the Pomodoro dial (types along while you focus):",
     t_pet: "Selected companion: ",
+    sec_mood_title: "Desk Mood & Vibe Signboard",
     sec_pack_sub: "Meme Character Pack:",
     t_pack: "Selected meme pack: ",
     sec_mood_sub: "Desk Mood / Vibe Signboard:",
     t_mood: "Selected vibe: ",
+    mood_custom_toggle: "Custom Status Title & Message",
+    mood_custom_hint: "• Off: Default bilingual meme quotes (VI/EN).<br>• On: Displays exactly what you type below.",
+    mood_tag_label: "Neon Sign Title (Max 20 chars, UPPERCASE):",
+    mood_msg_label: "Sub-message below (Max 36 chars):",
+    mood_quick_label: "Quick presets:",
+    btn_save_mood: "Save Status",
+    btn_reset_mood: "Reset",
+    t_mood_saved: "Custom mood status saved!",
+    t_mood_default: "Restored to default bilingual status!",
     sec_snd_title: "Sound & Melodies (Speaker GPIO 26)",
     snd_touch_label: "Touch sound feedback:",
     snd_melody_label: "Alarm Melody:",
@@ -598,6 +692,78 @@ function switchMood(moodId) {
   fetch(`/api/mood?set=${moodId}`).catch(() => {});
 }
 
+function updateMoodCounters() {
+  const tagInp = document.getElementById('customTagInput');
+  const msgInp = document.getElementById('customMsgInput');
+  const tc = document.getElementById('customTagCount');
+  const mc = document.getElementById('customMsgCount');
+  if (tagInp && tc) tc.textContent = `${tagInp.value.length}/20`;
+  if (msgInp && mc) mc.textContent = `${msgInp.value.length}/36`;
+}
+
+function setQuickMood(tag, msg) {
+  const toggle = document.getElementById('customMoodToggle');
+  if (toggle) toggle.checked = true;
+  const wrap = document.getElementById('customMoodInputs');
+  if (wrap) wrap.style.display = 'block';
+  const tagInp = document.getElementById('customTagInput');
+  const msgInp = document.getElementById('customMsgInput');
+  if (tagInp) tagInp.value = tag;
+  if (msgInp) msgInp.value = msg;
+  updateMoodCounters();
+}
+
+function toggleCustomMood(en) {
+  const wrap = document.getElementById('customMoodInputs');
+  if (wrap) wrap.style.display = en ? 'block' : 'none';
+  if (!en) {
+    fetch('/api/mood?custom=0')
+      .then(r => r.json())
+      .then(() => showToast(getDict().t_mood_default || 'Đã trở về nội dung mặc định (Song ngữ)!'))
+      .catch(() => {});
+  }
+}
+
+async function saveCustomMood() {
+  const en = document.getElementById('customMoodToggle').checked ? 1 : 0;
+  let tag = document.getElementById('customTagInput').value.trim();
+  let msg = document.getElementById('customMsgInput').value.trim();
+
+  tag = tag.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toUpperCase();
+  msg = msg.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D');
+
+  document.getElementById('customTagInput').value = tag;
+  document.getElementById('customMsgInput').value = msg;
+  updateMoodCounters();
+
+  try {
+    const res = await fetch(`/api/mood?custom=${en}&tag=${encodeURIComponent(tag)}&msg=${encodeURIComponent(msg)}`);
+    if (res.ok) {
+      showToast(getDict().t_mood_saved || 'Đã lưu trạng thái tùy chỉnh!');
+    } else {
+      showToast(getDict().t_cmd_err || 'Lỗi khi lưu trạng thái!', false);
+    }
+  } catch(e) {
+    showToast(getDict().t_conn_err || 'Lỗi kết nối!', false);
+  }
+}
+
+function resetDefaultMood() {
+  const toggle = document.getElementById('customMoodToggle');
+  if (toggle) toggle.checked = false;
+  const wrap = document.getElementById('customMoodInputs');
+  if (wrap) wrap.style.display = 'none';
+  const tagInp = document.getElementById('customTagInput');
+  const msgInp = document.getElementById('customMsgInput');
+  if (tagInp) tagInp.value = '';
+  if (msgInp) msgInp.value = '';
+  updateMoodCounters();
+  fetch('/api/mood?custom=0')
+    .then(r => r.json())
+    .then(() => showToast(getDict().t_mood_default || 'Đã khôi phục nội dung mặc định (Song ngữ)!'))
+    .catch(() => {});
+}
+
 async function saveCurrencies() {
   const c1 = document.getElementById('cur1Select').value;
   const c2 = document.getElementById('cur2Select').value;
@@ -694,6 +860,27 @@ async function fetchStatus() {
     if (data.pack !== undefined) {
       highlightPack(data.pack);
     }
+    if (data.useCustomMood !== undefined) {
+      const toggle = document.getElementById('customMoodToggle');
+      if (toggle && !toggle.matches(':focus')) {
+        toggle.checked = data.useCustomMood;
+        const wrap = document.getElementById('customMoodInputs');
+        if (wrap) wrap.style.display = data.useCustomMood ? 'block' : 'none';
+      }
+    }
+    if (data.customTag !== undefined) {
+      const inp = document.getElementById('customTagInput');
+      if (inp && !inp.matches(':focus') && !inp.value) {
+        inp.value = data.customTag;
+      }
+    }
+    if (data.customMsg !== undefined) {
+      const inp = document.getElementById('customMsgInput');
+      if (inp && !inp.matches(':focus') && !inp.value) {
+        inp.value = data.customMsg;
+      }
+    }
+    updateMoodCounters();
     if (data.lang !== undefined) {
       applyLanguage(data.lang);
     }
@@ -796,6 +983,9 @@ void WebDashboard::_setupRoutes() {
     doc["moodName"] = deskMood.getName(deskMood.getMood());
     doc["pack"] = (int)deskMood.getPack();
     doc["packName"] = deskMood.getPackName(deskMood.getPack());
+    doc["useCustomMood"] = deskMood.isCustom();
+    doc["customTag"] = deskMood.getCustomTag();
+    doc["customMsg"] = deskMood.getCustomMessage();
 
     String res;
     serializeJson(doc, res);
@@ -814,7 +1004,7 @@ void WebDashboard::_setupRoutes() {
     }
   });
 
-  // ── GET /api/mood?set=X&pack=Y ──────────────────────────────────
+  // ── GET /api/mood?set=X&pack=Y&custom=Z&tag=...&msg=... ──────────
   _server.on("/api/mood", HTTP_GET, [](AsyncWebServerRequest *request) {
     bool updated = false;
     if (request->hasParam("set")) {
@@ -830,6 +1020,13 @@ void WebDashboard::_setupRoutes() {
         deskMood.setPack((MoodPack)p);
         updated = true;
       }
+    }
+    if (request->hasParam("custom")) {
+      bool en = (request->getParam("custom")->value() == "1" || request->getParam("custom")->value() == "true");
+      String tag = request->hasParam("tag") ? request->getParam("tag")->value() : "";
+      String msg = request->hasParam("msg") ? request->getParam("msg")->value() : "";
+      deskMood.setCustom(en, tag.length() > 0 ? tag.c_str() : nullptr, msg.length() > 0 ? msg.c_str() : nullptr);
+      updated = true;
     }
     if (updated) {
       display.triggerRender();
