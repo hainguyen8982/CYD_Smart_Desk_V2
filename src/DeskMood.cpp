@@ -170,51 +170,52 @@ void DeskMood::_saveSettings() {
     }
 }
 
-static void drawMemeBitmap80(TFT_eSprite& spr, int16_t startX, int16_t startY, const uint16_t* bmp) {
+static void drawMemeBitmap160(TFT_eSprite& spr, int16_t startX, int16_t startY, const uint16_t* bmp) {
+    uint16_t* fb = (uint16_t*)spr.getPointer();
     for (int r = 0; r < MEME_BITMAP_H; r++) {
         int16_t py = startY + r;
+        if (py < 0 || py >= 240) continue;
+        uint16_t* dst = fb ? (fb + py * 320 + startX) : nullptr;
         int rowIdx = r * MEME_BITMAP_W;
         for (int c = 0; c < MEME_BITMAP_W; c++) {
+            int16_t px = startX + c;
+            if (px < 0 || px >= 320) continue;
             uint16_t color = pgm_read_word(&bmp[rowIdx + c]);
             if (color != MEME_TRANSPARENT_COLOR) {
-                spr.drawPixel(startX + c, py, color);
+                if (dst) dst[c] = color;
+                else spr.drawPixel(px, py, color);
             }
         }
     }
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-//  RENDER SIGNBOARD (IN TRỰC TIẾP BITMAP MEME GỐC TỪ FLASH - KHÔNG VẼ VÒNG TRÒN)
+//  RENDER SIGNBOARD (MEME KHỔNG LỒ 160x160 > 2/3 MÀN HÌNH - KHÔNG VÒNG TRÒN)
 // ═══════════════════════════════════════════════════════════════════════
 void DeskMood::renderPage(TFT_eSprite& spr, uint8_t lang, uint16_t themeBg) {
     // 1. Phông nền toàn màn hình 320x240 sạch sẽ, phẳng hoàn toàn theo Theme
     spr.fillSprite(themeBg);
 
     int16_t cx = 160;
-    int16_t cy = 62;
+    int16_t cy = 82; // Tâm ảnh: Meme chiếm từ Y=2 đến Y=162 (160px > 2/3 màn hình)
 
-    // 2. IN TRỰC TIẾP HÌNH MEME GỐC (80x80) VỚI NỀN TRONG SUỐT (KHÔNG TÔ VÒNG TRÒN)
+    // 2. IN TRỰC TIẾP HÌNH MEME GỐC KHỔNG LỒ (160x160) VỚI NỀN TRONG SUỐT
     const uint16_t* memeBmp = getMemeBitmap((uint8_t)_pack, (uint8_t)_mood);
-    drawMemeBitmap80(spr, cx - MEME_BITMAP_W / 2, cy - MEME_BITMAP_H / 2, memeBmp);
+    drawMemeBitmap160(spr, cx - MEME_BITMAP_W / 2, cy - MEME_BITMAP_H / 2, memeBmp);
 
-    // 3. BIỂN BÁO NEON TỰ ĐỘNG SCALE BÓNG CHUẨN XÁC THEO ĐỘ DÀI TEXT (Y = 126..158)
+    // 3. BIỂN BÁO NEON TỰ ĐỘNG SCALE BÓNG CHUẨN XÁC THEO ĐỘ DÀI TEXT (Y = 166..194)
     uint16_t accent = getAccentColor(_mood);
     const char* tagStr = getTag(_mood, lang);
 
-    uint8_t fontToUse = 4;
+    uint8_t fontToUse = 2; // Font 2 đậm, gọn gàng và đẹp mắt dưới meme khổng lồ
     int16_t textW = spr.textWidth(tagStr, fontToUse);
-    // Nếu chữ quá dài so với màn hình thì dùng font 2 để không bị tràn
-    if (textW > 260) {
-        fontToUse = 2;
-        textW = spr.textWidth(tagStr, fontToUse);
-    }
 
-    // Bóng tự co giãn vừa vặn (padding 16px mỗi bên, bo tròn viên thuốc r=16)
-    int16_t tagW = textW + 32;
-    if (tagW < 130) tagW = 130;
-    if (tagW > 312) tagW = 312;
-    int16_t tagH = (fontToUse == 4) ? 32 : 26;
-    int16_t tagY = (fontToUse == 4) ? 124 : 127;
+    // Bóng tự co giãn vừa vặn (padding 18px mỗi bên, bo tròn viên thuốc r=14)
+    int16_t tagW = textW + 36;
+    if (tagW < 140) tagW = 140;
+    if (tagW > 308) tagW = 308;
+    int16_t tagH = 26;
+    int16_t tagY = 166;
     int16_t tagR = tagH / 2;
 
     // Đổ bóng & Nền viên thuốc Neon
@@ -227,19 +228,19 @@ void DeskMood::renderPage(TFT_eSprite& spr, uint8_t lang, uint16_t themeBg) {
     spr.setTextColor(C_BLACK);
     spr.drawString(tagStr, cx, tagY + tagH / 2, fontToUse);
 
-    // 4. CÂU QUOTE VĂN PHÒNG HÀI HƯỚC (Y = 172)
+    // 4. CÂU QUOTE VĂN PHÒNG HÀI HƯỚC (Y = 199)
     spr.setTextDatum(MC_DATUM);
     spr.setTextColor(C_WHITE);
-    spr.drawString(getMessage(_mood, lang), cx, 172, 2);
+    spr.drawString(getMessage(_mood, lang), cx, 200, 2);
 
-    // 5. CHẤM CHỈ THỊ 6 TRẠNG THÁI (Y = 206)
-    int16_t dotStartX = cx - (MOOD_COUNT * 16) / 2 + 8;
+    // 5. CHẤM CHỈ THỊ 6 TRẠNG THÁI (Y = 222)
+    int16_t dotStartX = cx - (MOOD_COUNT * 14) / 2 + 7;
     for (int i = 0; i < MOOD_COUNT; i++) {
-        int16_t dx = dotStartX + i * 16;
+        int16_t dx = dotStartX + i * 14;
         if (i == (int)_mood) {
-            spr.fillSmoothRoundRect(dx - 8, 204, 16, 6, 3, accent, themeBg);
+            spr.fillSmoothRoundRect(dx - 6, 220, 13, 5, 2, accent, themeBg);
         } else {
-            spr.fillSmoothCircle(dx, 207, 3, RGB565(55, 68, 90), themeBg);
+            spr.fillSmoothCircle(dx, 222, 2, RGB565(60, 75, 100), themeBg);
         }
     }
 }
