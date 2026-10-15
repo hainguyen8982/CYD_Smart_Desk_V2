@@ -8,6 +8,7 @@
 #include "HardwareManager.h"
 #include "Theme.h"
 #include "WeatherService.h"
+#include "DeskPet.h"
 #include <ArduinoJson.h>
 #include <ESPmDNS.h>
 #include <LittleFS.h>
@@ -219,6 +220,23 @@ input[type=range] { width: 100%; accent-color: var(--accent); height: 6px; borde
     </div>
   </div>
 
+  <!-- Desk Pet Mascot Companion Section -->
+  <div class="card">
+    <div class="card-title">
+      <span style="font-size: 18px;">🐾</span>
+      <span data-i18n="sec_pet_title">Thú cưng Pomodoro (Desk Pet)</span>
+    </div>
+    <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 12px;" data-i18n="sec_pet_sub">
+      Chọn bạn đồng hành hiển thị ở tâm vòng tròn Pomodoro (gõ phím cùng bạn khi cày deadline):
+    </div>
+    <div class="btn-group" id="petButtons">
+      <button class="btn-chip" onclick="switchPet(0)">🍅 Cà chua</button>
+      <button class="btn-chip" onclick="switchPet(1)">🐱 Mèo Pixel</button>
+      <button class="btn-chip" onclick="switchPet(2)">🐕 Shiba Inu</button>
+      <button class="btn-chip" onclick="switchPet(3)">🦫 Capybara</button>
+    </div>
+  </div>
+
   <!-- Sound & Audio Settings Section -->
   <div class="card">
     <div class="card-title">
@@ -298,6 +316,9 @@ const I18N = {
     page_sub: "Chuyển trang hiển thị:",
     theme_sub: "Bộ sưu tập Giao diện (Theme):",
     bright_label: "Độ sáng màn hình",
+    sec_pet_title: "Thú cưng Pomodoro (Desk Pet)",
+    sec_pet_sub: "Chọn bạn đồng hành hiển thị ở tâm vòng tròn Pomodoro (gõ phím cùng bạn khi cày deadline):",
+    t_pet: "Đã chọn thú cưng: ",
     sec_snd_title: "Âm thanh & Điệu chuông (Loa GPIO 26)",
     snd_touch_label: "Âm chạm cảm ứng:",
     snd_melody_label: "Điệu chuông báo thức:",
@@ -351,6 +372,9 @@ const I18N = {
     page_sub: "Switch Display Page:",
     theme_sub: "Theme Presets:",
     bright_label: "Screen Brightness",
+    sec_pet_title: "Pomodoro Companion (Desk Pet)",
+    sec_pet_sub: "Select your companion in the center of the Pomodoro dial (types along while you focus):",
+    t_pet: "Selected companion: ",
     sec_snd_title: "Sound & Melodies (Speaker GPIO 26)",
     snd_touch_label: "Touch sound feedback:",
     snd_melody_label: "Alarm Melody:",
@@ -510,6 +534,18 @@ function highlightTheme(id) {
   btns.forEach((b, idx) => b.classList.toggle('active', idx === id));
 }
 
+const PET_NAMES = ['Tomato', 'Tuxedo Cat', 'Shiba Inu', 'Capybara'];
+function highlightPet(id) {
+  const btns = document.querySelectorAll('#petButtons .btn-chip');
+  btns.forEach((b, idx) => b.classList.toggle('active', idx === id));
+}
+function switchPet(petId) {
+  highlightPet(petId);
+  const dict = getDict();
+  showToast(`${dict.t_pet}${PET_NAMES[petId] || petId}`);
+  fetch(`/api/pet?set=${petId}`).catch(() => {});
+}
+
 async function saveCurrencies() {
   const c1 = document.getElementById('cur1Select').value;
   const c2 = document.getElementById('cur2Select').value;
@@ -596,6 +632,9 @@ async function fetchStatus() {
     if (data.alarmMelody !== undefined) {
       const m = document.getElementById('alarmMelodySelect');
       if (m && !m.matches(':focus')) m.value = data.alarmMelody;
+    }
+    if (data.pet !== undefined) {
+      highlightPet(data.pet);
     }
     if (data.lang !== undefined) {
       applyLanguage(data.lang);
@@ -693,10 +732,24 @@ void WebDashboard::_setupRoutes() {
     doc["alarmMelody"] = hardware.getAlarmMelody();
     doc["lang"] = (int)getLanguage();
     doc["langName"] = getLanguageName();
+    doc["pet"] = (int)deskPet.getType();
+    doc["petName"] = deskPet.getNameCurrent();
 
     String res;
     serializeJson(doc, res);
     request->send(200, "application/json", res);
+  });
+
+  // ── GET /api/pet?set=X ──────────────────────────────────────────
+  _server.on("/api/pet", HTTP_GET, [](AsyncWebServerRequest *request) {
+    if (request->hasParam("set")) {
+      uint8_t p = (uint8_t)request->getParam("set")->value().toInt();
+      deskPet.setType((DeskPetType)p);
+      display.triggerRender();
+      request->send(200, "application/json", "{\"success\":true}");
+    } else {
+      request->send(400, "application/json", "{\"error\":\"Missing set param\"}");
+    }
   });
 
   // ── GET /api/alarm?h=X&m=Y&en=Z&msg=... ─────────────────────────

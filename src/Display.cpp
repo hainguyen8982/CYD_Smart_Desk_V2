@@ -17,6 +17,7 @@
 #include "HardwareManager.h"
 #include "DockIconsColor20.h"
 #include "FabXLogo.h"
+#include "DeskPet.h"
 #include <WiFi.h>
 #include <LittleFS.h>
 #include <Preferences.h>
@@ -46,6 +47,7 @@ void Display::begin() {
     initLanguage();                // Load saved language (VI / EN) from NVS
     initTheme();                   // Load saved theme from NVS
     loadAlarmSettings();           // Load saved alarm settings from NVS
+    deskPet.begin();               // Load saved Desk Pet mascot from NVS
 
     // Mount LittleFS and ensure clean storage (purge leftover wallpaper if any)
     if (LittleFS.begin(true)) {
@@ -1978,7 +1980,15 @@ bool Display::handleTouch(uint16_t x, uint16_t y) {
             }
         }
 
-        // B. Chạm vào Vòng tròn / Mascot Cà chua bên trái (X: 15..156, Y: 45..194) -> Đổi Chạy / Tạm dừng
+        // B1. Chạm trực tiếp vào Pet ở tâm vòng tròn (X: 58..118, Y: 96..156) -> Đổi sang Pet kế tiếp!
+        if (x >= 58 && x <= 118 && y >= 96 && y <= 156) {
+            deskPet.nextPet();
+            hardware.playTouchSound();
+            _lastRender = 0;
+            return true;
+        }
+
+        // B2. Chạm vào Vòng tròn bên ngoài (X: 15..156, Y: 45..194) -> Đổi Chạy / Tạm dừng
         if (x >= 15 && x <= 156 && y >= 45 && y <= 194) {
             if (_pomoState == POMO_RUNNING) {
                 pomoPause();
@@ -3076,9 +3086,8 @@ void Display::renderPage3_Pomodoro() {
     // Vòng ray nền MÀU XÁM TRUNG TÍNH (Neutral Slate Gray, TUYỆT ĐỐI KHÔNG XANH NAVY)
     _spr.drawArc(cx, ringCy, outerR, innerR, 0, 360, RGB565(75, 75, 75), theme.bg, true);
 
-    // Vẽ chú Cà chua Mascot lớn dễ thương ở trung tâm vòng tròn
-    bool isFocusMode = (_pomoMode == POMO_FOCUS);
-    drawTomatoMascot(cx, ringCy + 1, isFocusMode);
+    // Vẽ Desk Pet Mascot (Cà chua / Mèo / Shiba / Capybara) ở trung tâm vòng tròn
+    deskPet.render(_spr, cx, ringCy + 1, _pomoState, _pomoMode, _pomoRemainingSec, theme.bg);
 
     // Tính % tiến độ
     float progress = 0.0f;
