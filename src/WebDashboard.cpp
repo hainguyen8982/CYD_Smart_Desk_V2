@@ -165,162 +165,7 @@ input[type=range] { width: 100%; accent-color: var(--accent); height: 6px; borde
     </div>
   </div>
 
-  <!-- Currency Settings Section -->
-  <div class="card">
-    <div class="card-title">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v12M17 10H9.5a2.5 2.5 0 0 0 0 5H14a2.5 2.5 0 0 1 0 5H7"/></svg>
-      <span data-i18n="sec_cur_title">Cấu hình Ngoại tệ</span>
-    </div>
-    <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 12px;" data-i18n="sec_cur_sub">
-      Tùy chọn 2 đồng ngoại tệ bạn muốn theo dõi trên màn hình để bàn:
-    </div>
-    <div class="grid-2" style="margin-bottom: 12px;">
-      <div>
-        <div style="font-size: 11px; color: var(--text-dim); margin-bottom: 6px;" data-i18n="cur1_label">Ngoại tệ 1 (Mục trên):</div>
-        <select id="cur1Select" class="select-control">
-          <option value="USD">USD — Đô la Mỹ</option>
-          <option value="EUR">EUR — Euro</option>
-          <option value="CAD">CAD — Đô la Canada</option>
-          <option value="JPY">JPY — Yên Nhật</option>
-          <option value="GBP">GBP — Bảng Anh</option>
-          <option value="AUD">AUD — Đô la Úc</option>
-          <option value="SGD">SGD — Đô la Singapore</option>
-          <option value="CNY">CNY — Nhân dân tệ</option>
-          <option value="KRW">KRW — Won Hàn Quốc</option>
-          <option value="CHF">CHF — Franc Thụy Sĩ</option>
-          <option value="THB">THB — Baht Thái</option>
-        </select>
-      </div>
-      <div>
-        <div style="font-size: 11px; color: var(--text-dim); margin-bottom: 6px;" data-i18n="cur2_label">Ngoại tệ 2 (Mục dưới):</div>
-        <select id="cur2Select" class="select-control">
-          <option value="CAD">CAD — Đô la Canada</option>
-          <option value="EUR">EUR — Euro</option>
-          <option value="USD">USD — Đô la Mỹ</option>
-          <option value="JPY">JPY — Yên Nhật</option>
-          <option value="GBP">GBP — Bảng Anh</option>
-          <option value="AUD">AUD — Đô la Úc</option>
-          <option value="SGD">SGD — Đô la Singapore</option>
-          <option value="CNY">CNY — Nhân dân tệ</option>
-          <option value="KRW">KRW — Won Hàn Quốc</option>
-          <option value="CHF">CHF — Franc Thụy Sĩ</option>
-          <option value="THB">THB — Baht Thái</option>
-        </select>
-      </div>
-    </div>
-    <button class="btn btn-accent" onclick="saveCurrencies()" data-i18n="btn_save_cur">
-      Lưu cấu hình ngoại tệ
-    </button>
-  </div>
-
-  <!-- Alarm & Smart Reminder Section -->
-  <div class="card">
-    <div class="card-title">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-      <span data-i18n="sec_alarm_title">Báo thức & Lời nhắc SmartDesk</span>
-    </div>
-    <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 12px;" data-i18n="sec_alarm_sub">
-      Thiết lập giờ báo thức và lời nhắn hiển thị trên màn hình để bàn:
-    </div>
-
-    <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 12px;">
-      <input type="time" id="alarmTimeInput" class="select-control" style="font-size: 17px; font-weight: 600; padding: 6px 10px; width: 130px; text-align: center;">
-      <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; user-select: none;">
-        <input type="checkbox" id="alarmEnInput" style="width: 18px; height: 18px; accent-color: var(--accent);">
-        <span data-i18n="alarm_en_label">Kích hoạt báo thức</span>
-      </label>
-    </div>
-
-    <div style="margin-bottom: 10px;">
-      <div style="font-size: 11px; color: var(--text-dim); margin-bottom: 4px;" data-i18n="alarm_msg_label">Nội dung lời nhắc / thông báo khi chuông reo:</div>
-      <input type="text" id="alarmMsgInput" class="select-control" placeholder="VD: Uống nước, Vận động, Họp online..." data-i18n-ph="alarm_msg_ph" maxlength="36" style="width: 100%;">
-    </div>
-
-    <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px;">
-      <button class="btn-chip" style="font-size: 11px; padding: 3px 8px;" onclick="setQuickMsg('drink')" data-i18n="quick_drink">💧 Uống nước</button>
-      <button class="btn-chip" style="font-size: 11px; padding: 3px 8px;" onclick="setQuickMsg('sport')" data-i18n="quick_sport">🏃 Vận động</button>
-      <button class="btn-chip" style="font-size: 11px; padding: 3px 8px;" onclick="setQuickMsg('rest')" data-i18n="quick_rest">☕ Nghỉ ngơi</button>
-      <button class="btn-chip" style="font-size: 11px; padding: 3px 8px;" onclick="setQuickMsg('work')" data-i18n="quick_work">💼 Tan ca</button>
-    </div>
-
-    <button class="btn btn-accent" onclick="saveAlarmSettings()" data-i18n="btn_save_alarm">
-      Lưu cài đặt báo thức
-    </button>
-  </div>
-
-  <!-- Remote Control Section -->
-  <div class="card">
-    <div class="card-title">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-      <span data-i18n="sec_ctrl_title">Điều khiển màn hình từ xa</span>
-    </div>
-
-    <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 8px;" data-i18n="page_sub">Chuyển trang hiển thị:</div>
-    <div id="pageButtons" style="display:grid; grid-template-columns: repeat(6, 1fr); gap: 6px;">
-      <button class="btn-chip" onclick="switchPage(0)">Đồng hồ</button>
-      <button class="btn-chip" onclick="switchPage(1)">Lịch âm</button>
-      <button class="btn-chip" onclick="switchPage(2)">Tài chính</button>
-      <button class="btn-chip" onclick="switchPage(3)">Pomodoro</button>
-      <button class="btn-chip" onclick="switchPage(4)">Tâm trạng</button>
-      <button class="btn-chip" onclick="switchPage(5)">⚙️ Cài đặt</button>
-    </div>
-
-    <div style="font-size: 12px; color: var(--text-dim); margin: 14px 0 8px;" data-i18n="sec_pack_sub">Bộ Meme Nhân Vật (Meme Pack):</div>
-    <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap: 6px;" id="packButtons">
-      <button class="btn-chip" onclick="switchPack(0)">👶 Đầu trọc Mochi</button>
-      <button class="btn-chip" onclick="switchPack(1)">⭐ Ngôi sao vàng</button>
-      <button class="btn-chip" onclick="switchPack(2)">🐰 Bé Thỏ trắng</button>
-    </div>
-
-    <div style="font-size: 12px; color: var(--text-dim); margin: 14px 0 8px;" data-i18n="sec_mood_sub">Tâm trạng bàn làm việc (Desk Mood):</div>
-    <div class="grid-2" id="moodButtons">
-      <button class="btn-chip" onclick="switchMood(0)">😊 Vui vẻ</button>
-      <button class="btn-chip" onclick="switchMood(1)">📖 Tập trung</button>
-      <button class="btn-chip" onclick="switchMood(2)">😡 Đang bực mình</button>
-      <button class="btn-chip" onclick="switchMood(3)">🪫 Cạn năng lượng 0%</button>
-      <button class="btn-chip" onclick="switchMood(4)">😑 Đang chán / Chill</button>
-      <button class="btn-chip" onclick="switchMood(5)">🎉 Cuối tuần / Quẩy</button>
-    </div>
-
-    <div style="font-size: 12px; color: var(--text-dim); margin: 14px 0 8px;" data-i18n="theme_sub">Bộ sưu tập Giao diện (Theme):</div>
-    <div class="grid-2" id="themeButtons">
-      <button class="btn-chip" onclick="switchTheme(0)">Cyber Neon</button>
-      <button class="btn-chip" onclick="switchTheme(1)">Minimal Obsidian</button>
-      <button class="btn-chip" onclick="switchTheme(2)">Sunset Amber</button>
-      <button class="btn-chip" onclick="switchTheme(3)">Cyberpunk</button>
-      <button class="btn-chip" onclick="switchTheme(4)">💜 Pastel Lavender</button>
-      <button class="btn-chip" onclick="switchTheme(5)">❄️ Nordic Frost</button>
-      <button class="btn-chip" onclick="switchTheme(6)">🌸 Sakura Blossom</button>
-      <button class="btn-chip" onclick="switchTheme(7)">🌿 Emerald Forest</button>
-    </div>
-
-    <div class="slider-wrap">
-      <div class="slider-hdr">
-        <span data-i18n="bright_label">Độ sáng màn hình</span>
-        <span id="brightVal">80%</span>
-      </div>
-      <input type="range" id="brightSlider" min="10" max="100" value="80" oninput="changeBrightness(this.value)">
-    </div>
-  </div>
-
-  <!-- Desk Pet Mascot Companion Section -->
-  <div class="card">
-    <div class="card-title">
-      <span style="font-size: 18px;">🐾</span>
-      <span data-i18n="sec_pet_title">Thú cưng Pomodoro (Desk Pet)</span>
-    </div>
-    <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 12px;" data-i18n="sec_pet_sub">
-      Chọn bạn đồng hành hiển thị ở tâm vòng tròn Pomodoro (gõ phím cùng bạn khi cày deadline):
-    </div>
-    <div class="btn-group" id="petButtons">
-      <button class="btn-chip" onclick="switchPet(0)">🍅 Cà chua</button>
-      <button class="btn-chip" onclick="switchPet(1)">🐱 Mèo Pixel</button>
-      <button class="btn-chip" onclick="switchPet(2)">🐕 Shiba Inu</button>
-      <button class="btn-chip" onclick="switchPet(3)">🦫 Capybara</button>
-    </div>
-  </div>
-
-  <!-- Desk Mood & Signboard Section -->
+  <!-- 1. Desk Mood & Signboard Section -->
   <div class="card">
     <div class="card-title">
       <span style="font-size: 18px;">🎭</span>
@@ -390,6 +235,96 @@ input[type=range] { width: 100%; accent-color: var(--accent); height: 6px; borde
     </div>
   </div>
 
+  <!-- 2. Remote Screen Control Section -->
+  <div class="card">
+    <div class="card-title">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+      <span data-i18n="sec_ctrl_title">Điều khiển màn hình từ xa</span>
+    </div>
+
+    <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 8px;" data-i18n="page_sub">Chuyển trang hiển thị:</div>
+    <div id="pageButtons" style="display:grid; grid-template-columns: repeat(6, 1fr); gap: 6px;">
+      <button class="btn-chip" onclick="switchPage(0)">Đồng hồ</button>
+      <button class="btn-chip" onclick="switchPage(1)">Lịch âm</button>
+      <button class="btn-chip" onclick="switchPage(2)">Tài chính</button>
+      <button class="btn-chip" onclick="switchPage(3)">Pomodoro</button>
+      <button class="btn-chip" onclick="switchPage(4)">Tâm trạng</button>
+      <button class="btn-chip" onclick="switchPage(5)">⚙️ Cài đặt</button>
+    </div>
+
+    <div style="font-size: 12px; color: var(--text-dim); margin: 14px 0 8px;" data-i18n="theme_sub">Bộ sưu tập Giao diện (Theme):</div>
+    <div class="grid-2" id="themeButtons">
+      <button class="btn-chip" onclick="switchTheme(0)">Cyber Neon</button>
+      <button class="btn-chip" onclick="switchTheme(1)">Minimal Obsidian</button>
+      <button class="btn-chip" onclick="switchTheme(2)">Sunset Amber</button>
+      <button class="btn-chip" onclick="switchTheme(3)">Cyberpunk</button>
+      <button class="btn-chip" onclick="switchTheme(4)">💜 Pastel Lavender</button>
+      <button class="btn-chip" onclick="switchTheme(5)">❄️ Nordic Frost</button>
+      <button class="btn-chip" onclick="switchTheme(6)">🌸 Sakura Blossom</button>
+      <button class="btn-chip" onclick="switchTheme(7)">🌿 Emerald Forest</button>
+    </div>
+
+    <div class="slider-wrap">
+      <div class="slider-hdr">
+        <span data-i18n="bright_label">Độ sáng màn hình</span>
+        <span id="brightVal">80%</span>
+      </div>
+      <input type="range" id="brightSlider" min="10" max="100" value="80" oninput="changeBrightness(this.value)">
+    </div>
+  </div>
+
+  <!-- 3. Desk Pet Mascot Companion Section -->
+  <div class="card">
+    <div class="card-title">
+      <span style="font-size: 18px;">🐾</span>
+      <span data-i18n="sec_pet_title">Thú cưng Pomodoro (Desk Pet)</span>
+    </div>
+    <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 12px;" data-i18n="sec_pet_sub">
+      Chọn bạn đồng hành hiển thị ở tâm vòng tròn Pomodoro (gõ phím cùng bạn khi cày deadline):
+    </div>
+    <div class="grid-4" id="petButtons">
+      <button class="btn-chip" onclick="switchPet(0)">🍅 Cà chua</button>
+      <button class="btn-chip" onclick="switchPet(1)">🐱 Mèo Pixel</button>
+      <button class="btn-chip" onclick="switchPet(2)">🐕 Shiba Inu</button>
+      <button class="btn-chip" onclick="switchPet(3)">🦫 Capybara</button>
+    </div>
+  </div>
+
+  <!-- 4. Alarm & Smart Reminder Section -->
+  <div class="card">
+    <div class="card-title">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+      <span data-i18n="sec_alarm_title">Báo thức & Lời nhắc SmartDesk</span>
+    </div>
+    <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 12px;" data-i18n="sec_alarm_sub">
+      Thiết lập giờ báo thức và lời nhắn hiển thị trên màn hình để bàn:
+    </div>
+
+    <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 12px;">
+      <input type="time" id="alarmTimeInput" class="select-control" style="font-size: 17px; font-weight: 600; padding: 6px 10px; width: 130px; text-align: center;">
+      <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; user-select: none;">
+        <input type="checkbox" id="alarmEnInput" style="width: 18px; height: 18px; accent-color: var(--accent);">
+        <span data-i18n="alarm_en_label">Kích hoạt báo thức</span>
+      </label>
+    </div>
+
+    <div style="margin-bottom: 10px;">
+      <div style="font-size: 11px; color: var(--text-dim); margin-bottom: 4px;" data-i18n="alarm_msg_label">Nội dung lời nhắc / thông báo khi chuông reo:</div>
+      <input type="text" id="alarmMsgInput" class="select-control" placeholder="VD: Uống nước, Vận động, Họp online..." data-i18n-ph="alarm_msg_ph" maxlength="36" style="width: 100%;">
+    </div>
+
+    <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px;">
+      <button class="btn-chip" style="font-size: 11px; padding: 3px 8px;" onclick="setQuickMsg('drink')" data-i18n="quick_drink">💧 Uống nước</button>
+      <button class="btn-chip" style="font-size: 11px; padding: 3px 8px;" onclick="setQuickMsg('sport')" data-i18n="quick_sport">🏃 Vận động</button>
+      <button class="btn-chip" style="font-size: 11px; padding: 3px 8px;" onclick="setQuickMsg('rest')" data-i18n="quick_rest">☕ Nghỉ ngơi</button>
+      <button class="btn-chip" style="font-size: 11px; padding: 3px 8px;" onclick="setQuickMsg('work')" data-i18n="quick_work">💼 Tan ca</button>
+    </div>
+
+    <button class="btn btn-accent" onclick="saveAlarmSettings()" data-i18n="btn_save_alarm">
+      Lưu cài đặt báo thức
+    </button>
+  </div>
+
   <!-- Sound & Audio Settings Section -->
   <div class="card">
     <div class="card-title">
@@ -423,6 +358,54 @@ input[type=range] { width: 100%; accent-color: var(--accent); height: 6px; borde
         <span data-i18n="btn_test_melody">Phát thử chuông báo thức</span>
       </button>
     </div>
+  </div>
+
+  <!-- Currency Settings Section -->
+  <div class="card">
+    <div class="card-title">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v12M17 10H9.5a2.5 2.5 0 0 0 0 5H14a2.5 2.5 0 0 1 0 5H7"/></svg>
+      <span data-i18n="sec_cur_title">Cấu hình Ngoại tệ</span>
+    </div>
+    <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 12px;" data-i18n="sec_cur_sub">
+      Tùy chọn 2 đồng ngoại tệ bạn muốn theo dõi trên màn hình để bàn:
+    </div>
+    <div class="grid-2" style="margin-bottom: 12px;">
+      <div>
+        <div style="font-size: 11px; color: var(--text-dim); margin-bottom: 6px;" data-i18n="cur1_label">Ngoại tệ 1 (Mục trên):</div>
+        <select id="cur1Select" class="select-control">
+          <option value="USD">USD — Đô la Mỹ</option>
+          <option value="EUR">EUR — Euro</option>
+          <option value="CAD">CAD — Đô la Canada</option>
+          <option value="JPY">JPY — Yên Nhật</option>
+          <option value="GBP">GBP — Bảng Anh</option>
+          <option value="AUD">AUD — Đô la Úc</option>
+          <option value="SGD">SGD — Đô la Singapore</option>
+          <option value="CNY">CNY — Nhân dân tệ</option>
+          <option value="KRW">KRW — Won Hàn Quốc</option>
+          <option value="CHF">CHF — Franc Thụy Sĩ</option>
+          <option value="THB">THB — Baht Thái</option>
+        </select>
+      </div>
+      <div>
+        <div style="font-size: 11px; color: var(--text-dim); margin-bottom: 6px;" data-i18n="cur2_label">Ngoại tệ 2 (Mục dưới):</div>
+        <select id="cur2Select" class="select-control">
+          <option value="CAD">CAD — Đô la Canada</option>
+          <option value="EUR">EUR — Euro</option>
+          <option value="USD">USD — Đô la Mỹ</option>
+          <option value="JPY">JPY — Yên Nhật</option>
+          <option value="GBP">GBP — Bảng Anh</option>
+          <option value="AUD">AUD — Đô la Úc</option>
+          <option value="SGD">SGD — Đô la Singapore</option>
+          <option value="CNY">CNY — Nhân dân tệ</option>
+          <option value="KRW">KRW — Won Hàn Quốc</option>
+          <option value="CHF">CHF — Franc Thụy Sĩ</option>
+          <option value="THB">THB — Baht Thái</option>
+        </select>
+      </div>
+    </div>
+    <button class="btn btn-accent" onclick="saveCurrencies()" data-i18n="btn_save_cur">
+      Lưu cấu hình ngoại tệ
+    </button>
   </div>
 
   <!-- Network & WiFi Section -->
@@ -613,7 +596,13 @@ function applyLanguage(l) {
 
   document.querySelectorAll('[data-i18n]').forEach(el => {
     const k = el.getAttribute('data-i18n');
-    if (dict[k]) el.textContent = dict[k];
+    if (dict[k]) {
+      if (dict[k].indexOf('<') !== -1) {
+        el.innerHTML = dict[k];
+      } else {
+        el.textContent = dict[k];
+      }
+    }
   });
   document.querySelectorAll('[data-i18n-ph]').forEach(el => {
     const k = el.getAttribute('data-i18n-ph');
@@ -945,16 +934,38 @@ async function saveAlarmSettings() {
   }
 }
 
+let isInitialStatusLoaded = false;
+let autoSyncTimer = null;
+
 async function fetchStatus() {
   try {
     const res = await fetch('/status');
+    if (!res.ok) throw new Error('Status fetch failed');
     const data = await res.json();
+
+    // Update connection status badge
+    const badge = document.getElementById('statusBadge');
+    if (badge) {
+      badge.textContent = (currentLang === 1) ? 'Online' : 'Trực tuyến';
+      badge.style.background = 'rgba(0, 230, 118, 0.15)';
+      badge.style.color = 'var(--success)';
+      badge.style.borderColor = 'rgba(0, 230, 118, 0.3)';
+    }
+
     highlightPage(data.page);
     highlightTheme(data.theme);
-    document.getElementById('brightSlider').value = data.brightness;
-    document.getElementById('brightVal').textContent = data.brightness + '%';
-    if (data.cur1) document.getElementById('cur1Select').value = data.cur1;
-    if (data.cur2) document.getElementById('cur2Select').value = data.cur2;
+
+    const bSlider = document.getElementById('brightSlider');
+    if (bSlider && !bSlider.matches(':active')) {
+      bSlider.value = data.brightness;
+      document.getElementById('brightVal').textContent = data.brightness + '%';
+    }
+
+    const cur1 = document.getElementById('cur1Select');
+    if (cur1 && !cur1.matches(':focus') && data.cur1) cur1.value = data.cur1;
+    const cur2 = document.getElementById('cur2Select');
+    if (cur2 && !cur2.matches(':focus') && data.cur2) cur2.value = data.cur2;
+
     if (data.ip) document.getElementById('wifiIp').textContent = data.ip;
     if (data.rssi !== undefined) document.getElementById('wifiRssi').textContent = data.rssi;
 
@@ -985,20 +996,53 @@ async function fetchStatus() {
     }
     if (data.mood !== undefined) {
       highlightMood(data.mood);
-      currentEditMood = data.mood;
+      if (!isInitialStatusLoaded) {
+        currentEditMood = data.mood;
+      }
     }
     if (data.pack !== undefined) {
       highlightPack(data.pack);
     }
-    if (data.customMoods && Array.isArray(data.customMoods)) {
+
+    const tagInp = document.getElementById('customTagInput');
+    const msgInp = document.getElementById('customMsgInput');
+    const isEditingCustom = (tagInp && tagInp.matches(':focus')) || (msgInp && msgInp.matches(':focus'));
+    if (data.customMoods && Array.isArray(data.customMoods) && !isEditingCustom) {
       customMoods = data.customMoods;
+      updateMoodEditorUI();
     }
-    updateMoodEditorUI();
-    if (data.lang !== undefined) {
+
+    if (data.lang !== undefined && data.lang !== currentLang) {
       applyLanguage(data.lang);
     }
-  } catch (e) {}
+
+    isInitialStatusLoaded = true;
+  } catch (e) {
+    const badge = document.getElementById('statusBadge');
+    if (badge) {
+      badge.textContent = (currentLang === 1) ? 'Offline' : 'Mất kết nối';
+      badge.style.background = 'rgba(255, 59, 48, 0.15)';
+      badge.style.color = 'var(--danger)';
+      badge.style.borderColor = 'rgba(255, 59, 48, 0.3)';
+    }
+  }
 }
+
+function startAutoSync() {
+  if (autoSyncTimer) clearInterval(autoSyncTimer);
+  autoSyncTimer = setInterval(() => {
+    // Only poll when browser tab is visible (zero battery/network drain when hidden)
+    if (!document.hidden) {
+      fetchStatus();
+    }
+  }, 3000);
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) {
+    fetchStatus();
+  }
+});
 
 async function toggleWebLang() {
   const next = (currentLang === 1) ? 0 : 1;
@@ -1078,6 +1122,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
 applyLanguage(0);
 fetchStatus();
+startAutoSync();
 </script>
 </body>
 </html>
