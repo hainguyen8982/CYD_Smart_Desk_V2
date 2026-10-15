@@ -171,19 +171,17 @@ void DeskMood::_saveSettings() {
 }
 
 static void drawMemeBitmap160(TFT_eSprite& spr, int16_t startX, int16_t startY, const uint16_t* bmp) {
-    uint16_t* fb = (uint16_t*)spr.getPointer();
+    if (!bmp) return;
     for (int r = 0; r < MEME_BITMAP_H; r++) {
         int16_t py = startY + r;
         if (py < 0 || py >= 240) continue;
-        uint16_t* dst = fb ? (fb + py * 320 + startX) : nullptr;
         int rowIdx = r * MEME_BITMAP_W;
         for (int c = 0; c < MEME_BITMAP_W; c++) {
             int16_t px = startX + c;
             if (px < 0 || px >= 320) continue;
             uint16_t color = pgm_read_word(&bmp[rowIdx + c]);
             if (color != MEME_TRANSPARENT_COLOR) {
-                if (dst) dst[c] = color;
-                else spr.drawPixel(px, py, color);
+                spr.drawPixel(px, py, color);
             }
         }
     }
