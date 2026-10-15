@@ -11,11 +11,18 @@
 enum MoodType : uint8_t {
     MOOD_HAPPY       = 0,   // 🟢 Vui vẻ / Sẵn sàng chém gió (Ready to chat)
     MOOD_FOCUS       = 1,   // 🔴 Tập trung cao độ / Đừng làm phiền (Deep work / DND)
-    MOOD_BUG         = 2,   // ⚡ Bực mình vì bug (Bug hunting)
-    MOOD_LOW_BATTERY = 3,   // 🟡 Cạn pin 1% (Low battery / AFK)
-    MOOD_CHILL       = 4,   // 🟣 Siêu chill (Keep calm & chill)
-    MOOD_TGIF        = 5,   // 🎉 Thứ Sáu rồi (TGIF / Weekend vibe)
+    MOOD_BUG         = 2,   // ⚡ Bực mình / Đang săn bug (Bug hunting / Angry)
+    MOOD_LOW_BATTERY = 3,   // 🟡 Cạn năng lượng 0% (Low battery 0%)
+    MOOD_CHILL       = 4,   // 🟣 Đang chán / Siêu chill (Bored / Chill)
+    MOOD_TGIF        = 5,   // 🎉 Cuối tuần rồi / Quẩy thôi (TGIF / Weekend)
     MOOD_COUNT       = 6
+};
+
+enum MoodPack : uint8_t {
+    PACK_MOCHI = 0,  // Bé Đầu Trọc Mochi (Mochi Guy)
+    PACK_STAR  = 1,  // Ngôi Sao Vàng Cute (Cute Star)
+    PACK_BUNNY = 2,  // Bé Thỏ Trắng Dễ Thương (Cute Bunny)
+    PACK_COUNT = 3
 };
 
 class DeskMood {
@@ -27,6 +34,11 @@ public:
     void setMood(MoodType m);
     void nextMood();
     void prevMood();
+
+    MoodPack getPack() const { return _pack; }
+    void setPack(MoodPack p);
+    void nextPack();
+    const char* getPackName(MoodPack p) const;
 
     const char* getName(MoodType m) const;
     const char* getIcon(MoodType m) const;
@@ -42,9 +54,12 @@ private:
     void _saveSettings();
     void _syncHardwareLed();
 
-    void _drawAvatar(TFT_eSprite& spr, int16_t cx, int16_t cy, MoodType m, uint16_t bgCol);
+    void _drawMochiAvatar(TFT_eSprite& spr, int16_t cx, int16_t cy, MoodType m, uint16_t bgCol);
+    void _drawStarAvatar(TFT_eSprite& spr, int16_t cx, int16_t cy, MoodType m, uint16_t bgCol);
+    void _drawBunnyAvatar(TFT_eSprite& spr, int16_t cx, int16_t cy, MoodType m, uint16_t bgCol);
 
     MoodType _mood;
+    MoodPack _pack;
 };
 
 extern DeskMood deskMood;

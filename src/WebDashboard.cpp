@@ -201,14 +201,21 @@ input[type=range] { width: 100%; accent-color: var(--accent); height: 6px; borde
       <button class="btn-chip" onclick="switchPage(5)">⚙️ Cài đặt</button>
     </div>
 
+    <div style="font-size: 12px; color: var(--text-dim); margin: 14px 0 8px;" data-i18n="sec_pack_sub">Bộ Meme Nhân Vật (Meme Pack):</div>
+    <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap: 6px;" id="packButtons">
+      <button class="btn-chip" onclick="switchPack(0)">👶 Đầu trọc Mochi</button>
+      <button class="btn-chip" onclick="switchPack(1)">⭐ Ngôi sao vàng</button>
+      <button class="btn-chip" onclick="switchPack(2)">🐰 Bé Thỏ trắng</button>
+    </div>
+
     <div style="font-size: 12px; color: var(--text-dim); margin: 14px 0 8px;" data-i18n="sec_mood_sub">Tâm trạng bàn làm việc (Desk Mood):</div>
     <div class="grid-2" id="moodButtons">
-      <button class="btn-chip" onclick="switchMood(0)">😊 Vui vẻ / Chill</button>
-      <button class="btn-chip" onclick="switchMood(1)">🔥 Deep Work</button>
-      <button class="btn-chip" onclick="switchMood(2)">🐛 Bắt Bug</button>
-      <button class="btn-chip" onclick="switchMood(3)">🪫 Pin 1%</button>
-      <button class="btn-chip" onclick="switchMood(4)">☕ Thảnh thơi</button>
-      <button class="btn-chip" onclick="switchMood(5)">🎉 Cuối tuần TGIF</button>
+      <button class="btn-chip" onclick="switchMood(0)">😊 Vui vẻ</button>
+      <button class="btn-chip" onclick="switchMood(1)">📖 Tập trung</button>
+      <button class="btn-chip" onclick="switchMood(2)">😡 Đang bực mình</button>
+      <button class="btn-chip" onclick="switchMood(3)">🪫 Cạn năng lượng 0%</button>
+      <button class="btn-chip" onclick="switchMood(4)">😑 Đang chán / Chill</button>
+      <button class="btn-chip" onclick="switchMood(5)">🎉 Cuối tuần / Quẩy</button>
     </div>
 
     <div style="font-size: 12px; color: var(--text-dim); margin: 14px 0 8px;" data-i18n="theme_sub">Bộ sưu tập Giao diện (Theme):</div>
@@ -339,6 +346,8 @@ const I18N = {
     wifi_mdns: "• Tên miền mDNS: ",
     wifi_ip_prefix: "• Địa chỉ IP hiện tại: ",
     wifi_rssi_prefix: " (Sóng: ",
+    sec_pack_sub: "Bộ Meme Nhân Vật (Meme Pack):",
+    t_pack: "Đã chọn bộ meme: ",
     sec_mood_sub: "Tâm trạng bàn làm việc (Desk Mood):",
     t_mood: "Đã đổi tâm trạng: ",
     btn_reset_wifi: "Đổi mạng WiFi / Chuyển mạng mới",
@@ -389,6 +398,8 @@ const I18N = {
     sec_pet_title: "Pomodoro Companion (Desk Pet)",
     sec_pet_sub: "Select your companion in the center of the Pomodoro dial (types along while you focus):",
     t_pet: "Selected companion: ",
+    sec_pack_sub: "Meme Character Pack:",
+    t_pack: "Selected meme pack: ",
     sec_mood_sub: "Desk Mood / Vibe Signboard:",
     t_mood: "Selected vibe: ",
     sec_snd_title: "Sound & Melodies (Speaker GPIO 26)",
@@ -563,7 +574,19 @@ function switchPet(petId) {
   fetch(`/api/pet?set=${petId}`).catch(() => {});
 }
 
-const MOOD_NAMES = ['Vui ve', 'Deep Work', 'Bat Bug', 'Pin 1%', 'Thanh thoi', 'Cuoi tuan'];
+const PACK_NAMES = ['Đầu trọc Mochi', 'Ngôi sao vàng', 'Bé Thỏ trắng'];
+function highlightPack(id) {
+  const btns = document.querySelectorAll('#packButtons .btn-chip');
+  btns.forEach((b, idx) => b.classList.toggle('active', idx === id));
+}
+function switchPack(packId) {
+  highlightPack(packId);
+  const dict = getDict();
+  showToast(`${dict.t_pack || "Bộ meme: "}${PACK_NAMES[packId] || packId}`);
+  fetch(`/api/mood?pack=${packId}`).catch(() => {});
+}
+
+const MOOD_NAMES = ['Vui vẻ', 'Tập trung', 'Đang bực mình', 'Cạn năng lượng 0%', 'Đang chán / Chill', 'Cuối tuần / Quẩy'];
 function highlightMood(id) {
   const btns = document.querySelectorAll('#moodButtons .btn-chip');
   btns.forEach((b, idx) => b.classList.toggle('active', idx === id));
@@ -668,6 +691,9 @@ async function fetchStatus() {
     if (data.mood !== undefined) {
       highlightMood(data.mood);
     }
+    if (data.pack !== undefined) {
+      highlightPack(data.pack);
+    }
     if (data.lang !== undefined) {
       applyLanguage(data.lang);
     }
@@ -768,6 +794,8 @@ void WebDashboard::_setupRoutes() {
     doc["petName"] = deskPet.getNameCurrent();
     doc["mood"] = (int)deskMood.getMood();
     doc["moodName"] = deskMood.getName(deskMood.getMood());
+    doc["pack"] = (int)deskMood.getPack();
+    doc["packName"] = deskMood.getPackName(deskMood.getPack());
 
     String res;
     serializeJson(doc, res);
@@ -786,18 +814,29 @@ void WebDashboard::_setupRoutes() {
     }
   });
 
-  // ── GET /api/mood?set=X ─────────────────────────────────────────
+  // ── GET /api/mood?set=X&pack=Y ──────────────────────────────────
   _server.on("/api/mood", HTTP_GET, [](AsyncWebServerRequest *request) {
+    bool updated = false;
     if (request->hasParam("set")) {
       uint8_t m = (uint8_t)request->getParam("set")->value().toInt();
-      if (m < 6) {
+      if (m < MOOD_COUNT) {
         deskMood.setMood((MoodType)m);
-        display.triggerRender();
-        request->send(200, "application/json", "{\"success\":true}");
-        return;
+        updated = true;
       }
     }
-    request->send(400, "application/json", "{\"error\":\"Missing or invalid set param\"}");
+    if (request->hasParam("pack")) {
+      uint8_t p = (uint8_t)request->getParam("pack")->value().toInt();
+      if (p < PACK_COUNT) {
+        deskMood.setPack((MoodPack)p);
+        updated = true;
+      }
+    }
+    if (updated) {
+      display.triggerRender();
+      request->send(200, "application/json", "{\"success\":true}");
+    } else {
+      request->send(400, "application/json", "{\"error\":\"Missing or invalid param\"}");
+    }
   });
 
   // ── GET /api/alarm?h=X&m=Y&en=Z&msg=... ─────────────────────────
