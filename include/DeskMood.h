@@ -42,7 +42,7 @@ private:
     void _saveSettings();
     void _syncHardwareLed();
 
-    void _drawAvatar(TFT_eSprite& spr, int16_t cx, int16_t cy, MoodType m, uint16_t cardBg);
+    void _drawAvatar(TFT_eSprite& spr, int16_t cx, int16_t cy, MoodType m, uint16_t bgCol);
 
     MoodType _mood;
 };
