@@ -10,6 +10,7 @@
 #include "WeatherService.h"
 #include "DeskPet.h"
 #include "DeskMood.h"
+#include "AppIcon.h"
 #include <ArduinoJson.h>
 #include <ESPmDNS.h>
 #include <LittleFS.h>
@@ -17,13 +18,60 @@
 
 WebDashboard webDashboard;
 
+// PWA Web App Manifest JSON
+static const char MANIFEST_JSON[] PROGMEM = R"rawliteral({
+  "name": "CYD SmartDesk V2",
+  "short_name": "SmartDesk",
+  "description": "Bảng điều khiển CYD SmartDesk để bàn thông minh",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#070B14",
+  "theme_color": "#070B14",
+  "icons": [
+    {
+      "src": "/app-icon.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+})rawliteral";
+
+// PWA Service Worker script
+static const char SW_JS[] PROGMEM = R"rawliteral(
+const CACHE_NAME = 'cyd-smartdesk-v2';
+self.addEventListener('install', e => {
+  self.skipWaiting();
+});
+self.addEventListener('activate', e => {
+  e.waitUntil(self.clients.claim());
+});
+self.addEventListener('fetch', e => {
+  if (e.request.url.includes('/api/') || e.request.url.includes('/status')) {
+    return;
+  }
+  e.respondWith(
+    fetch(e.request).catch(() => caches.match(e.request))
+  );
+});
+)rawliteral";
+
 // HTML/CSS/JS Dashboard page stored in PROGMEM
 static const char INDEX_HTML[] PROGMEM = R"rawliteral(<!DOCTYPE html>
 <html lang="vi">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>CYD SmartDesk V2 Dashboard</title>
+<title>CYD SmartDesk V2</title>
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#070B14">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SmartDesk">
+<link rel="apple-touch-icon" href="/app-icon.png">
+<link rel="icon" type="image/png" href="/app-icon.png">
 <style>
 :root {
   --bg: #070B14;
@@ -99,6 +147,21 @@ input[type=range] { width: 100%; accent-color: var(--accent); height: 6px; borde
     <div style="display: flex; gap: 8px; align-items: center;">
       <button id="langBtn" class="btn-chip" style="font-size: 11px; padding: 4px 10px; font-weight: 700; color: var(--accent); border-color: var(--accent);" onclick="toggleWebLang()">🇻🇳 Tiếng Việt</button>
       <div class="badge-online" id="statusBadge" data-i18n="status_online">Trực tuyến</div>
+    </div>
+  </div>
+
+  <!-- PWA Install Banner -->
+  <div id="pwaBanner" class="card" style="display:none; padding:12px 14px; background:linear-gradient(135deg, rgba(0,229,255,0.1), rgba(112,0,255,0.12)); border:1px solid var(--accent); flex-direction:row; align-items:center; justify-content:space-between; gap:10px;">
+    <div style="display:flex; align-items:center; gap:10px;">
+      <img src="/app-icon.png" width="38" height="38" style="border-radius:10px; border:1px solid rgba(0,229,255,0.4);" alt="App Icon">
+      <div>
+        <div style="font-size:13px; font-weight:700; color:#fff;" data-i18n="pwa_title">Cài đặt SmartDesk App</div>
+        <div style="font-size:11px; color:var(--text-dim);" data-i18n="pwa_desc">Trải nghiệm toàn màn hình như App xịn</div>
+      </div>
+    </div>
+    <div style="display:flex; gap:6px; align-items:center;">
+      <button type="button" class="btn btn-accent" style="width:auto; padding:6px 12px; font-size:11px; border-radius:8px;" onclick="installPWA()" data-i18n="pwa_btn">Cài đặt</button>
+      <button type="button" class="btn-chip" style="padding:6px 8px; font-size:11px; border-radius:8px;" onclick="dismissPWA()">✕</button>
     </div>
   </div>
 
@@ -453,7 +516,12 @@ const I18N = {
     cur_jpy: "JPY — Yên Nhật", cur_gbp: "GBP — Bảng Anh", cur_aud: "AUD — Đô la Úc",
     cur_sgd: "SGD — Đô la Singapore", cur_cny: "CNY — Nhân dân tệ", cur_krw: "KRW — Won Hàn Quốc",
     cur_chf: "CHF — Franc Thụy Sĩ", cur_thb: "THB — Baht Thái",
-    snd_0: "Tắt âm (Mute)", snd_1: "Cơ bản (Click)", snd_2: "Giọt nước (Water)", snd_3: "Tiếng bíp (Beep)", snd_4: "Tiếng chim (Chirp)"
+    snd_0: "Tắt âm (Mute)", snd_1: "Cơ bản (Click)", snd_2: "Giọt nước (Water)", snd_3: "Tiếng bíp (Beep)", snd_4: "Tiếng chim (Chirp)",
+    pwa_title: "Cài đặt SmartDesk App",
+    pwa_desc: "Trải nghiệm toàn màn hình như App xịn",
+    pwa_btn: "Cài đặt",
+    pwa_ios_hint: "Để cài đặt trên iPhone:\n1. Bấm nút Chia sẻ (biểu tượng ⎋ mũi tên lên dưới thanh Safari)\n2. Chọn 'Thêm vào MH chính' (Add to Home Screen).",
+    pwa_android_hint: "Để cài đặt: Bấm menu trình duyệt (dấu 3 chấm) -> Chọn 'Cài đặt ứng dụng' hoặc 'Thêm vào màn hình chính'."
   },
   1: {
     brand_sub: "Smart Desktop Companion",
@@ -524,7 +592,12 @@ const I18N = {
     cur_jpy: "JPY — Japanese Yen", cur_gbp: "GBP — British Pound", cur_aud: "AUD — Australian Dollar",
     cur_sgd: "SGD — Singapore Dollar", cur_cny: "CNY — Chinese Yuan", cur_krw: "KRW — Korean Won",
     cur_chf: "CHF — Swiss Franc", cur_thb: "THB — Thai Baht",
-    snd_0: "Mute", snd_1: "Mechanical Click", snd_2: "Water Drop", snd_3: "Soft Beep", snd_4: "Dual Chirp"
+    snd_0: "Mute", snd_1: "Mechanical Click", snd_2: "Water Drop", snd_3: "Soft Beep", snd_4: "Dual Chirp",
+    pwa_title: "Install SmartDesk App",
+    pwa_desc: "Full-screen standalone app experience",
+    pwa_btn: "Install",
+    pwa_ios_hint: "To install on iPhone:\n1. Tap the Share button in Safari (icon with arrow up)\n2. Tap 'Add to Home Screen'.",
+    pwa_android_hint: "To install: Tap the browser menu (3 dots) -> Select 'Install app' or 'Add to Home screen'."
   }
 };
 
@@ -951,6 +1024,58 @@ function resetWifi() {
   }
 }
 
+// ── PWA & Service Worker ──────────────────────────────────────────────
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  });
+}
+
+let deferredPrompt = null;
+const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+  if (!isStandalone) {
+    const banner = document.getElementById('pwaBanner');
+    if (banner) banner.style.display = 'flex';
+  }
+});
+
+function installPWA() {
+  const dict = getDict();
+  if (deferredPrompt) {
+    deferredPrompt.prompt();
+    deferredPrompt.userChoice.then((choice) => {
+      if (choice.outcome === 'accepted') {
+        dismissPWA();
+      }
+      deferredPrompt = null;
+    });
+  } else {
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    if (isIOS) {
+      alert(dict.pwa_ios_hint);
+    } else {
+      alert(dict.pwa_android_hint);
+    }
+  }
+}
+
+function dismissPWA() {
+  const banner = document.getElementById('pwaBanner');
+  if (banner) banner.style.display = 'none';
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+  if (isIOS && !isStandalone) {
+    const banner = document.getElementById('pwaBanner');
+    if (banner) banner.style.display = 'flex';
+  }
+});
+
 applyLanguage(0);
 fetchStatus();
 </script>
@@ -992,6 +1117,23 @@ void WebDashboard::_setupRoutes() {
   // ── GET /: Serve mobile dashboard ──────────────────────────────
   _server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
     request->send_P(200, "text/html", INDEX_HTML);
+  });
+
+  // ── GET /manifest.json: PWA Web App Manifest ──────────────────
+  _server.on("/manifest.json", HTTP_GET, [](AsyncWebServerRequest *request) {
+    request->send_P(200, "application/manifest+json", MANIFEST_JSON);
+  });
+
+  // ── GET /sw.js: PWA Service Worker ────────────────────────────
+  _server.on("/sw.js", HTTP_GET, [](AsyncWebServerRequest *request) {
+    request->send_P(200, "application/javascript", SW_JS);
+  });
+
+  // ── GET /app-icon.png: PWA App Icon 192x192 ───────────────────
+  _server.on("/app-icon.png", HTTP_GET, [](AsyncWebServerRequest *request) {
+    AsyncWebServerResponse *response = request->beginResponse_P(200, "image/png", APP_ICON_PNG, APP_ICON_PNG_LEN);
+    response->addHeader("Cache-Control", "public, max-age=604800");
+    request->send(response);
   });
 
   // ── GET /status: System telemetry ─────────────────────────────
