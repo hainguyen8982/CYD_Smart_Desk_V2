@@ -1980,8 +1980,8 @@ bool Display::handleTouch(uint16_t x, uint16_t y) {
             }
         }
 
-        // B1. Chạm trực tiếp vào Pet ở tâm vòng tròn (X: 58..118, Y: 96..156) -> Đổi sang Pet kế tiếp!
-        if (x >= 58 && x <= 118 && y >= 96 && y <= 156) {
+        // B1. Chạm trực tiếp vào Pet ở tâm vòng tròn (X: 52..124, Y: 88..164) -> Đổi sang Pet kế tiếp!
+        if (x >= 52 && x <= 124 && y >= 88 && y <= 164) {
             deskPet.nextPet();
             hardware.playTouchSound();
             _lastRender = 0;
