@@ -16,7 +16,8 @@ enum ActivePage {
     PAGE_CALENDAR = 1,
     PAGE_FINANCE = 2,
     PAGE_POMODORO = 3,
-    PAGE_SETTINGS = 4
+    PAGE_MOOD = 4,
+    PAGE_SETTINGS = 5
 };
 
 class Display {
@@ -141,7 +142,9 @@ private:
     void renderPage1_Calendar();
     void renderPage2_Finance();
     void renderPage3_Pomodoro();
-    void renderPage4_Settings();
+    void renderPage4_Mood();
+    void renderPage5_Settings();
+    void renderPage4_Settings() { renderPage5_Settings(); }
     bool handleTouchSettings(int16_t x, int16_t y);
 
     // ── Smart Dock & Calibration ─────────────────────────────
@@ -151,6 +154,7 @@ private:
     void drawDockIconCalendar(int16_t cx, int16_t cy, bool isActive);
     void drawDockIconFinance(int16_t cx, int16_t cy, bool isActive);
     void drawDockIconPomodoro(int16_t cx, int16_t cy, bool isActive);
+    void drawDockIconMood(int16_t cx, int16_t cy, bool isActive);
     void drawDockIconTheme(int16_t cx, int16_t cy, bool isActive);
 
     // ── Background & Visual Elements ─────────────────────────

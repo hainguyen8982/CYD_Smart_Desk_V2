@@ -9,6 +9,7 @@
 #include "Theme.h"
 #include "WeatherService.h"
 #include "DeskPet.h"
+#include "DeskMood.h"
 #include <ArduinoJson.h>
 #include <ESPmDNS.h>
 #include <LittleFS.h>
@@ -191,12 +192,23 @@ input[type=range] { width: 100%; accent-color: var(--accent); height: 6px; borde
     </div>
 
     <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 8px;" data-i18n="page_sub">Chuyển trang hiển thị:</div>
-    <div id="pageButtons" style="display:grid; grid-template-columns: repeat(5, 1fr); gap: 6px;">
+    <div id="pageButtons" style="display:grid; grid-template-columns: repeat(6, 1fr); gap: 6px;">
       <button class="btn-chip" onclick="switchPage(0)">Đồng hồ</button>
       <button class="btn-chip" onclick="switchPage(1)">Lịch âm</button>
       <button class="btn-chip" onclick="switchPage(2)">Tài chính</button>
       <button class="btn-chip" onclick="switchPage(3)">Pomodoro</button>
-      <button class="btn-chip" onclick="switchPage(4)">⚙️ Cài đặt</button>
+      <button class="btn-chip" onclick="switchPage(4)">Tâm trạng</button>
+      <button class="btn-chip" onclick="switchPage(5)">⚙️ Cài đặt</button>
+    </div>
+
+    <div style="font-size: 12px; color: var(--text-dim); margin: 14px 0 8px;" data-i18n="sec_mood_sub">Tâm trạng bàn làm việc (Desk Mood):</div>
+    <div class="grid-2" id="moodButtons">
+      <button class="btn-chip" onclick="switchMood(0)">😊 Vui vẻ / Chill</button>
+      <button class="btn-chip" onclick="switchMood(1)">🔥 Deep Work</button>
+      <button class="btn-chip" onclick="switchMood(2)">🐛 Bắt Bug</button>
+      <button class="btn-chip" onclick="switchMood(3)">🪫 Pin 1%</button>
+      <button class="btn-chip" onclick="switchMood(4)">☕ Thảnh thơi</button>
+      <button class="btn-chip" onclick="switchMood(5)">🎉 Cuối tuần TGIF</button>
     </div>
 
     <div style="font-size: 12px; color: var(--text-dim); margin: 14px 0 8px;" data-i18n="theme_sub">Bộ sưu tập Giao diện (Theme):</div>
@@ -327,8 +339,10 @@ const I18N = {
     wifi_mdns: "• Tên miền mDNS: ",
     wifi_ip_prefix: "• Địa chỉ IP hiện tại: ",
     wifi_rssi_prefix: " (Sóng: ",
+    sec_mood_sub: "Tâm trạng bàn làm việc (Desk Mood):",
+    t_mood: "Đã đổi tâm trạng: ",
     btn_reset_wifi: "Đổi mạng WiFi / Chuyển mạng mới",
-    p0: "Đồng hồ", p1: "Lịch âm", p2: "Tài chính", p3: "Pomodoro", p4: "⚙️ Cài đặt",
+    p0: "Đồng hồ", p1: "Lịch âm", p2: "Tài chính", p3: "Pomodoro", p4: "Tâm trạng", p5: "⚙️ Cài đặt",
     t_page: "Đã chuyển: ",
     t_snd_save: "Đã lưu cấu hình âm thanh!",
     t_snd_err: "Lỗi lưu âm thanh",
@@ -375,6 +389,8 @@ const I18N = {
     sec_pet_title: "Pomodoro Companion (Desk Pet)",
     sec_pet_sub: "Select your companion in the center of the Pomodoro dial (types along while you focus):",
     t_pet: "Selected companion: ",
+    sec_mood_sub: "Desk Mood / Vibe Signboard:",
+    t_mood: "Selected vibe: ",
     sec_snd_title: "Sound & Melodies (Speaker GPIO 26)",
     snd_touch_label: "Touch sound feedback:",
     snd_melody_label: "Alarm Melody:",
@@ -384,7 +400,7 @@ const I18N = {
     wifi_ip_prefix: "• Current IP Address: ",
     wifi_rssi_prefix: " (Signal: ",
     btn_reset_wifi: "Reset WiFi / Setup New Network",
-    p0: "Clock", p1: "Calendar", p2: "Finance", p3: "Pomodoro", p4: "⚙️ Settings",
+    p0: "Clock", p1: "Calendar", p2: "Finance", p3: "Pomodoro", p4: "Mood", p5: "⚙️ Settings",
     t_page: "Switched to: ",
     t_snd_save: "Sound settings saved!",
     t_snd_err: "Failed to save sound settings",
@@ -451,12 +467,13 @@ function applyLanguage(l) {
   }
 
   const pBtns = document.querySelectorAll('#pageButtons .btn-chip');
-  if (pBtns.length >= 5) {
+  if (pBtns.length >= 6) {
     pBtns[0].textContent = dict.p0;
     pBtns[1].textContent = dict.p1;
     pBtns[2].textContent = dict.p2;
     pBtns[3].textContent = dict.p3;
     pBtns[4].textContent = dict.p4;
+    pBtns[5].textContent = dict.p5;
   }
 }
 
@@ -472,7 +489,7 @@ let pageDebounce = null;
 function switchPage(pageId) {
   highlightPage(pageId);
   const dict = getDict();
-  const pageNames = [dict.p0, dict.p1, dict.p2, dict.p3, dict.p4];
+  const pageNames = [dict.p0, dict.p1, dict.p2, dict.p3, dict.p4, dict.p5];
   showToast(`${dict.t_page}${pageNames[pageId] || pageId}`);
   clearTimeout(pageDebounce);
   pageDebounce = setTimeout(() => {
@@ -544,6 +561,18 @@ function switchPet(petId) {
   const dict = getDict();
   showToast(`${dict.t_pet}${PET_NAMES[petId] || petId}`);
   fetch(`/api/pet?set=${petId}`).catch(() => {});
+}
+
+const MOOD_NAMES = ['Vui ve', 'Deep Work', 'Bat Bug', 'Pin 1%', 'Thanh thoi', 'Cuoi tuan'];
+function highlightMood(id) {
+  const btns = document.querySelectorAll('#moodButtons .btn-chip');
+  btns.forEach((b, idx) => b.classList.toggle('active', idx === id));
+}
+function switchMood(moodId) {
+  highlightMood(moodId);
+  const dict = getDict();
+  showToast(`${dict.t_mood}${MOOD_NAMES[moodId] || moodId}`);
+  fetch(`/api/mood?set=${moodId}`).catch(() => {});
 }
 
 async function saveCurrencies() {
@@ -635,6 +664,9 @@ async function fetchStatus() {
     }
     if (data.pet !== undefined) {
       highlightPet(data.pet);
+    }
+    if (data.mood !== undefined) {
+      highlightMood(data.mood);
     }
     if (data.lang !== undefined) {
       applyLanguage(data.lang);
@@ -734,6 +766,8 @@ void WebDashboard::_setupRoutes() {
     doc["langName"] = getLanguageName();
     doc["pet"] = (int)deskPet.getType();
     doc["petName"] = deskPet.getNameCurrent();
+    doc["mood"] = (int)deskMood.getMood();
+    doc["moodName"] = deskMood.getName(deskMood.getMood());
 
     String res;
     serializeJson(doc, res);
@@ -750,6 +784,20 @@ void WebDashboard::_setupRoutes() {
     } else {
       request->send(400, "application/json", "{\"error\":\"Missing set param\"}");
     }
+  });
+
+  // ── GET /api/mood?set=X ─────────────────────────────────────────
+  _server.on("/api/mood", HTTP_GET, [](AsyncWebServerRequest *request) {
+    if (request->hasParam("set")) {
+      uint8_t m = (uint8_t)request->getParam("set")->value().toInt();
+      if (m < 6) {
+        deskMood.setMood((MoodType)m);
+        display.triggerRender();
+        request->send(200, "application/json", "{\"success\":true}");
+        return;
+      }
+    }
+    request->send(400, "application/json", "{\"error\":\"Missing or invalid set param\"}");
   });
 
   // ── GET /api/alarm?h=X&m=Y&en=Z&msg=... ─────────────────────────

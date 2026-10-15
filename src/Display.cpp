@@ -18,6 +18,7 @@
 #include "DockIconsColor20.h"
 #include "FabXLogo.h"
 #include "DeskPet.h"
+#include "DeskMood.h"
 #include <WiFi.h>
 #include <LittleFS.h>
 #include <Preferences.h>
@@ -48,6 +49,7 @@ void Display::begin() {
     initTheme();                   // Load saved theme from NVS
     loadAlarmSettings();           // Load saved alarm settings from NVS
     deskPet.begin();               // Load saved Desk Pet mascot from NVS
+    deskMood.begin();              // Load saved Desk Mood from NVS
 
     // Mount LittleFS and ensure clean storage (purge leftover wallpaper if any)
     if (LittleFS.begin(true)) {
@@ -394,7 +396,8 @@ void Display::update() {
         case PAGE_CALENDAR: renderPage1_Calendar();     break;
         case PAGE_FINANCE:  renderPage2_Finance();      break;
         case PAGE_POMODORO: renderPage3_Pomodoro();     break;
-        case PAGE_SETTINGS: renderPage4_Settings();     break;
+        case PAGE_MOOD:     renderPage4_Mood();         break;
+        case PAGE_SETTINGS: renderPage5_Settings();     break;
         default:            renderPage0_WeatherClock(); break;
     }
 
@@ -1871,11 +1874,12 @@ bool Display::handleTouch(uint16_t x, uint16_t y) {
         if (y >= 185) {
             // Chạm vào vùng Dock -> Xử lý chức năng chuyển trang / đổi theme
             wakeDock(); // Reset 5s auto-hide timer
-            if (x < 94)                   { setPage(PAGE_CLOCK);    return true; }
-            else if (x >= 94 && x < 138)  { setPage(PAGE_CALENDAR); return true; }
-            else if (x >= 138 && x < 182) { setPage(PAGE_FINANCE);  return true; }
-            else if (x >= 182 && x < 226) { setPage(PAGE_POMODORO); return true; }
-            else if (x >= 226)            { setPage(PAGE_SETTINGS); return true; }
+            if (x < 80)                   { setPage(PAGE_CLOCK);    return true; }
+            else if (x >= 80 && x < 120)  { setPage(PAGE_CALENDAR); return true; }
+            else if (x >= 120 && x < 160) { setPage(PAGE_FINANCE);  return true; }
+            else if (x >= 160 && x < 200) { setPage(PAGE_POMODORO); return true; }
+            else if (x >= 200 && x < 240) { setPage(PAGE_MOOD);     return true; }
+            else if (x >= 240)            { setPage(PAGE_SETTINGS); return true; }
             return true;
         } else {
             // Nhấn ra ngoài vùng Dock (Y < 185) -> TẮT THANH DOCK NGAY
@@ -2056,7 +2060,15 @@ bool Display::handleTouch(uint16_t x, uint16_t y) {
         }
     }
 
-    // 7. If on Settings page (PAGE_SETTINGS):
+    // 7. If on Mood page (PAGE_MOOD):
+    if (_currentPage == PAGE_MOOD) {
+        if (deskMood.handleTouch(x, y)) {
+            _lastRender = 0;
+            return true;
+        }
+    }
+
+    // 8. If on Settings page (PAGE_SETTINGS):
     if (_currentPage == PAGE_SETTINGS) {
         if (handleTouchSettings(x, y)) {
             return true;
@@ -2136,9 +2148,9 @@ void Display::renderDock() {
     }
 
     // Centered Floating Solid Obsidian Dock Capsule (Seamless, no split line)
-    int16_t dockX = 50;
+    int16_t dockX = 38;
     int16_t dockY = 196;
-    int16_t dockW = 220;
+    int16_t dockW = 244;
     int16_t dockH = 36;
     int16_t dockR = 18;
 
@@ -2154,9 +2166,9 @@ void Display::renderDock() {
     // 4. Subtle specular highlight on top edge
     _spr.drawFastHLine(dockX + dockR, dockY, dockW - dockR * 2, RGB565(140, 190, 245));
 
-    // 5 Vector Icon Slots (spaced 44px apart)
-    for (int i = 0; i < 5; i++) {
-        int16_t cx = dockX + 22 + i * 44;
+    // 6 Vector Icon Slots (spaced 40px apart)
+    for (int i = 0; i < 6; i++) {
+        int16_t cx = dockX + 22 + i * 40;
         int16_t cy = dockY + dockH / 2;
         bool isActive = (_currentPage == i);
 
@@ -2172,7 +2184,8 @@ void Display::renderDock() {
             case 1: drawDockIconCalendar(cx, cy, isActive); break;
             case 2: drawDockIconFinance(cx, cy, isActive); break;
             case 3: drawDockIconPomodoro(cx, cy, isActive); break;
-            case 4: drawDockIconTheme(cx, cy, isActive); break;
+            case 4: drawDockIconMood(cx, cy, isActive); break;
+            case 5: drawDockIconTheme(cx, cy, isActive); break;
         }
     }
 }
@@ -2205,6 +2218,10 @@ void Display::drawDockIconFinance(int16_t cx, int16_t cy, bool isActive) {
 
 void Display::drawDockIconPomodoro(int16_t cx, int16_t cy, bool isActive) {
     drawDockBitmap20(_spr, cx, cy, dock_pro_pomodoro_20x20);
+}
+
+void Display::drawDockIconMood(int16_t cx, int16_t cy, bool isActive) {
+    drawDockBitmap20(_spr, cx, cy, dock_pro_mood_20x20);
 }
 
 void Display::drawDockIconTheme(int16_t cx, int16_t cy, bool isActive) {
@@ -3185,10 +3202,17 @@ void Display::renderPage3_Pomodoro() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-//  PAGE 4 — SETTINGS (Pure Seamless Android Material 3 List — ZERO CARDS)
+//  PAGE 4 — DESK MOOD / VIBE SIGNBOARD
+// ═══════════════════════════════════════════════════════════════════════
+void Display::renderPage4_Mood() {
+    deskMood.renderPage(_spr, (uint8_t)getLanguage(), theme.bg);
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  PAGE 5 — SETTINGS (Pure Seamless Android Material 3 List — ZERO CARDS)
 //  6 Rows: Language, Theme, Touch Sound, Alarm Melody, Brightness, System
 // ═══════════════════════════════════════════════════════════════════════
-void Display::renderPage4_Settings() {
+void Display::renderPage5_Settings() {
     // Nền trơn tĩnh (Solid Velvet) chuẩn màu Theme, loại bỏ toàn bộ sao lốm đốm để text rõ nét
     _spr.fillSprite(theme.bg);
 
