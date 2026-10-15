@@ -126,7 +126,6 @@ bool TouchManager::checkTap(uint16_t *x, uint16_t *y) {
                 _lastTapTime = now;
                 *x = currX;
                 *y = currY;
-                hardware.playClick();
                 Serial.printf("[Touch] ✓ Tap registered on press at (%d, %d)\n", *x, *y);
                 return true;
             }
@@ -141,7 +140,6 @@ bool TouchManager::checkTap(uint16_t *x, uint16_t *y) {
                     _lastTapTime = now;
                     *x = _startX;
                     *y = _startY;
-                    hardware.playClick();
                     return true;
                 }
             }

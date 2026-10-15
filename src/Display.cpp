@@ -1874,6 +1874,7 @@ bool Display::handleTouch(uint16_t x, uint16_t y) {
         if (y >= 185) {
             // Chạm vào vùng Dock -> Xử lý chức năng chuyển trang / đổi theme
             wakeDock(); // Reset 5s auto-hide timer
+            hardware.playClick();
             if (x < 80)                   { setPage(PAGE_CLOCK);    return true; }
             else if (x >= 80 && x < 120)  { setPage(PAGE_CALENDAR); return true; }
             else if (x >= 120 && x < 160) { setPage(PAGE_FINANCE);  return true; }
@@ -1885,6 +1886,7 @@ bool Display::handleTouch(uint16_t x, uint16_t y) {
             // Nhấn ra ngoài vùng Dock (Y < 185) -> TẮT THANH DOCK NGAY
             // Cảm ứng của các chức năng màn hình lúc này CHƯA được kích hoạt
             _dockVisible = false;
+            hardware.playClick();
             _lastRender = 0; // Vẽ lại màn hình với Dock đã ẩn
             return true;
         }
@@ -1914,6 +1916,7 @@ bool Display::handleTouch(uint16_t x, uint16_t y) {
     if (_currentPage == PAGE_CLOCK) {
         // 5a. Chạm vào BIỂU TƯỢNG CHUÔNG (X: 245..315, Y: 15..70) -> Bật / Tắt nhanh chuông báo
         if (x >= 245 && x <= 315 && y >= 15 && y <= 70) {
+            hardware.playClick();
             if (!_alarmEnabled) {
                 // Đang TẮT -> BẬT lên và hiện popup báo giờ báo thức trong 3s để user biết
                 _alarmEnabled = true;
@@ -1937,6 +1940,7 @@ bool Display::handleTouch(uint16_t x, uint16_t y) {
 
         // 5b. Chạm vào VÙNG GIỮA ĐỒNG HỒ (Quanh dấu : giữa giờ và phút, X: 115..205, Y: 15..95) -> Mở Cài Đặt Giờ
         if (x >= 115 && x <= 205 && y >= 15 && y <= 95) {
+            hardware.playClick();
             loadAlarmSettings();
             _alarmAutoCloseTime = 0; // Mở thủ công thì không tự đóng sau 3s
             _activePopup = POPUP_ALARM;
@@ -2079,6 +2083,7 @@ bool Display::handleTouch(uint16_t x, uint16_t y) {
     if (!_dockVisible) {
         if (y >= 210) {
             wakeDock();
+            hardware.playClick();
             return true;
         }
         return false;

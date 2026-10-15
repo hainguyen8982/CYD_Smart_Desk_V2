@@ -91,41 +91,53 @@ void HardwareManager::playClick() {
 void HardwareManager::playTouchSound() {
     if (_soundVolume == 0 || _touchSound == TOUCH_SND_MUTE) return;
 
+    // Chống lặp tiếng (Debounce): Loại bỏ triệt để xung đột kích hoạt 2 tiếng liên tiếp trong 60ms
+    unsigned long now = millis();
+    static unsigned long lastTouchSoundTime = 0;
+    if (now - lastTouchSoundTime < 60) {
+        return;
+    }
+    lastTouchSoundTime = now;
+
     switch (_touchSound) {
         case TOUCH_SND_CLICK:
-            // 1. Phím cơ (Mechanical Click): Tiếng "tách" đanh, dứt khoát với 2 micro-snap
-            tone(PIN_SPEAKER, 1400, 4);
+            // 1. Phím cơ (Mechanical Click): Tiếng "tách" đanh, dứt khoát với 2 micro-snap (1600Hz -> 2400Hz)
+            tone(PIN_SPEAKER, 1600, 4);
             delay(5);
-            tone(PIN_SPEAKER, 2100, 6);
+            tone(PIN_SPEAKER, 2400, 6);
             delay(7);
             break;
 
         case TOUCH_SND_WATER:
-            // 2. Giọt nước (Water Drop): Quét tần số tăng dần từ 1100Hz -> 2400Hz tạo hiệu ứng "bõm/tõm" bong bóng nước
-            for (int f = 1100; f <= 2300; f += 200) {
-                tone(PIN_SPEAKER, f, 5);
-                delay(5);
-            }
+            // 2. Giọt nước (Water Drop): Tiếng "bõm" giọt nước nảy nhanh (1300Hz -> 2800Hz trong ~25ms)
+            tone(PIN_SPEAKER, 1300, 4);
+            delay(5);
+            tone(PIN_SPEAKER, 1750, 5);
+            delay(6);
+            tone(PIN_SPEAKER, 2200, 6);
+            delay(7);
+            tone(PIN_SPEAKER, 2800, 8);
+            delay(9);
             break;
 
         case TOUCH_SND_BEEP:
-            // 3. Bíp nhẹ (Soft Chime): Tiếng chuông "ting" êm ái ngân 32ms ở nốt Đô cao (C6 - 1047Hz)
-            tone(PIN_SPEAKER, 1047, 32);
-            delay(34);
+            // 3. Bíp nhẹ (Soft Beep): Tiếng "ting" dứt khoát, thanh thoát ở 1175Hz (nốt Re cao D6) trong 26ms
+            tone(PIN_SPEAKER, 1175, 26);
+            delay(28);
             break;
 
         case TOUCH_SND_CHIRP:
-            // 4. Chíp chíp (Dual Chirp): 2 tiếng chim hót liên tiếp có khoảng ngắt rõ rệt ("chíp - chíp")
-            tone(PIN_SPEAKER, 1760, 16); // Nốt A6
-            delay(18);
+            // 4. Chíp chíp (Dual Chirp): 2 tiếng chim non lảnh lót A6 (1760Hz) và D7 (2349Hz)
+            tone(PIN_SPEAKER, 1760, 12);
+            delay(14);
             noTone(PIN_SPEAKER);
-            delay(18);                    // Khoảng nghỉ giữa 2 tiếng
-            tone(PIN_SPEAKER, 2349, 22); // Nốt D7 cao
-            delay(24);
+            delay(14);
+            tone(PIN_SPEAKER, 2349, 16);
+            delay(18);
             break;
 
         default:
-            tone(PIN_SPEAKER, 1400, 5);
+            tone(PIN_SPEAKER, 1600, 5);
             delay(6);
             break;
     }
