@@ -281,15 +281,18 @@ input[type=range] { width: 100%; accent-color: var(--accent); height: 6px; borde
       <button class="btn-chip" onclick="switchMood(5)">🎉 Cuối tuần / Quẩy</button>
     </div>
 
-    <!-- Custom Status Toggle & Inputs -->
+    <!-- Custom Status Toggle & Inputs (Tùy chỉnh riêng cho từng trạng thái) -->
     <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 14px;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-        <label for="customMoodToggle" style="font-size: 13px; font-weight: 600; color: #fff; cursor: pointer;" data-i18n="mood_custom_toggle">Tùy chỉnh Tiêu đề & Thông điệp riêng</label>
+        <div style="font-size: 13px; font-weight: 600; color: #fff;">
+          <span data-i18n="mood_custom_prefix">Tùy chỉnh riêng cho: </span>
+          <span id="curEditMoodName" style="color: var(--accent); font-weight: 700;">🟢 Vui vẻ</span>
+        </div>
         <input type="checkbox" id="customMoodToggle" onchange="toggleCustomMood(this.checked)" style="width: 18px; height: 18px; accent-color: var(--accent); cursor: pointer;">
       </div>
       <div style="font-size: 11px; color: var(--text-dim); line-height: 1.5; margin-bottom: 12px;" data-i18n="mood_custom_hint">
-        • Tắt: Dùng nội dung mặc định theo Meme (tự động Song ngữ VI/EN).<br>
-        • Bật: Hiển thị chính xác những gì bạn nhập bên dưới.
+        • Bật để đặt Tiêu đề & Thông điệp riêng cho trạng thái này.<br>
+        • Các trạng thái khác vẫn giữ nguyên câu riêng hoặc câu mặc định song ngữ.
       </div>
 
       <div id="customMoodInputs" style="display: none;">
@@ -309,22 +312,16 @@ input[type=range] { width: 100%; accent-color: var(--accent); height: 6px; borde
           <input type="text" id="customMsgInput" class="select-control" maxlength="36" placeholder="VD: Ve sau 30p * Gap thi goi dien nhe!" oninput="updateMoodCounters()" style="width: 100%;">
         </div>
 
-        <!-- Quick suggestions -->
-        <div style="font-size: 11px; color: var(--text-dim); margin-bottom: 6px;" data-i18n="mood_quick_label">Gợi ý nhanh:</div>
-        <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px;">
-          <button class="btn-chip" style="font-size: 11px; padding: 4px 8px;" onclick="setQuickMood('DANG DI HOP', 'Ve sau 30p * Can thi goi dien!')">💼 Đang họp</button>
-          <button class="btn-chip" style="font-size: 11px; padding: 4px 8px;" onclick="setQuickMood('DANG FIX BUG', 'Xin dung lam phien * Dang tap trung!')">⚡ Fix bug</button>
-          <button class="btn-chip" style="font-size: 11px; padding: 4px 8px;" onclick="setQuickMood('THEM CA PHE', 'Ai di ca phe khong? Minh bao!')">☕ Uống cà phê</button>
-          <button class="btn-chip" style="font-size: 11px; padding: 4px 8px;" onclick="setQuickMood('DI AN TRUA', 'Nghi trua roi * 13h quay lai lam viec!')">🍱 Đi ăn trưa</button>
-          <button class="btn-chip" style="font-size: 11px; padding: 4px 8px;" onclick="setQuickMood('DANG SPRINT', 'Tap trung 100% * Khong tiep khach!')">🚀 Chạy Sprint</button>
-        </div>
+        <!-- Quick suggestions container -->
+        <div style="font-size: 11px; color: var(--text-dim); margin-bottom: 6px;" data-i18n="mood_quick_label">Gợi ý nhanh cho trạng thái này:</div>
+        <div id="quickMoodContainer" style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px;"></div>
 
         <div style="display: flex; gap: 8px;">
-          <button class="btn btn-accent" style="flex: 2;" onclick="saveCustomMood()">
+          <button type="button" class="btn btn-accent" style="flex: 2;" onclick="saveCustomMood()">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-            <span data-i18n="btn_save_mood">Lưu Trạng Thái</span>
+            <span id="saveMoodBtnText" data-i18n="btn_save_mood">Lưu Trạng Thái</span>
           </button>
-          <button class="btn btn-outline" style="flex: 1;" onclick="resetDefaultMood()" data-i18n="btn_reset_mood">Mặc định</button>
+          <button type="button" class="btn btn-outline" style="flex: 1;" onclick="resetDefaultMood()" data-i18n="btn_reset_mood">Mặc định</button>
         </div>
       </div>
     </div>
@@ -425,8 +422,9 @@ const I18N = {
     t_pack: "Đã chọn bộ meme: ",
     sec_mood_sub: "Tâm trạng bàn làm việc (Desk Mood):",
     t_mood: "Đã đổi tâm trạng: ",
+    mood_custom_prefix: "Tùy chỉnh riêng cho: ",
     mood_custom_toggle: "Tùy chỉnh Tiêu đề & Thông điệp riêng",
-    mood_custom_hint: "• Tắt: Dùng nội dung mặc định theo Meme (tự động Song ngữ VI/EN).<br>• Bật: Hiển thị chính xác những gì bạn nhập bên dưới.",
+    mood_custom_hint: "• Bật để đặt Tiêu đề & Thông điệp riêng cho trạng thái này.<br>• Các trạng thái khác vẫn giữ nguyên câu riêng hoặc câu mặc định song ngữ.",
     mood_tag_label: "Tiêu đề bảng Neon (Tối đa 20 ký tự, in HOA):",
     mood_msg_label: "Câu nhắn phía dưới (Tối đa 36 ký tự):",
     mood_quick_label: "Gợi ý nhanh:",
@@ -487,8 +485,9 @@ const I18N = {
     t_pack: "Selected meme pack: ",
     sec_mood_sub: "Desk Mood / Vibe Signboard:",
     t_mood: "Selected vibe: ",
+    mood_custom_prefix: "Customizing for: ",
     mood_custom_toggle: "Custom Status Title & Message",
-    mood_custom_hint: "• Off: Default bilingual meme quotes (VI/EN).<br>• On: Displays exactly what you type below.",
+    mood_custom_hint: "• Enable to set custom Title & Message specifically for this mood.<br>• Other moods will keep their own custom or default bilingual quotes.",
     mood_tag_label: "Neon Sign Title (Max 20 chars, UPPERCASE):",
     mood_msg_label: "Sub-message below (Max 36 chars):",
     mood_quick_label: "Quick presets:",
@@ -680,16 +679,73 @@ function switchPack(packId) {
   fetch(`/api/mood?pack=${packId}`).catch(() => {});
 }
 
-const MOOD_NAMES = ['Vui vẻ', 'Tập trung', 'Đang bực mình', 'Cạn năng lượng 0%', 'Đang chán / Chill', 'Cuối tuần / Quẩy'];
+const MOOD_NAMES = ['🟢 Vui vẻ', '🔴 Tập trung cao', '⚡ Đang bực mình', '🟡 Sập nguồn 0%', '🟣 Đang chán', '🎉 Cuối tuần / Quẩy'];
+let currentEditMood = 0;
+let customMoods = [
+  { en: false, tag: "", msg: "" },
+  { en: false, tag: "", msg: "" },
+  { en: false, tag: "", msg: "" },
+  { en: false, tag: "", msg: "" },
+  { en: false, tag: "", msg: "" },
+  { en: false, tag: "", msg: "" }
+];
+
+const QUICK_SUGGESTIONS = [
+  // 0: Happy
+  [ { t: 'DANG CHILL', m: 'Ca phe sang khong? * Minh bao!' }, { t: 'GOOD VIBES', m: 'Ngay moi tran day nang luong!' } ],
+  // 1: Focus
+  [ { t: 'DANG SPRINT', m: '100% Focus * Khong tiep khach!' }, { t: 'DEEP WORK', m: 'Dang chay deadline den trua!' } ],
+  // 2: Bug
+  [ { t: 'DANG FIX BUG', m: 'Xin dung lam phien * Dang rat quau!' }, { t: 'DND - CAY CU', m: 'Bug chua fix xong * Cho mot chut!' } ],
+  // 3: Low bat
+  [ { t: 'SAP NGUON 0%', m: 'Can nap tra sua gap!' }, { t: 'HET PIN ROI', m: 'Di sac pin mot lat se quay lai!' } ],
+  // 4: Chill
+  [ { t: 'BO PHO / CHAN', m: 'Chung nao moi duoc tan ca day?' }, { t: 'BUON NGU QUA', m: 'Nghi ngoi mat 5 phut nap nang luong!' } ],
+  // 5: TGIF
+  [ { t: 'QUAY THOI!', m: 'Toi nay xoa het deadline!' }, { t: 'TGIF - CHILL', m: 'Cuoi tuan roi * Di quau ngay thoi!' } ]
+];
+
 function highlightMood(id) {
   const btns = document.querySelectorAll('#moodButtons .btn-chip');
   btns.forEach((b, idx) => b.classList.toggle('active', idx === id));
 }
+
+function renderQuickMoodChips(m) {
+  const container = document.getElementById('quickMoodContainer');
+  if (!container) return;
+  const list = QUICK_SUGGESTIONS[m] || QUICK_SUGGESTIONS[0];
+  container.innerHTML = list.map(item => 
+    `<button type="button" class="btn-chip" style="font-size: 11px; padding: 4px 8px;" onclick="setQuickMood('${item.t}', '${item.m}')">${item.t}</button>`
+  ).join('');
+}
+
+function updateMoodEditorUI() {
+  const m = currentEditMood;
+  const lbl = document.getElementById('curEditMoodName');
+  if (lbl) lbl.textContent = MOOD_NAMES[m] || ('Mood ' + m);
+
+  const cm = customMoods[m] || { en: false, tag: "", msg: "" };
+  const toggle = document.getElementById('customMoodToggle');
+  const wrap = document.getElementById('customMoodInputs');
+  if (toggle) toggle.checked = cm.en;
+  if (wrap) wrap.style.display = cm.en ? 'block' : 'none';
+
+  const tagInp = document.getElementById('customTagInput');
+  const msgInp = document.getElementById('customMsgInput');
+  if (tagInp && !tagInp.matches(':focus')) tagInp.value = cm.tag || '';
+  if (msgInp && !msgInp.matches(':focus')) msgInp.value = cm.msg || '';
+
+  renderQuickMoodChips(m);
+  updateMoodCounters();
+}
+
 function switchMood(moodId) {
   highlightMood(moodId);
+  currentEditMood = moodId;
   const dict = getDict();
   showToast(`${dict.t_mood}${MOOD_NAMES[moodId] || moodId}`);
   fetch(`/api/mood?set=${moodId}`).catch(() => {});
+  updateMoodEditorUI();
 }
 
 function updateMoodCounters() {
@@ -714,17 +770,21 @@ function setQuickMood(tag, msg) {
 }
 
 function toggleCustomMood(en) {
+  const m = currentEditMood;
+  if (!customMoods[m]) customMoods[m] = { en: false, tag: "", msg: "" };
+  customMoods[m].en = en;
   const wrap = document.getElementById('customMoodInputs');
   if (wrap) wrap.style.display = en ? 'block' : 'none';
   if (!en) {
-    fetch('/api/mood?custom=0')
+    fetch(`/api/mood?m=${m}&custom=0`)
       .then(r => r.json())
-      .then(() => showToast(getDict().t_mood_default || 'Đã trở về nội dung mặc định (Song ngữ)!'))
+      .then(() => showToast(`${getDict().t_mood_default || 'Đã khôi phục mặc định: '} ${MOOD_NAMES[m]}!`))
       .catch(() => {});
   }
 }
 
 async function saveCustomMood() {
+  const m = currentEditMood;
   const en = document.getElementById('customMoodToggle').checked ? 1 : 0;
   let tag = document.getElementById('customTagInput').value.trim();
   let msg = document.getElementById('customMsgInput').value.trim();
@@ -736,10 +796,12 @@ async function saveCustomMood() {
   document.getElementById('customMsgInput').value = msg;
   updateMoodCounters();
 
+  customMoods[m] = { en: (en === 1), tag: tag, msg: msg };
+
   try {
-    const res = await fetch(`/api/mood?custom=${en}&tag=${encodeURIComponent(tag)}&msg=${encodeURIComponent(msg)}`);
+    const res = await fetch(`/api/mood?m=${m}&custom=${en}&tag=${encodeURIComponent(tag)}&msg=${encodeURIComponent(msg)}`);
     if (res.ok) {
-      showToast(getDict().t_mood_saved || 'Đã lưu trạng thái tùy chỉnh!');
+      showToast(`${getDict().t_mood_saved || 'Đã lưu trạng thái: '} ${MOOD_NAMES[m]}!`);
     } else {
       showToast(getDict().t_cmd_err || 'Lỗi khi lưu trạng thái!', false);
     }
@@ -749,18 +811,12 @@ async function saveCustomMood() {
 }
 
 function resetDefaultMood() {
-  const toggle = document.getElementById('customMoodToggle');
-  if (toggle) toggle.checked = false;
-  const wrap = document.getElementById('customMoodInputs');
-  if (wrap) wrap.style.display = 'none';
-  const tagInp = document.getElementById('customTagInput');
-  const msgInp = document.getElementById('customMsgInput');
-  if (tagInp) tagInp.value = '';
-  if (msgInp) msgInp.value = '';
-  updateMoodCounters();
-  fetch('/api/mood?custom=0')
+  const m = currentEditMood;
+  customMoods[m] = { en: false, tag: "", msg: "" };
+  updateMoodEditorUI();
+  fetch(`/api/mood?m=${m}&custom=0`)
     .then(r => r.json())
-    .then(() => showToast(getDict().t_mood_default || 'Đã khôi phục nội dung mặc định (Song ngữ)!'))
+    .then(() => showToast(`${getDict().t_mood_default || 'Đã khôi phục mặc định: '} ${MOOD_NAMES[m]}!`))
     .catch(() => {});
 }
 
@@ -856,31 +912,15 @@ async function fetchStatus() {
     }
     if (data.mood !== undefined) {
       highlightMood(data.mood);
+      currentEditMood = data.mood;
     }
     if (data.pack !== undefined) {
       highlightPack(data.pack);
     }
-    if (data.useCustomMood !== undefined) {
-      const toggle = document.getElementById('customMoodToggle');
-      if (toggle && !toggle.matches(':focus')) {
-        toggle.checked = data.useCustomMood;
-        const wrap = document.getElementById('customMoodInputs');
-        if (wrap) wrap.style.display = data.useCustomMood ? 'block' : 'none';
-      }
+    if (data.customMoods && Array.isArray(data.customMoods)) {
+      customMoods = data.customMoods;
     }
-    if (data.customTag !== undefined) {
-      const inp = document.getElementById('customTagInput');
-      if (inp && !inp.matches(':focus') && !inp.value) {
-        inp.value = data.customTag;
-      }
-    }
-    if (data.customMsg !== undefined) {
-      const inp = document.getElementById('customMsgInput');
-      if (inp && !inp.matches(':focus') && !inp.value) {
-        inp.value = data.customMsg;
-      }
-    }
-    updateMoodCounters();
+    updateMoodEditorUI();
     if (data.lang !== undefined) {
       applyLanguage(data.lang);
     }
@@ -983,9 +1023,17 @@ void WebDashboard::_setupRoutes() {
     doc["moodName"] = deskMood.getName(deskMood.getMood());
     doc["pack"] = (int)deskMood.getPack();
     doc["packName"] = deskMood.getPackName(deskMood.getPack());
-    doc["useCustomMood"] = deskMood.isCustom();
-    doc["customTag"] = deskMood.getCustomTag();
-    doc["customMsg"] = deskMood.getCustomMessage();
+    doc["useCustomMood"] = deskMood.isCurrentCustom();
+    doc["customTag"] = deskMood.getCustomTag(deskMood.getMood());
+    doc["customMsg"] = deskMood.getCustomMessage(deskMood.getMood());
+
+    JsonArray cArr = doc["customMoods"].to<JsonArray>();
+    for (int i = 0; i < MOOD_COUNT; i++) {
+        JsonObject mObj = cArr.add<JsonObject>();
+        mObj["en"] = deskMood.isCustom((MoodType)i);
+        mObj["tag"] = deskMood.getCustomTag((MoodType)i);
+        mObj["msg"] = deskMood.getCustomMessage((MoodType)i);
+    }
 
     String res;
     serializeJson(doc, res);
@@ -1004,7 +1052,7 @@ void WebDashboard::_setupRoutes() {
     }
   });
 
-  // ── GET /api/mood?set=X&pack=Y&custom=Z&tag=...&msg=... ──────────
+  // ── GET /api/mood?set=X&pack=Y&m=I&custom=Z&tag=...&msg=... ──────────
   _server.on("/api/mood", HTTP_GET, [](AsyncWebServerRequest *request) {
     bool updated = false;
     if (request->hasParam("set")) {
@@ -1022,11 +1070,16 @@ void WebDashboard::_setupRoutes() {
       }
     }
     if (request->hasParam("custom")) {
-      bool en = (request->getParam("custom")->value() == "1" || request->getParam("custom")->value() == "true");
-      String tag = request->hasParam("tag") ? request->getParam("tag")->value() : "";
-      String msg = request->hasParam("msg") ? request->getParam("msg")->value() : "";
-      deskMood.setCustom(en, tag.length() > 0 ? tag.c_str() : nullptr, msg.length() > 0 ? msg.c_str() : nullptr);
-      updated = true;
+      uint8_t targetMood = request->hasParam("m") 
+                           ? (uint8_t)request->getParam("m")->value().toInt() 
+                           : (uint8_t)deskMood.getMood();
+      if (targetMood < MOOD_COUNT) {
+        bool en = (request->getParam("custom")->value() == "1" || request->getParam("custom")->value() == "true");
+        String tag = request->hasParam("tag") ? request->getParam("tag")->value() : "";
+        String msg = request->hasParam("msg") ? request->getParam("msg")->value() : "";
+        deskMood.setCustomForMood((MoodType)targetMood, en, tag.length() > 0 ? tag.c_str() : nullptr, msg.length() > 0 ? msg.c_str() : nullptr);
+        updated = true;
+      }
     }
     if (updated) {
       display.triggerRender();

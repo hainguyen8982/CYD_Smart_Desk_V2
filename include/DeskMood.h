@@ -46,11 +46,13 @@ public:
     const char* getMessage(MoodType m, uint8_t lang) const;
     uint16_t    getAccentColor(MoodType m) const;
 
-    // Custom Status Management (Tự đặt câu trạng thái riêng)
-    bool isCustom() const { return _useCustom; }
-    const char* getCustomTag() const { return _customTag; }
-    const char* getCustomMessage() const { return _customMessage; }
-    void setCustom(bool enabled, const char* tag = nullptr, const char* msg = nullptr);
+    // Custom Status Management (Tự đặt câu trạng thái riêng CHO TỪNG TÂM TRẠNG)
+    bool isCustom(MoodType m) const { return (m < MOOD_COUNT) ? _customEnabled[m] : false; }
+    bool isCurrentCustom() const { return isCustom(_mood); }
+    const char* getCustomTag(MoodType m) const { return (m < MOOD_COUNT) ? _customTags[m] : ""; }
+    const char* getCustomMessage(MoodType m) const { return (m < MOOD_COUNT) ? _customMsgs[m] : ""; }
+    void setCustomForMood(MoodType m, bool enabled, const char* tag = nullptr, const char* msg = nullptr);
+    void resetMoodToDefault(MoodType m);
 
     void renderPage(TFT_eSprite& spr, uint8_t lang, uint16_t themeBg);
     bool handleTouch(int16_t x, int16_t y);
@@ -62,9 +64,9 @@ private:
 
     MoodType _mood;
     MoodPack _pack;
-    bool     _useCustom;
-    char     _customTag[24];      // Max 20 chars + null
-    char     _customMessage[40];  // Max 36 chars + null
+    bool     _customEnabled[MOOD_COUNT];
+    char     _customTags[MOOD_COUNT][24];      // Max 20 chars + null for each mood
+    char     _customMsgs[MOOD_COUNT][40];      // Max 36 chars + null for each mood
 };
 
 extern DeskMood deskMood;

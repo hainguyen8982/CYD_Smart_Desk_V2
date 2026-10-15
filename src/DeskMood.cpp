@@ -10,9 +10,12 @@
 
 DeskMood deskMood;
 
-DeskMood::DeskMood() : _mood(MOOD_HAPPY), _pack(PACK_MOCHI), _useCustom(false) {
-    _customTag[0] = '\0';
-    _customMessage[0] = '\0';
+DeskMood::DeskMood() : _mood(MOOD_HAPPY), _pack(PACK_MOCHI) {
+    for (int i = 0; i < MOOD_COUNT; i++) {
+        _customEnabled[i] = false;
+        _customTags[i][0] = '\0';
+        _customMsgs[i][0] = '\0';
+    }
 }
 
 void DeskMood::begin() {
@@ -199,21 +202,30 @@ static String sanitizeAscii(const String& input) {
     return out;
 }
 
-void DeskMood::setCustom(bool enabled, const char* tag, const char* msg) {
-    _useCustom = enabled;
+void DeskMood::setCustomForMood(MoodType m, bool enabled, const char* tag, const char* msg) {
+    if (m >= MOOD_COUNT) return;
+    _customEnabled[m] = enabled;
     if (tag != nullptr) {
         String cleanTag = sanitizeAscii(String(tag));
         cleanTag.toUpperCase();
         cleanTag.trim();
-        strncpy(_customTag, cleanTag.c_str(), sizeof(_customTag) - 1);
-        _customTag[sizeof(_customTag) - 1] = '\0';
+        strncpy(_customTags[m], cleanTag.c_str(), sizeof(_customTags[m]) - 1);
+        _customTags[m][sizeof(_customTags[m]) - 1] = '\0';
     }
     if (msg != nullptr) {
         String cleanMsg = sanitizeAscii(String(msg));
         cleanMsg.trim();
-        strncpy(_customMessage, cleanMsg.c_str(), sizeof(_customMessage) - 1);
-        _customMessage[sizeof(_customMessage) - 1] = '\0';
+        strncpy(_customMsgs[m], cleanMsg.c_str(), sizeof(_customMsgs[m]) - 1);
+        _customMsgs[m][sizeof(_customMsgs[m]) - 1] = '\0';
     }
+    _saveSettings();
+}
+
+void DeskMood::resetMoodToDefault(MoodType m) {
+    if (m >= MOOD_COUNT) return;
+    _customEnabled[m] = false;
+    _customTags[m][0] = '\0';
+    _customMsgs[m][0] = '\0';
     _saveSettings();
 }
 
@@ -224,13 +236,19 @@ void DeskMood::_loadSettings() {
         _mood = (m < MOOD_COUNT) ? (MoodType)m : MOOD_HAPPY;
         uint8_t p = prefs.getUChar("pack", (uint8_t)PACK_MOCHI);
         _pack = (p < PACK_COUNT) ? (MoodPack)p : PACK_MOCHI;
-        _useCustom = prefs.getBool("custom", false);
-        String t = prefs.getString("tag", "");
-        String msg = prefs.getString("msg", "");
-        strncpy(_customTag, t.c_str(), sizeof(_customTag) - 1);
-        _customTag[sizeof(_customTag) - 1] = '\0';
-        strncpy(_customMessage, msg.c_str(), sizeof(_customMessage) - 1);
-        _customMessage[sizeof(_customMessage) - 1] = '\0';
+        uint8_t mask = prefs.getUChar("c_mask", 0);
+        for (int i = 0; i < MOOD_COUNT; i++) {
+            _customEnabled[i] = (mask & (1 << i)) != 0;
+            char kTag[8], kMsg[8];
+            snprintf(kTag, sizeof(kTag), "t_%d", i);
+            snprintf(kMsg, sizeof(kMsg), "m_%d", i);
+            String t = prefs.getString(kTag, "");
+            String msg = prefs.getString(kMsg, "");
+            strncpy(_customTags[i], t.c_str(), sizeof(_customTags[i]) - 1);
+            _customTags[i][sizeof(_customTags[i]) - 1] = '\0';
+            strncpy(_customMsgs[i], msg.c_str(), sizeof(_customMsgs[i]) - 1);
+            _customMsgs[i][sizeof(_customMsgs[i]) - 1] = '\0';
+        }
         prefs.end();
     }
 }
@@ -240,9 +258,16 @@ void DeskMood::_saveSettings() {
     if (prefs.begin("cyd_mood", false)) {
         prefs.putUChar("mood", (uint8_t)_mood);
         prefs.putUChar("pack", (uint8_t)_pack);
-        prefs.putBool("custom", _useCustom);
-        prefs.putString("tag", _customTag);
-        prefs.putString("msg", _customMessage);
+        uint8_t mask = 0;
+        for (int i = 0; i < MOOD_COUNT; i++) {
+            if (_customEnabled[i]) mask |= (1 << i);
+            char kTag[8], kMsg[8];
+            snprintf(kTag, sizeof(kTag), "t_%d", i);
+            snprintf(kMsg, sizeof(kMsg), "m_%d", i);
+            prefs.putString(kTag, _customTags[i]);
+            prefs.putString(kMsg, _customMsgs[i]);
+        }
+        prefs.putUChar("c_mask", mask);
         prefs.end();
     }
 }
@@ -308,8 +333,11 @@ void DeskMood::renderPage(TFT_eSprite& spr, uint8_t lang, uint16_t themeBg) {
     spr.drawLine(icx, icy + 2, icx - 3, icy + 5, accent);
 
     // 3. BIỂN BÁO NEON TỰ ĐỘNG SCALE BÓNG CHUẨN XÁC THEO ĐỘ DÀI TEXT (Y = 166..194)
-    // Nếu dùng Custom -> Hiển thị trực tiếp những gì user nhập; Nếu mặc định -> Song ngữ chuẩn
-    const char* tagStr = (_useCustom && _customTag[0] != '\0') ? _customTag : getTag(_mood, lang);
+    // Nếu mood hiện tại được custom -> Hiển thị text custom riêng của mood đó!
+    // Nếu không -> Hiển thị text mặc định song ngữ (VI/EN) chuẩn của mood đó!
+    const char* tagStr = (_customEnabled[_mood] && _customTags[_mood][0] != '\0')
+                         ? _customTags[_mood]
+                         : getTag(_mood, lang);
 
     uint8_t fontToUse = 2; // Font 2 đậm, gọn gàng và đẹp mắt dưới meme khổng lồ
     int16_t textW = spr.textWidth(tagStr, fontToUse);
@@ -332,8 +360,10 @@ void DeskMood::renderPage(TFT_eSprite& spr, uint8_t lang, uint16_t themeBg) {
     spr.setTextColor(C_BLACK);
     spr.drawString(tagStr, cx, tagY + tagH / 2, fontToUse);
 
-    // 4. CÂU QUOTE VĂN PHÒNG HÀI HƯỚC HOẶC CUSTOM (Y = 199)
-    const char* msgStr = (_useCustom && _customMessage[0] != '\0') ? _customMessage : getMessage(_mood, lang);
+    // 4. CÂU QUOTE VĂN PHÒNG HÀI HƯỚC HOẶC CUSTOM RIÊNG CỦA MOOD (Y = 199)
+    const char* msgStr = (_customEnabled[_mood] && _customMsgs[_mood][0] != '\0')
+                         ? _customMsgs[_mood]
+                         : getMessage(_mood, lang);
     spr.setTextDatum(MC_DATUM);
     spr.setTextColor(C_WHITE);
     spr.drawString(msgStr, cx, 200, 2);
