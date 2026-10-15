@@ -201,8 +201,33 @@ void DeskMood::renderPage(TFT_eSprite& spr, uint8_t lang, uint16_t themeBg) {
     const uint16_t* memeBmp = getMemeBitmap((uint8_t)_pack, (uint8_t)_mood);
     drawMemeBitmap160(spr, cx - MEME_BITMAP_W / 2, cy - MEME_BITMAP_H / 2, memeBmp);
 
-    // 3. BIỂN BÁO NEON TỰ ĐỘNG SCALE BÓNG CHUẨN XÁC THEO ĐỘ DÀI TEXT (Y = 166..194)
+    // 2b. NÚT ĐỔI BỘ MEME GÓC TRÊN BÊN PHẢI (4 GÓC BO TRÒN CAPSULE, KHÔNG VÁT CẠNH)
+    int16_t pBtnW = 98;
+    int16_t pBtnH = 22;
+    int16_t pBtnX = 320 - pBtnW - 8; // X = 214..312
+    int16_t pBtnY = 8;
+    int16_t pBtnR = pBtnH / 2; // Bo tròn 4 góc r=11 mềm mại, tuyệt đối không vát cạnh
+
+    // Đổ bóng & Nền kính đen mờ (Obsidian Frosted Glass)
+    spr.fillSmoothRoundRect(pBtnX, pBtnY + 2, pBtnW, pBtnH, pBtnR, RGB565(2, 4, 8), themeBg);
+    spr.fillSmoothRoundRect(pBtnX, pBtnY, pBtnW, pBtnH, pBtnR, RGB565(18, 24, 36), themeBg);
+    spr.drawRoundRect(pBtnX, pBtnY, pBtnW, pBtnH, pBtnR, RGB565(55, 70, 95));
+
+    // Chấm chỉ thị neon theo mood
     uint16_t accent = getAccentColor(_mood);
+    spr.fillSmoothCircle(pBtnX + 10, pBtnY + pBtnH / 2, 3, accent, RGB565(18, 24, 36));
+
+    // Tên gói meme đang hiển thị (Mochi Guy / Cute Star / Cute Bunny)
+    spr.setTextDatum(ML_DATUM);
+    spr.setTextColor(RGB565(220, 230, 245));
+    spr.drawString(getPackName(_pack), pBtnX + 18, pBtnY + pBtnH / 2, 2);
+
+    // Mũi tên chuyển đổi '>' neon
+    spr.setTextDatum(MR_DATUM);
+    spr.setTextColor(accent);
+    spr.drawString(">", pBtnX + pBtnW - 6, pBtnY + pBtnH / 2, 2);
+
+    // 3. BIỂN BÁO NEON TỰ ĐỘNG SCALE BÓNG CHUẨN XÁC THEO ĐỘ DÀI TEXT (Y = 166..194)
     const char* tagStr = getTag(_mood, lang);
 
     uint8_t fontToUse = 2; // Font 2 đậm, gọn gàng và đẹp mắt dưới meme khổng lồ
@@ -247,7 +272,14 @@ void DeskMood::renderPage(TFT_eSprite& spr, uint8_t lang, uint16_t themeBg) {
 //  TOUCH TRỰC TIẾP TRÊN MEME ĐỂ XOAY VÒNG CHUYỂN TRẠNG THÁI
 // ═══════════════════════════════════════════════════════════════════════
 bool DeskMood::handleTouch(int16_t x, int16_t y) {
-    // Chạm vào bất kỳ vị trí nào trên meme (trên vùng Dock) để chuyển tâm trạng kế tiếp
+    // 1. Chạm vào nút Đổi Bộ Meme (Góc trên bên phải: X >= 200 && Y <= 40)
+    if (x >= 200 && y <= 40) {
+        nextPack(); // Đổi Mochi Guy -> Cute Star -> Cute Bunny -> Mochi Guy
+        hardware.playClick();
+        return true;
+    }
+
+    // 2. Chạm vào bất kỳ vị trí nào trên meme (trên vùng Dock) để chuyển tâm trạng kế tiếp
     if (y < 196) {
         nextMood(); // Xoay vòng tròn 0 -> 1 -> 2 -> 3 -> 4 -> 5 -> 0
         hardware.playClick();
