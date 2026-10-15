@@ -16,6 +16,7 @@
 #include "WeatherService.h"
 #include "FinanceService.h"
 #include "WebDashboard.h"
+#include "NetworkTask.h"
 
 void setup() {
     Serial.begin(115200);
@@ -43,11 +44,11 @@ void setup() {
     // 5. Connect WiFi, sync NTP, fetch weather
     weather.begin();
 
-    // 6. Initialize & fetch real-time finance market rates
+    // 6. Initialize & fetch real-time finance market rates (direct on boot)
     finance.begin();
     if (weather.isConnected()) {
         display.showBootStatus("Fetching Market Rates...", 96);
-        finance.fetchNow();
+        finance.fetchDirect();
     }
 
     // 7. Start Web Dashboard for mobile controls & settings
@@ -56,8 +57,12 @@ void setup() {
         webDashboard.begin();
     }
 
+    // 8. Start non-blocking FreeRTOS background task pinned to Core 0
+    networkTask.begin();
+
     display.showBootStatus("System Ready!", 100);
-    delay(300);
+    hardware.playStartupJingle();
+    delay(200);
 
     Serial.println("[System] Setup complete!");
     Serial.printf("[System] Free heap: %d bytes\n", ESP.getFreeHeap());

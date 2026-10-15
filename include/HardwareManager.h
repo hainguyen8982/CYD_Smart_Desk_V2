@@ -49,6 +49,7 @@ public:
     // ── Buzzer & Sound Feedback (GPIO 26 -> Audio Amp -> Speaker) ──
     void playClick();                                    // Tactile audio feedback (respects _touchSound)
     void playBeep(uint16_t freqHz = 2400, uint16_t durationMs = 50);
+    void playStartupJingle();                            // Windows-style Ambient Cyber boot completion jingle
     void playAlarmTune();
     void stopSound();
     void setSoundVolume(uint8_t volPercent);

@@ -2,6 +2,7 @@
 //  WebDashboard.cpp — Web server implementation for CYD SmartDesk V2
 // ═══════════════════════════════════════════════════════════════════════
 #include "WebDashboard.h"
+#include "Language.h"
 #include "Display.h"
 #include "FinanceService.h"
 #include "HardwareManager.h"
@@ -89,26 +90,27 @@ input[type=range] { width: 100%; accent-color: var(--accent); height: 6px; borde
       <div class="brand-icon">V2</div>
       <div>
         <div class="brand-title">CYD SmartDesk</div>
-        <div class="brand-sub">Màn hình để bàn thông minh</div>
+        <div class="brand-sub" data-i18n="brand_sub">Màn hình để bàn thông minh</div>
       </div>
     </div>
-    <div class="badge-online" id="statusBadge">Trực tuyến</div>
+    <div style="display: flex; gap: 8px; align-items: center;">
+      <button id="langBtn" class="btn-chip" style="font-size: 11px; padding: 4px 10px; font-weight: 700; color: var(--accent); border-color: var(--accent);" onclick="toggleWebLang()">🇻🇳 Tiếng Việt</button>
+      <div class="badge-online" id="statusBadge" data-i18n="status_online">Trực tuyến</div>
+    </div>
   </div>
-
-
 
   <!-- Currency Settings Section -->
   <div class="card">
     <div class="card-title">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v12M17 10H9.5a2.5 2.5 0 0 0 0 5H14a2.5 2.5 0 0 1 0 5H7"/></svg>
-      Cấu hình Ngoại tệ
+      <span data-i18n="sec_cur_title">Cấu hình Ngoại tệ</span>
     </div>
-    <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 12px;">
+    <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 12px;" data-i18n="sec_cur_sub">
       Tùy chọn 2 đồng ngoại tệ bạn muốn theo dõi trên màn hình để bàn:
     </div>
     <div class="grid-2" style="margin-bottom: 12px;">
       <div>
-        <div style="font-size: 11px; color: var(--text-dim); margin-bottom: 6px;">Ngoại tệ 1 (Mục trên):</div>
+        <div style="font-size: 11px; color: var(--text-dim); margin-bottom: 6px;" data-i18n="cur1_label">Ngoại tệ 1 (Mục trên):</div>
         <select id="cur1Select" class="select-control">
           <option value="USD">USD — Đô la Mỹ</option>
           <option value="EUR">EUR — Euro</option>
@@ -124,7 +126,7 @@ input[type=range] { width: 100%; accent-color: var(--accent); height: 6px; borde
         </select>
       </div>
       <div>
-        <div style="font-size: 11px; color: var(--text-dim); margin-bottom: 6px;">Ngoại tệ 2 (Mục dưới):</div>
+        <div style="font-size: 11px; color: var(--text-dim); margin-bottom: 6px;" data-i18n="cur2_label">Ngoại tệ 2 (Mục dưới):</div>
         <select id="cur2Select" class="select-control">
           <option value="CAD">CAD — Đô la Canada</option>
           <option value="EUR">EUR — Euro</option>
@@ -140,7 +142,7 @@ input[type=range] { width: 100%; accent-color: var(--accent); height: 6px; borde
         </select>
       </div>
     </div>
-    <button class="btn btn-accent" onclick="saveCurrencies()">
+    <button class="btn btn-accent" onclick="saveCurrencies()" data-i18n="btn_save_cur">
       Lưu cấu hình ngoại tệ
     </button>
   </div>
@@ -149,9 +151,9 @@ input[type=range] { width: 100%; accent-color: var(--accent); height: 6px; borde
   <div class="card">
     <div class="card-title">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-      Báo thức & Lời nhắc SmartDesk
+      <span data-i18n="sec_alarm_title">Báo thức & Lời nhắc SmartDesk</span>
     </div>
-    <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 12px;">
+    <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 12px;" data-i18n="sec_alarm_sub">
       Thiết lập giờ báo thức và lời nhắn hiển thị trên màn hình để bàn:
     </div>
 
@@ -159,23 +161,23 @@ input[type=range] { width: 100%; accent-color: var(--accent); height: 6px; borde
       <input type="time" id="alarmTimeInput" class="select-control" style="font-size: 17px; font-weight: 600; padding: 6px 10px; width: 130px; text-align: center;">
       <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; user-select: none;">
         <input type="checkbox" id="alarmEnInput" style="width: 18px; height: 18px; accent-color: var(--accent);">
-        <span>Kích hoạt báo thức</span>
+        <span data-i18n="alarm_en_label">Kích hoạt báo thức</span>
       </label>
     </div>
 
     <div style="margin-bottom: 10px;">
-      <div style="font-size: 11px; color: var(--text-dim); margin-bottom: 4px;">Nội dung lời nhắc / thông báo khi chuông reo:</div>
-      <input type="text" id="alarmMsgInput" class="select-control" placeholder="VD: Uống nước, Vận động, Họp online..." maxlength="36" style="width: 100%;">
+      <div style="font-size: 11px; color: var(--text-dim); margin-bottom: 4px;" data-i18n="alarm_msg_label">Nội dung lời nhắc / thông báo khi chuông reo:</div>
+      <input type="text" id="alarmMsgInput" class="select-control" placeholder="VD: Uống nước, Vận động, Họp online..." data-i18n-ph="alarm_msg_ph" maxlength="36" style="width: 100%;">
     </div>
 
     <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px;">
-      <button class="btn-chip" style="font-size: 11px; padding: 3px 8px;" onclick="setQuickMsg('Uong nuoc & Thu gian')">💧 Uống nước</button>
-      <button class="btn-chip" style="font-size: 11px; padding: 3px 8px;" onclick="setQuickMsg('Dung day & Vuon vai')">🏃 Vận động</button>
-      <button class="btn-chip" style="font-size: 11px; padding: 3px 8px;" onclick="setQuickMsg('Nghi ngoi mat 5 phut')">☕ Nghỉ ngơi</button>
-      <button class="btn-chip" style="font-size: 11px; padding: 3px 8px;" onclick="setQuickMsg('Het gio lam viec!')">💼 Tan ca</button>
+      <button class="btn-chip" style="font-size: 11px; padding: 3px 8px;" onclick="setQuickMsg('drink')" data-i18n="quick_drink">💧 Uống nước</button>
+      <button class="btn-chip" style="font-size: 11px; padding: 3px 8px;" onclick="setQuickMsg('sport')" data-i18n="quick_sport">🏃 Vận động</button>
+      <button class="btn-chip" style="font-size: 11px; padding: 3px 8px;" onclick="setQuickMsg('rest')" data-i18n="quick_rest">☕ Nghỉ ngơi</button>
+      <button class="btn-chip" style="font-size: 11px; padding: 3px 8px;" onclick="setQuickMsg('work')" data-i18n="quick_work">💼 Tan ca</button>
     </div>
 
-    <button class="btn btn-accent" onclick="saveAlarmSettings()">
+    <button class="btn btn-accent" onclick="saveAlarmSettings()" data-i18n="btn_save_alarm">
       Lưu cài đặt báo thức
     </button>
   </div>
@@ -184,10 +186,10 @@ input[type=range] { width: 100%; accent-color: var(--accent); height: 6px; borde
   <div class="card">
     <div class="card-title">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-      Điều khiển màn hình từ xa
+      <span data-i18n="sec_ctrl_title">Điều khiển màn hình từ xa</span>
     </div>
 
-    <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 8px;">Chuyển trang hiển thị:</div>
+    <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 8px;" data-i18n="page_sub">Chuyển trang hiển thị:</div>
     <div id="pageButtons" style="display:grid; grid-template-columns: repeat(5, 1fr); gap: 6px;">
       <button class="btn-chip" onclick="switchPage(0)">Đồng hồ</button>
       <button class="btn-chip" onclick="switchPage(1)">Lịch âm</button>
@@ -196,7 +198,7 @@ input[type=range] { width: 100%; accent-color: var(--accent); height: 6px; borde
       <button class="btn-chip" onclick="switchPage(4)">⚙️ Cài đặt</button>
     </div>
 
-    <div style="font-size: 12px; color: var(--text-dim); margin: 14px 0 8px;">Bộ sưu tập Giao diện (Theme):</div>
+    <div style="font-size: 12px; color: var(--text-dim); margin: 14px 0 8px;" data-i18n="theme_sub">Bộ sưu tập Giao diện (Theme):</div>
     <div class="grid-2" id="themeButtons">
       <button class="btn-chip" onclick="switchTheme(0)">Cyber Neon</button>
       <button class="btn-chip" onclick="switchTheme(1)">Minimal Obsidian</button>
@@ -210,7 +212,7 @@ input[type=range] { width: 100%; accent-color: var(--accent); height: 6px; borde
 
     <div class="slider-wrap">
       <div class="slider-hdr">
-        <span>Độ sáng màn hình</span>
+        <span data-i18n="bright_label">Độ sáng màn hình</span>
         <span id="brightVal">80%</span>
       </div>
       <input type="range" id="brightSlider" min="10" max="100" value="80" oninput="changeBrightness(this.value)">
@@ -221,11 +223,11 @@ input[type=range] { width: 100%; accent-color: var(--accent); height: 6px; borde
   <div class="card">
     <div class="card-title">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
-      Âm thanh & Điệu chuông (Loa GPIO 26)
+      <span data-i18n="sec_snd_title">Âm thanh & Điệu chuông (Loa GPIO 26)</span>
     </div>
     <div class="grid-2">
       <div>
-        <label style="font-size: 12px; color: var(--text-dim); display: block; margin-bottom: 6px;">Âm chạm cảm ứng:</label>
+        <label style="font-size: 12px; color: var(--text-dim); display: block; margin-bottom: 6px;" data-i18n="snd_touch_label">Âm chạm cảm ứng:</label>
         <select class="select-control" id="touchSndSelect" onchange="changeSound()">
           <option value="0">Tắt âm (Mute)</option>
           <option value="1">Cơ bản (Click)</option>
@@ -235,7 +237,7 @@ input[type=range] { width: 100%; accent-color: var(--accent); height: 6px; borde
         </select>
       </div>
       <div>
-        <label style="font-size: 12px; color: var(--text-dim); display: block; margin-bottom: 6px;">Điệu chuông báo thức:</label>
+        <label style="font-size: 12px; color: var(--text-dim); display: block; margin-bottom: 6px;" data-i18n="snd_melody_label">Điệu chuông báo thức:</label>
         <select class="select-control" id="alarmMelodySelect" onchange="changeSound()">
           <option value="0">Classic Alarm</option>
           <option value="1">Melodic Chime</option>
@@ -247,7 +249,7 @@ input[type=range] { width: 100%; accent-color: var(--accent); height: 6px; borde
     <div style="margin-top: 12px;">
       <button class="btn btn-primary" onclick="testAlarmMelody()">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-        Phát thử chuông báo thức
+        <span data-i18n="btn_test_melody">Phát thử chuông báo thức</span>
       </button>
     </div>
   </div>
@@ -256,13 +258,13 @@ input[type=range] { width: 100%; accent-color: var(--accent); height: 6px; borde
   <div class="card">
     <div class="card-title">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>
-      Cài đặt Mạng & WiFi
+      <span data-i18n="sec_wifi_title">Cài đặt Mạng & WiFi</span>
     </div>
     <div style="font-size: 12px; color: var(--text-dim); line-height: 1.7; margin-bottom: 12px;">
-      <div>• Tên miền mDNS: <b style="color:var(--accent);">http://smartdesk.local</b></div>
-      <div>• Địa chỉ IP hiện tại: <span id="wifiIp" style="color:#fff;">...</span> (Sóng: <span id="wifiRssi">...</span> dBm)</div>
+      <div><span data-i18n="wifi_mdns">• Tên miền mDNS: </span><b style="color:var(--accent);">http://smartdesk.local</b></div>
+      <div><span data-i18n="wifi_ip_prefix">• Địa chỉ IP hiện tại: </span><span id="wifiIp" style="color:#fff;">...</span><span data-i18n="wifi_rssi_prefix"> (Sóng: </span><span id="wifiRssi">...</span> dBm)</div>
     </div>
-    <button class="btn btn-outline" style="border-color:var(--danger); color:var(--danger); width:100%;" onclick="resetWifi()">
+    <button class="btn btn-outline" style="border-color:var(--danger); color:var(--danger); width:100%;" onclick="resetWifi()" data-i18n="btn_reset_wifi">
       Đổi mạng WiFi / Chuyển mạng mới
     </button>
   </div>
@@ -272,6 +274,168 @@ input[type=range] { width: 100%; accent-color: var(--accent); height: 6px; borde
 <div id="toast">Thông báo</div>
 
 <script>
+let currentLang = 0;
+const I18N = {
+  0: {
+    brand_sub: "Màn hình để bàn thông minh",
+    status_online: "Trực tuyến",
+    sec_cur_title: "Cấu hình Ngoại tệ",
+    sec_cur_sub: "Tùy chọn 2 đồng ngoại tệ bạn muốn theo dõi trên màn hình để bàn:",
+    cur1_label: "Ngoại tệ 1 (Mục trên):",
+    cur2_label: "Ngoại tệ 2 (Mục dưới):",
+    btn_save_cur: "Lưu cấu hình ngoại tệ",
+    sec_alarm_title: "Báo thức & Lời nhắc SmartDesk",
+    sec_alarm_sub: "Thiết lập giờ báo thức và lời nhắn hiển thị trên màn hình để bàn:",
+    alarm_en_label: "Kích hoạt báo thức",
+    alarm_msg_label: "Nội dung lời nhắc / thông báo khi chuông reo:",
+    alarm_msg_ph: "VD: Uống nước, Vận động, Họp online...",
+    quick_drink: "💧 Uống nước",
+    quick_sport: "🏃 Vận động",
+    quick_rest: "☕ Nghỉ ngơi",
+    quick_work: "💼 Tan ca",
+    btn_save_alarm: "Lưu cài đặt báo thức",
+    sec_ctrl_title: "Điều khiển màn hình từ xa",
+    page_sub: "Chuyển trang hiển thị:",
+    theme_sub: "Bộ sưu tập Giao diện (Theme):",
+    bright_label: "Độ sáng màn hình",
+    sec_snd_title: "Âm thanh & Điệu chuông (Loa GPIO 26)",
+    snd_touch_label: "Âm chạm cảm ứng:",
+    snd_melody_label: "Điệu chuông báo thức:",
+    btn_test_melody: "Phát thử chuông báo thức",
+    sec_wifi_title: "Cài đặt Mạng & WiFi",
+    wifi_mdns: "• Tên miền mDNS: ",
+    wifi_ip_prefix: "• Địa chỉ IP hiện tại: ",
+    wifi_rssi_prefix: " (Sóng: ",
+    btn_reset_wifi: "Đổi mạng WiFi / Chuyển mạng mới",
+    p0: "Đồng hồ", p1: "Lịch âm", p2: "Tài chính", p3: "Pomodoro", p4: "⚙️ Cài đặt",
+    t_page: "Đã chuyển: ",
+    t_snd_save: "Đã lưu cấu hình âm thanh!",
+    t_snd_err: "Lỗi lưu âm thanh",
+    t_test_melody: "Đang phát thử chuông trên loa...",
+    t_theme: "Đã đổi: ",
+    t_cur_updating: "Đang cập nhật tỉ giá",
+    t_cur_ok: "Đã đổi tỉ giá sang",
+    t_cur_err: "Lỗi cập nhật ngoại tệ!",
+    t_conn_err: "Lỗi kết nối!",
+    t_alarm_ok: "Đã lưu cài đặt báo thức thành công!",
+    t_alarm_err: "Lỗi khi lưu báo thức",
+    t_lang_switched: "Đã chuyển sang Tiếng Việt!",
+    t_cmd_err: "Lỗi gửi lệnh",
+    confirm_wifi_reset: "Xác nhận đổi mạng WiFi?\n\nThiết bị sẽ xóa mật khẩu WiFi hiện tại và khởi động lại vào điểm phát sóng 'CYD-SmartDesk-V2' (192.168.4.1) để bạn kết nối WiFi mới.",
+    alert_rebooting: "Đang khởi động lại...\nVui lòng kết nối vào WiFi 'CYD-SmartDesk-V2' trên điện thoại để cài đặt.",
+    cur_usd: "USD — Đô la Mỹ", cur_eur: "EUR — Euro", cur_cad: "CAD — Đô la Canada",
+    cur_jpy: "JPY — Yên Nhật", cur_gbp: "GBP — Bảng Anh", cur_aud: "AUD — Đô la Úc",
+    cur_sgd: "SGD — Đô la Singapore", cur_cny: "CNY — Nhân dân tệ", cur_krw: "KRW — Won Hàn Quốc",
+    cur_chf: "CHF — Franc Thụy Sĩ", cur_thb: "THB — Baht Thái",
+    snd_0: "Tắt âm (Mute)", snd_1: "Cơ bản (Click)", snd_2: "Giọt nước (Water)", snd_3: "Tiếng bíp (Beep)", snd_4: "Tiếng chim (Chirp)"
+  },
+  1: {
+    brand_sub: "Smart Desktop Companion",
+    status_online: "Online",
+    sec_cur_title: "Currency Settings",
+    sec_cur_sub: "Select 2 currencies to track on your desktop screen:",
+    cur1_label: "Currency 1 (Top):",
+    cur2_label: "Currency 2 (Bottom):",
+    btn_save_cur: "Save Currency Settings",
+    sec_alarm_title: "Alarm & Smart Reminders",
+    sec_alarm_sub: "Configure alarm time and notification message for desktop screen:",
+    alarm_en_label: "Enable Alarm",
+    alarm_msg_label: "Reminder message when alarm rings:",
+    alarm_msg_ph: "e.g., Drink water, Stretch, Meeting...",
+    quick_drink: "💧 Drink water",
+    quick_sport: "🏃 Exercise",
+    quick_rest: "☕ Short break",
+    quick_work: "💼 Off work",
+    btn_save_alarm: "Save Alarm Settings",
+    sec_ctrl_title: "Remote Screen Control",
+    page_sub: "Switch Display Page:",
+    theme_sub: "Theme Presets:",
+    bright_label: "Screen Brightness",
+    sec_snd_title: "Sound & Melodies (Speaker GPIO 26)",
+    snd_touch_label: "Touch sound feedback:",
+    snd_melody_label: "Alarm Melody:",
+    btn_test_melody: "Test Alarm Melody",
+    sec_wifi_title: "Network & WiFi Settings",
+    wifi_mdns: "• mDNS Domain: ",
+    wifi_ip_prefix: "• Current IP Address: ",
+    wifi_rssi_prefix: " (Signal: ",
+    btn_reset_wifi: "Reset WiFi / Setup New Network",
+    p0: "Clock", p1: "Calendar", p2: "Finance", p3: "Pomodoro", p4: "⚙️ Settings",
+    t_page: "Switched to: ",
+    t_snd_save: "Sound settings saved!",
+    t_snd_err: "Failed to save sound settings",
+    t_test_melody: "Playing alarm melody on speaker...",
+    t_theme: "Switched to: ",
+    t_cur_updating: "Updating exchange rates for",
+    t_cur_ok: "Updated exchange rates to",
+    t_cur_err: "Failed to update currencies!",
+    t_conn_err: "Connection error!",
+    t_alarm_ok: "Alarm settings saved successfully!",
+    t_alarm_err: "Failed to save alarm settings",
+    t_lang_switched: "Switched to English!",
+    t_cmd_err: "Failed to send command",
+    confirm_wifi_reset: "Confirm WiFi network reset?\n\nThe device will erase current WiFi credentials and restart into AP hotspot 'CYD-SmartDesk-V2' (192.168.4.1) so you can connect to a new WiFi network.",
+    alert_rebooting: "Restarting device...\nPlease connect to WiFi 'CYD-SmartDesk-V2' on your phone/PC to configure.",
+    cur_usd: "USD — US Dollar", cur_eur: "EUR — Euro", cur_cad: "CAD — Canadian Dollar",
+    cur_jpy: "JPY — Japanese Yen", cur_gbp: "GBP — British Pound", cur_aud: "AUD — Australian Dollar",
+    cur_sgd: "SGD — Singapore Dollar", cur_cny: "CNY — Chinese Yuan", cur_krw: "KRW — Korean Won",
+    cur_chf: "CHF — Swiss Franc", cur_thb: "THB — Thai Baht",
+    snd_0: "Mute", snd_1: "Mechanical Click", snd_2: "Water Drop", snd_3: "Soft Beep", snd_4: "Dual Chirp"
+  }
+};
+
+function getDict() {
+  return I18N[currentLang] || I18N[0];
+}
+
+function applyLanguage(l) {
+  currentLang = l;
+  const dict = getDict();
+  const btn = document.getElementById('langBtn');
+  if (btn) btn.textContent = (l === 1) ? '🇬🇧 English' : '🇻🇳 Tiếng Việt';
+
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const k = el.getAttribute('data-i18n');
+    if (dict[k]) el.textContent = dict[k];
+  });
+  document.querySelectorAll('[data-i18n-ph]').forEach(el => {
+    const k = el.getAttribute('data-i18n-ph');
+    if (dict[k]) el.placeholder = dict[k];
+  });
+
+  const curNames = {
+    USD: dict.cur_usd, EUR: dict.cur_eur, CAD: dict.cur_cad,
+    JPY: dict.cur_jpy, GBP: dict.cur_gbp, AUD: dict.cur_aud,
+    SGD: dict.cur_sgd, CNY: dict.cur_cny, KRW: dict.cur_krw,
+    CHF: dict.cur_chf, THB: dict.cur_thb
+  };
+  ['cur1Select', 'cur2Select'].forEach(selId => {
+    const sel = document.getElementById(selId);
+    if (sel) {
+      Array.from(sel.options).forEach(opt => {
+        if (curNames[opt.value]) opt.textContent = curNames[opt.value];
+      });
+    }
+  });
+
+  const sndSel = document.getElementById('touchSndSelect');
+  if (sndSel) {
+    const sndNames = [dict.snd_0, dict.snd_1, dict.snd_2, dict.snd_3, dict.snd_4];
+    Array.from(sndSel.options).forEach((opt, idx) => {
+      if (sndNames[idx]) opt.textContent = sndNames[idx];
+    });
+  }
+
+  const pBtns = document.querySelectorAll('#pageButtons .btn-chip');
+  if (pBtns.length >= 5) {
+    pBtns[0].textContent = dict.p0;
+    pBtns[1].textContent = dict.p1;
+    pBtns[2].textContent = dict.p2;
+    pBtns[3].textContent = dict.p3;
+    pBtns[4].textContent = dict.p4;
+  }
+}
+
 function showToast(msg, isSuccess = true) {
   const t = document.getElementById('toast');
   t.textContent = msg;
@@ -283,8 +447,9 @@ function showToast(msg, isSuccess = true) {
 let pageDebounce = null;
 function switchPage(pageId) {
   highlightPage(pageId);
-  const pageNames = ['Đồng hồ', 'Lịch âm', 'Tài chính', 'Pomodoro', 'Cài đặt'];
-  showToast(`Đã chuyển: ${pageNames[pageId] || pageId}`);
+  const dict = getDict();
+  const pageNames = [dict.p0, dict.p1, dict.p2, dict.p3, dict.p4];
+  showToast(`${dict.t_page}${pageNames[pageId] || pageId}`);
   clearTimeout(pageDebounce);
   pageDebounce = setTimeout(() => {
     fetch(`/api/page?id=${pageId}`).catch(() => {});
@@ -297,15 +462,16 @@ function changeSound() {
   const melody = document.getElementById('alarmMelodySelect').value;
   clearTimeout(soundDebounce);
   soundDebounce = setTimeout(() => {
+    const dict = getDict();
     fetch(`/api/sound?touch=${touch}&melody=${melody}`)
       .then(r => r.json())
-      .then(() => showToast('Đã lưu cấu hình âm thanh!'))
-      .catch(() => showToast('Lỗi lưu âm thanh', false));
+      .then(() => showToast(dict.t_snd_save))
+      .catch(() => showToast(dict.t_snd_err, false));
   }, 100);
 }
 
 function testAlarmMelody() {
-  showToast('Đang phát thử chuông trên loa...');
+  showToast(getDict().t_test_melody);
   fetch('/api/sound?test=1').catch(() => {});
 }
 
@@ -317,7 +483,8 @@ const THEME_NAMES = [
 let themeDebounce = null;
 function switchTheme(themeId) {
   highlightTheme(themeId);
-  showToast(`Đã đổi: ${THEME_NAMES[themeId] || themeId}`);
+  const dict = getDict();
+  showToast(`${dict.t_theme}${THEME_NAMES[themeId] || themeId}`);
   clearTimeout(themeDebounce);
   themeDebounce = setTimeout(() => {
     fetch(`/api/theme?id=${themeId}`).catch(() => {});
@@ -346,27 +513,35 @@ function highlightTheme(id) {
 async function saveCurrencies() {
   const c1 = document.getElementById('cur1Select').value;
   const c2 = document.getElementById('cur2Select').value;
-  showToast(`Đang cập nhật tỉ giá ${c1} & ${c2}...`);
+  const dict = getDict();
+  showToast(`${dict.t_cur_updating} ${c1} & ${c2}...`);
   try {
     const res = await fetch(`/api/currency?c1=${c1}&c2=${c2}`);
     if (res.ok) {
-      showToast(`Đã đổi tỉ giá sang ${c1} & ${c2}!`);
+      showToast(`${dict.t_cur_ok} ${c1} & ${c2}!`);
     } else {
-      showToast('Lỗi cập nhật ngoại tệ!', false);
+      showToast(dict.t_cur_err, false);
     }
   } catch (e) {
-    showToast('Lỗi kết nối!', false);
+    showToast(dict.t_conn_err, false);
   }
 }
 
-function setQuickMsg(text) {
-  document.getElementById('alarmMsgInput').value = text;
+function setQuickMsg(type) {
+  const msgs = {
+    drink: (currentLang === 1) ? 'Drink water & Relax' : 'Uong nuoc & Thu gian',
+    sport: (currentLang === 1) ? 'Stretch & Move' : 'Dung day & Vuon vai',
+    rest:  (currentLang === 1) ? 'Take a 5-min break' : 'Nghi ngoi mat 5 phut',
+    work:  (currentLang === 1) ? 'Time to leave work!' : 'Het gio lam viec!'
+  };
+  document.getElementById('alarmMsgInput').value = msgs[type] || type;
 }
 
 async function saveAlarmSettings() {
   const timeVal = document.getElementById('alarmTimeInput').value;
   const en = document.getElementById('alarmEnInput').checked ? 1 : 0;
   const msg = encodeURIComponent(document.getElementById('alarmMsgInput').value.trim());
+  const dict = getDict();
 
   let h = 7, m = 0;
   if (timeVal) {
@@ -378,12 +553,12 @@ async function saveAlarmSettings() {
   try {
     const res = await fetch(`/api/alarm?h=${h}&m=${m}&en=${en}&msg=${msg}`);
     if (res.ok) {
-      showToast('Đã lưu cài đặt báo thức thành công!');
+      showToast(dict.t_alarm_ok);
     } else {
-      showToast('Lỗi khi lưu báo thức', false);
+      showToast(dict.t_alarm_err, false);
     }
   } catch (e) {
-    showToast('Lỗi kết nối WiFi!', false);
+    showToast(dict.t_conn_err, false);
   }
 }
 
@@ -422,20 +597,37 @@ async function fetchStatus() {
       const m = document.getElementById('alarmMelodySelect');
       if (m && !m.matches(':focus')) m.value = data.alarmMelody;
     }
+    if (data.lang !== undefined) {
+      applyLanguage(data.lang);
+    }
   } catch (e) {}
 }
 
-function resetWifi() {
-  if (confirm("Xác nhận đổi mạng WiFi?\n\nThiết bị sẽ xóa mật khẩu WiFi hiện tại và khởi động lại vào điểm phát sóng 'CYD-SmartDesk-V2' (192.168.4.1) để bạn kết nối WiFi mới.")) {
-    fetch('/api/wifi/reset', { method: 'POST' })
-      .then(res => res.json())
-      .then(d => {
-        alert("Đang khởi động lại...\nVui lòng kết nối vào WiFi 'CYD-SmartDesk-V2' trên điện thoại để cài đặt.");
-      })
-      .catch(e => showToast("Lỗi gửi lệnh", false));
+async function toggleWebLang() {
+  const next = (currentLang === 1) ? 0 : 1;
+  applyLanguage(next);
+  const dict = getDict();
+  try {
+    await fetch('/api/lang?set=' + next);
+    showToast(dict.t_lang_switched);
+  } catch (e) {
+    showToast(dict.t_cmd_err, false);
   }
 }
 
+function resetWifi() {
+  const dict = getDict();
+  if (confirm(dict.confirm_wifi_reset)) {
+    fetch('/api/wifi/reset', { method: 'POST' })
+      .then(res => res.json())
+      .then(d => {
+        alert(dict.alert_rebooting);
+      })
+      .catch(e => showToast(dict.t_cmd_err, false));
+  }
+}
+
+applyLanguage(0);
 fetchStatus();
 </script>
 </body>
@@ -499,6 +691,8 @@ void WebDashboard::_setupRoutes() {
     doc["alarmMsg"] = display.getAlarmMessage();
     doc["touchSound"] = hardware.getTouchSound();
     doc["alarmMelody"] = hardware.getAlarmMelody();
+    doc["lang"] = (int)getLanguage();
+    doc["langName"] = getLanguageName();
 
     String res;
     serializeJson(doc, res);
@@ -584,6 +778,18 @@ void WebDashboard::_setupRoutes() {
     }
     hardware.saveSoundSettings();
     request->send(200, "application/json", "{\"success\":true}");
+  });
+
+  // ── GET /api/lang?set=X ────────────────────────────────────────
+  _server.on("/api/lang", HTTP_GET, [](AsyncWebServerRequest *request) {
+    if (request->hasParam("set")) {
+      uint8_t l = (uint8_t)request->getParam("set")->value().toInt();
+      setLanguage((l == 1) ? LANG_EN : LANG_VI);
+      display.triggerRender();
+      request->send(200, "application/json", "{\"success\":true}");
+    } else {
+      request->send(400, "application/json", "{\"error\":\"Missing set\"}");
+    }
   });
 
   // ── POST /api/wifi/reset: Reset WiFi credentials & restart into AP mode ──

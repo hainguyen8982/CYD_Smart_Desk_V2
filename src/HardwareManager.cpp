@@ -1,23 +1,9 @@
 #include "HardwareManager.h"
+#include "Language.h"
 #include <Preferences.h>
 #include <time.h>
 
 HardwareManager hardware;
-
-static const char* TOUCH_SOUND_NAMES[] = {
-    "Tat am (Mute)",
-    "Co hoc (Click)",
-    "Giot nuoc (Water)",
-    "Bip mem (Beep)",
-    "Kep (Chirp)"
-};
-
-static const char* ALARM_MELODY_NAMES[] = {
-    "Classic Beep",
-    "Melodic Chime",
-    "Cyber Wave",
-    "Gentle Pulse"
-};
 
 HardwareManager::HardwareManager()
     : _currentBrightness(85),
@@ -59,7 +45,7 @@ void HardwareManager::begin() {
     setRGB(COLOR_OFF);
 
     Serial.printf("[HardwareManager] Audio/Speaker OK! Touch: %s, Alarm: %s\n",
-                  TOUCH_SOUND_NAMES[_touchSound], ALARM_MELODY_NAMES[_alarmMelody]);
+                  getTouchSoundName(), getAlarmMelodyName());
 }
 
 void HardwareManager::setBacklight(uint8_t percentage) {
@@ -153,6 +139,33 @@ void HardwareManager::playBeep(uint16_t freqHz, uint16_t durationMs) {
     stopSound();
 }
 
+void HardwareManager::playStartupJingle() {
+    if (_soundVolume == 0 || _touchSound == TOUCH_SND_MUTE) return;
+
+    // Classic Warm Chime Startup (Rich, smooth legato Westminster-style chime)
+    // Low-mid frequencies for full warmth without harsh buzzer shrillness:
+    // G4 (392Hz) -> C5 (523Hz) -> E5 (659Hz) -> G5 (784Hz) -> C6 (1047Hz sustained)
+    struct Note {
+        uint16_t freq;
+        uint16_t durationMs;
+        uint16_t pauseMs;
+    };
+
+    static const Note jingle[] = {
+        { 392,  120, 125 },  // G4: Nốt trầm mở đầu êm dịu
+        { 523,  130, 135 },  // C5: Thăng hoa ấm áp
+        { 659,  140, 145 },  // E5: Trong trẻo
+        { 784,  155, 160 },  // G5: Vang sáng
+        { 1047, 450, 470 }   // C6: Ngân dài du dương kết thúc
+    };
+
+    for (const auto& n : jingle) {
+        tone(PIN_SPEAKER, n.freq, n.durationMs);
+        delay(n.pauseMs);
+    }
+    stopSound();
+}
+
 void HardwareManager::playAlarmTune() {
     playAlarmMelody(_alarmMelody);
 }
@@ -215,7 +228,7 @@ void HardwareManager::setTouchSound(uint8_t snd) {
 }
 
 const char* HardwareManager::getTouchSoundName() const {
-    return TOUCH_SOUND_NAMES[_touchSound];
+    return getTouchSoundNameI18n(_touchSound);
 }
 
 void HardwareManager::nextTouchSound() {
@@ -236,7 +249,7 @@ void HardwareManager::setAlarmMelody(uint8_t melody) {
 }
 
 const char* HardwareManager::getAlarmMelodyName() const {
-    return ALARM_MELODY_NAMES[_alarmMelody];
+    return getAlarmMelodyNameI18n(_alarmMelody);
 }
 
 void HardwareManager::nextAlarmMelody() {

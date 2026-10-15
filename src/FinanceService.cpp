@@ -3,6 +3,7 @@
 //  CYD SmartDesk V2 — Multi-Currency Configurable
 // ═══════════════════════════════════════════════════════════════════════
 #include "FinanceService.h"
+#include "NetworkTask.h"
 #include <Preferences.h>
 #include <math.h>
 
@@ -11,7 +12,7 @@ FinanceService finance;
 #define FINANCE_FETCH_INTERVAL (15 * 60 * 1000) // 15 phút cập nhật một lần
 
 FinanceService::FinanceService()
-    : _lastFetch(0), _isFetching(false) {
+    : _mutex(xSemaphoreCreateMutex()), _lastFetch(0), _isFetching(false) {
     // Khởi tạo mã ngoại tệ mặc định
     strlcpy(_data.cur1Code, "USD", sizeof(_data.cur1Code));
     strlcpy(_data.cur2Code, "EUR", sizeof(_data.cur2Code));
@@ -62,6 +63,34 @@ FinanceService::FinanceService()
     _data.lastFetchMs = 0;
 }
 
+FinanceData FinanceService::getData() const {
+    if (_mutex) xSemaphoreTake(_mutex, portMAX_DELAY);
+    FinanceData copy = _data;
+    if (_mutex) xSemaphoreGive(_mutex);
+    return copy;
+}
+
+bool FinanceService::isValid() const {
+    if (_mutex) xSemaphoreTake(_mutex, portMAX_DELAY);
+    bool v = _data.valid;
+    if (_mutex) xSemaphoreGive(_mutex);
+    return v;
+}
+
+String FinanceService::getCur1() const {
+    if (_mutex) xSemaphoreTake(_mutex, portMAX_DELAY);
+    String s = _data.cur1Code;
+    if (_mutex) xSemaphoreGive(_mutex);
+    return s;
+}
+
+String FinanceService::getCur2() const {
+    if (_mutex) xSemaphoreTake(_mutex, portMAX_DELAY);
+    String s = _data.cur2Code;
+    if (_mutex) xSemaphoreGive(_mutex);
+    return s;
+}
+
 void FinanceService::begin() {
     _loadCache();
     Serial.printf("[FinanceService] Initialized: Cur1=%s, Cur2=%s\n", _data.cur1Code, _data.cur2Code);
@@ -69,6 +98,7 @@ void FinanceService::begin() {
 
 void FinanceService::setCurrencies(const char* c1, const char* c2) {
     bool changed = false;
+    if (_mutex) xSemaphoreTake(_mutex, portMAX_DELAY);
     if (c1 && strlen(c1) >= 3) {
         char upper1[8];
         int i = 0;
@@ -93,25 +123,25 @@ void FinanceService::setCurrencies(const char* c1, const char* c2) {
             changed = true;
         }
     }
+    if (_mutex) xSemaphoreGive(_mutex);
 
     if (changed) {
         Serial.printf("[FinanceService] Currencies changed -> Cur1=%s, Cur2=%s\n", _data.cur1Code, _data.cur2Code);
         _saveCache();
-        fetchNow();
+        fetchNow(); // Non-blocking background trigger
     }
 }
 
 void FinanceService::update() {
-    if (WiFi.status() != WL_CONNECTED) return;
-    if (_isFetching) return;
-
-    unsigned long now = millis();
-    if (_lastFetch == 0 || (now - _lastFetch >= FINANCE_FETCH_INTERVAL)) {
-        fetchNow();
-    }
+    // Periodic fetching is managed asynchronously on Core 0 by NetworkTask.
 }
 
 void FinanceService::fetchNow() {
+    // Non-blocking trigger to background Core 0 task
+    networkTask.triggerFinance();
+}
+
+void FinanceService::fetchDirect() {
     if (WiFi.status() != WL_CONNECTED) {
         Serial.println("[FinanceService] WiFi not connected, skipping fetch");
         return;
@@ -129,13 +159,20 @@ void FinanceService::fetchNow() {
     _fetchCrypto();
     yield();
 
+    if (_mutex) xSemaphoreTake(_mutex, portMAX_DELAY);
     _data.valid = true;
     _data.lastFetchMs = millis();
     _lastFetch = millis();
+    if (_mutex) xSemaphoreGive(_mutex);
+
     _saveCache();
 
     Serial.println("[FinanceService] <<< Market data updated & cached successfully!");
     _isFetching = false;
+}
+
+void FinanceService::fetchBackground() {
+    fetchDirect();
 }
 
 void FinanceService::_fetchGoldSJC() {
@@ -161,6 +198,7 @@ void FinanceService::_fetchGoldSJC() {
                 long sellRaw = p0["sell"] | 0;
                 long chgRaw  = p0["day_change_sell"] | 0;
 
+                if (_mutex) xSemaphoreTake(_mutex, portMAX_DELAY);
                 if (buyRaw > 0)  _data.sjcBuy  = buyRaw / 1000000.0f;
                 if (sellRaw > 0) _data.sjcSell = sellRaw / 1000000.0f;
                 _data.sjcChange = chgRaw / 1000000.0f;
@@ -197,6 +235,7 @@ void FinanceService::_fetchGoldSJC() {
                 }
                 _data.sjcMin7d = minV;
                 _data.sjcMax7d = maxV;
+                if (_mutex) xSemaphoreGive(_mutex);
 
                 Serial.printf("[Finance] ✓ SJC: Mua=%.1f Ban=%.1f Chg=%s (%+.2f%%)\n",
                               _data.sjcBuy, _data.sjcSell, _data.sjcChangeStr, _data.sjcChangePercent);
@@ -211,7 +250,13 @@ void FinanceService::_fetchGoldSJC() {
 }
 
 void FinanceService::_fetchExchangeRates() {
-    Serial.printf("[Finance] Fetching open.er-api.com for %s & %s...\n", _data.cur1Code, _data.cur2Code);
+    char cur1[8], cur2[8];
+    if (_mutex) xSemaphoreTake(_mutex, portMAX_DELAY);
+    strlcpy(cur1, _data.cur1Code, sizeof(cur1));
+    strlcpy(cur2, _data.cur2Code, sizeof(cur2));
+    if (_mutex) xSemaphoreGive(_mutex);
+
+    Serial.printf("[Finance] Fetching open.er-api.com for %s & %s...\n", cur1, cur2);
     HTTPClient http;
     http.begin("https://open.er-api.com/v6/latest/USD");
     http.setTimeout(5000);
@@ -226,6 +271,8 @@ void FinanceService::_fetchExchangeRates() {
             float usdToVnd = doc["rates"]["VND"] | 0.0f;
 
             if (usdToVnd > 1000.0f) {
+                if (_mutex) xSemaphoreTake(_mutex, portMAX_DELAY);
+
                 // 1. Tính toán tỉ giá Ngoại tệ 1 (_data.cur1Code)
                 float r1 = usdToVnd;
                 if (strcmp(_data.cur1Code, "USD") != 0) {
@@ -248,13 +295,10 @@ void FinanceService::_fetchExchangeRates() {
                 // % Biến động so với phiên hôm qua (_data.cur17d[5])
                 float yest1 = _data.cur17d[5];
                 if (yest1 > 0.0f) {
-                    _data.cur1ChangePercent = ((_data.cur1Rate - yest1) / yest1) * 100.0f;
-                }
-                if (fabsf(_data.cur1ChangePercent) < 0.01f) {
-                    _data.cur1ChangePercent = +0.15f; // Chống lỗi 0.00% khi API chỉ update 1 lần/ngày
+                    _data.cur1ChangePercent = ((r1 - yest1) / yest1) * 100.0f;
                 }
 
-                float min1 = _data.cur17d[0], max1 = _data.cur17d[0];
+                float min1 = 999999.0f, max1 = 0.0f;
                 for (int i = 0; i < 7; i++) {
                     if (_data.cur17d[i] < min1) min1 = _data.cur17d[i];
                     if (_data.cur17d[i] > max1) max1 = _data.cur17d[i];
@@ -266,7 +310,7 @@ void FinanceService::_fetchExchangeRates() {
                     float p = _data.cur17d[i + 1];
                     float c = _data.cur17d[i + 2];
                     if (p > 0.0f) _data.cur1Bars[i] = ((c - p) / p) * 100.0f;
-                    else _data.cur1Bars[i] = (i % 2 == 0) ? +0.15f : -0.12f;
+                    else _data.cur1Bars[i] = (i % 2 == 0) ? +0.12f : -0.10f;
                 }
 
                 // 2. Tính toán tỉ giá Ngoại tệ 2 (_data.cur2Code)
@@ -279,7 +323,7 @@ void FinanceService::_fetchExchangeRates() {
 
                 bool needRegen2 = (_data.cur27d[0] <= 0.0f) || (fabsf(_data.cur27d[0] - r2) / r2 > 0.06f);
                 if (needRegen2) {
-                    static const float v7_2[7] = { +0.35f, +0.20f, -0.08f, +0.12f, -0.10f, +0.25f, 0.0f };
+                    static const float v7_2[7] = { +0.25f, -0.12f, -0.30f, +0.15f, -0.08f, +0.18f, 0.0f };
                     for (int i = 0; i < 7; i++) {
                         _data.cur27d[i] = roundf(r2 * (1.0f + v7_2[i] / 100.0f));
                     }
@@ -289,13 +333,10 @@ void FinanceService::_fetchExchangeRates() {
 
                 float yest2 = _data.cur27d[5];
                 if (yest2 > 0.0f) {
-                    _data.cur2ChangePercent = ((_data.cur2Rate - yest2) / yest2) * 100.0f;
-                }
-                if (fabsf(_data.cur2ChangePercent) < 0.01f) {
-                    _data.cur2ChangePercent = -0.28f; // Chống lỗi 0.00%
+                    _data.cur2ChangePercent = ((r2 - yest2) / yest2) * 100.0f;
                 }
 
-                float min2 = _data.cur27d[0], max2 = _data.cur27d[0];
+                float min2 = 999999.0f, max2 = 0.0f;
                 for (int i = 0; i < 7; i++) {
                     if (_data.cur27d[i] < min2) min2 = _data.cur27d[i];
                     if (_data.cur27d[i] > max2) max2 = _data.cur27d[i];
@@ -310,9 +351,11 @@ void FinanceService::_fetchExchangeRates() {
                     else _data.cur2Bars[i] = (i % 2 == 0) ? -0.18f : +0.20f;
                 }
 
+                if (_mutex) xSemaphoreGive(_mutex);
+
                 Serial.printf("[Finance] ✓ FX: %s=%.0f (%+.2f%%), %s=%.0f (%+.2f%%)\n",
-                              _data.cur1Code, _data.cur1Rate, _data.cur1ChangePercent,
-                              _data.cur2Code, _data.cur2Rate, _data.cur2ChangePercent);
+                              cur1, r1, _data.cur1ChangePercent,
+                              cur2, r2, _data.cur2ChangePercent);
                 _saveCache();
             }
         }
@@ -333,9 +376,15 @@ void FinanceService::_fetchCrypto() {
     if (codeBtc == 200) {
         JsonDocument docBtc;
         deserializeJson(docBtc, http.getString());
-        _data.btcRate = docBtc["lastPrice"].as<float>();
-        _data.btcChangePercent = docBtc["priceChangePercent"].as<float>();
-        Serial.printf("[Finance] ✓ BTC: $%.0f (%+.2f%%)\n", _data.btcRate, _data.btcChangePercent);
+        float bRate = docBtc["lastPrice"].as<float>();
+        float bChg  = docBtc["priceChangePercent"].as<float>();
+
+        if (_mutex) xSemaphoreTake(_mutex, portMAX_DELAY);
+        _data.btcRate = bRate;
+        _data.btcChangePercent = bChg;
+        if (_mutex) xSemaphoreGive(_mutex);
+
+        Serial.printf("[Finance] ✓ BTC: $%.0f (%+.2f%%)\n", bRate, bChg);
     }
     http.end();
 
@@ -352,6 +401,7 @@ void FinanceService::_fetchCrypto() {
         float pChg   = docPaxg["priceChangePercent"].as<float>();
 
         if (pPrice > 1000.0f) {
+            if (_mutex) xSemaphoreTake(_mutex, portMAX_DELAY);
             _data.worldGoldUsd    = pPrice;
             _data.worldGoldChgPct = pChg;
 
@@ -362,8 +412,12 @@ void FinanceService::_fetchCrypto() {
                 float worldVndPerLuongTr = (_data.worldGoldUsd * 1.20565f * usdRef) / 1000000.0f;
                 _data.domesticDiffTr = _data.sjcSell - worldVndPerLuongTr;
             }
+            float curWorldGold = _data.worldGoldUsd;
+            float curDiff = _data.domesticDiffTr;
+            if (_mutex) xSemaphoreGive(_mutex);
+
             Serial.printf("[Finance] ✓ Gold Kitco: $%.1f/oz (Chenh lech: ~%.1ftr/luong)\n",
-                          _data.worldGoldUsd, _data.domesticDiffTr);
+                          curWorldGold, curDiff);
         }
     }
     http.end();
@@ -372,6 +426,8 @@ void FinanceService::_fetchCrypto() {
 void FinanceService::_loadCache() {
     Preferences prefs;
     if (!prefs.begin("cyd_fin", true)) return;
+
+    if (_mutex) xSemaphoreTake(_mutex, portMAX_DELAY);
 
     String c1 = prefs.getString("cur1", "USD");
     String c2 = prefs.getString("cur2", "EUR");
@@ -418,40 +474,47 @@ void FinanceService::_loadCache() {
         else _data.cur2Bars[i] = 0.0f;
     }
 
+    if (_mutex) xSemaphoreGive(_mutex);
+
     prefs.end();
 }
 
 void FinanceService::_saveCache() {
+    FinanceData d;
+    if (_mutex) xSemaphoreTake(_mutex, portMAX_DELAY);
+    d = _data;
+    if (_mutex) xSemaphoreGive(_mutex);
+
     Preferences prefs;
     if (!prefs.begin("cyd_fin", false)) return;
 
-    prefs.putString("cur1", _data.cur1Code);
-    prefs.putString("cur2", _data.cur2Code);
+    prefs.putString("cur1", d.cur1Code);
+    prefs.putString("cur2", d.cur2Code);
 
-    prefs.putFloat("sjc_buy", _data.sjcBuy);
-    prefs.putFloat("sjc_sell", _data.sjcSell);
-    prefs.putFloat("sjc_chg", _data.sjcChangePercent);
-    prefs.putFloat("w_gold", _data.worldGoldUsd);
-    prefs.putFloat("diff_tr", _data.domesticDiffTr);
+    prefs.putFloat("sjc_buy", d.sjcBuy);
+    prefs.putFloat("sjc_sell", d.sjcSell);
+    prefs.putFloat("sjc_chg", d.sjcChangePercent);
+    prefs.putFloat("w_gold", d.worldGoldUsd);
+    prefs.putFloat("diff_tr", d.domesticDiffTr);
 
-    prefs.putFloat("cur1_r", _data.cur1Rate);
-    prefs.putFloat("cur2_r", _data.cur2Rate);
-    prefs.putFloat("cur1_chg", _data.cur1ChangePercent);
-    prefs.putFloat("cur2_chg", _data.cur2ChangePercent);
+    prefs.putFloat("cur1_r", d.cur1Rate);
+    prefs.putFloat("cur2_r", d.cur2Rate);
+    prefs.putFloat("cur1_chg", d.cur1ChangePercent);
+    prefs.putFloat("cur2_chg", d.cur2ChangePercent);
 
-    prefs.putFloat("btc_r", _data.btcRate);
-    prefs.putFloat("btc_chg", _data.btcChangePercent);
+    prefs.putFloat("btc_r", d.btcRate);
+    prefs.putFloat("btc_chg", d.btcChangePercent);
 
-    prefs.putBytes("sjc_7d", _data.sjc7d, sizeof(_data.sjc7d));
-    prefs.putBytes("cur1_7d", _data.cur17d, sizeof(_data.cur17d));
-    prefs.putBytes("cur2_7d", _data.cur27d, sizeof(_data.cur27d));
+    prefs.putBytes("sjc_7d", d.sjc7d, sizeof(d.sjc7d));
+    prefs.putBytes("cur1_7d", d.cur17d, sizeof(d.cur17d));
+    prefs.putBytes("cur2_7d", d.cur27d, sizeof(d.cur27d));
 
-    prefs.putFloat("sjc_min", _data.sjcMin7d);
-    prefs.putFloat("sjc_max", _data.sjcMax7d);
-    prefs.putFloat("cur1_min", _data.cur1Min7d);
-    prefs.putFloat("cur1_max", _data.cur1Max7d);
-    prefs.putFloat("cur2_min", _data.cur2Min7d);
-    prefs.putFloat("cur2_max", _data.cur2Max7d);
+    prefs.putFloat("sjc_min", d.sjcMin7d);
+    prefs.putFloat("sjc_max", d.sjcMax7d);
+    prefs.putFloat("cur1_min", d.cur1Min7d);
+    prefs.putFloat("cur1_max", d.cur1Max7d);
+    prefs.putFloat("cur2_min", d.cur2Min7d);
+    prefs.putFloat("cur2_max", d.cur2Max7d);
 
     prefs.end();
 }

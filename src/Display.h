@@ -33,6 +33,7 @@ public:
     uint8_t getPage() const { return _currentPage; }
     bool handleTouch(uint16_t x, uint16_t y);
     void wakeDock();
+    void triggerRender() { _lastRender = 0; }
 
     // ── Alarm API ─────────────────────────────────────────────
     void setAlarm(uint8_t h, uint8_t m, bool enabled, const char* msg = nullptr);

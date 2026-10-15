@@ -52,16 +52,21 @@ struct WeatherData {
     DailyForecast forecast[3]; // 3-day forecast: [0] Today, [1] Tomorrow, [2] Day after
 };
 
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
+
 class WeatherService {
 public:
     WeatherService();
     void begin();                       // Connect WiFi via WiFiManager
-    void update();                      // Periodic fetch
-    void fetchNow();                    // Force immediate fetch
+    void update();                      // Periodic check (now delegates to background task)
+    void fetchNow();                    // Request immediate background fetch
+    void fetchDirect();                 // Direct synchronous fetch (used during boot splash)
+    void fetchBackground();             // Worker fetch method running on Core 0
 
     bool isConnected() const { return WiFi.status() == WL_CONNECTED; }
     bool isTimeSynced() const { return _timeSynced; }
-    const WeatherData& getData() const { return _data; }
+    WeatherData getData() const;
     WeatherType getType() const;
     bool isNight() const;
 
@@ -75,6 +80,7 @@ private:
     void _fetchWeather();
 
     WeatherData _data;
+    mutable SemaphoreHandle_t _mutex;
     unsigned long _lastFetch;
     unsigned long _lastNtpAttempt;
     bool _timeSynced;

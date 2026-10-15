@@ -9,6 +9,7 @@
 //  • Pastel blob decorations, sparkles, glass cards = premium feel
 // ═══════════════════════════════════════════════════════════════════════
 #include "Display.h"
+#include "Language.h"
 #include "WeatherService.h"
 #include "FinanceService.h"
 #include "TouchManager.h"
@@ -42,6 +43,7 @@ Display::Display()
 
 // ─── Begin ───────────────────────────────────────────────────────────
 void Display::begin() {
+    initLanguage();                // Load saved language (VI / EN) from NVS
     initTheme();                   // Load saved theme from NVS
     loadAlarmSettings();           // Load saved alarm settings from NVS
 
@@ -228,9 +230,6 @@ void Display::playBootAnimation() {
     }
 
     free(particles);
-
-    // Audio click feedback upon logo lock
-    hardware.playClick();
 
     // 1. Chữ FabX bừng sáng chói lòa rồi từ từ dịu về màu logo chuẩn (Bloom Flare Decay)
     const uint8_t flareSteps[] = { 240, 180, 120, 60, 0 };
@@ -531,13 +530,9 @@ void Display::renderPage0_WeatherClock() {
     // ────────────────────────────────────────────────────────────────
     // 3. DATE LINE — Centered with ample space (Y = 107, Font 2, Pure White)
     // ────────────────────────────────────────────────────────────────
-    const char* vnDayNames[] = {
-        "CHU NHAT", "THU HAI", "THU BA", "THU TU",
-        "THU NAM", "THU SAU", "THU BAY"
-    };
     char dateBuf[40];
     snprintf(dateBuf, sizeof(dateBuf), "%s, %02d/%02d/%d",
-             vnDayNames[t.tm_wday],
+             getDayNameI18n(t.tm_wday),
              t.tm_mday, t.tm_mon + 1, 1900 + t.tm_year);
 
     _spr.setTextDatum(MC_DATUM);
@@ -601,16 +596,7 @@ void Display::renderPage0_WeatherClock() {
     _spr.drawString("C", degX + 7, cardY + 33, 2);
 
     // Condition text: spaced 6px cleanly below 29°C for relaxed readability
-    const char* condStr = "Quang";
-    switch (wType) {
-        case WEATHER_CLEAR:  condStr = night ? "Dem quang" : "Troi nang"; break;
-        case WEATHER_CLOUDY: condStr = "Co may"; break;
-        case WEATHER_RAIN:   condStr = "Co mua"; break;
-        case WEATHER_STORM:  condStr = "Mua dong"; break;
-        case WEATHER_SNOW:   condStr = "Tuyet"; break;
-        case WEATHER_MIST:   condStr = "Suong mu"; break;
-        default:             condStr = "Troi dep"; break;
-    }
+    const char* condStr = getWeatherConditionI18n(wType, night, false);
     _spr.setTextDatum(TL_DATUM);
     _spr.setTextColor(RGB565(255, 215, 0)); // Gold
     _spr.drawString(condStr, leftX + 50, cardY + 60, 1);
@@ -620,16 +606,7 @@ void Display::renderPage0_WeatherClock() {
     drawGlassCard(rightX, cardY, cardW, cardH, 12);
 
     uint8_t lunarDay = lDate.day;
-    float moonPct = 0;
-    const char* phaseName = "Trang Non";
-    if (lunarDay <= 1)       { phaseName = "Trang Non";        moonPct = 0; }
-    else if (lunarDay <= 6)  { phaseName = "Trang Luoi Liem";  moonPct = lunarDay * 6.7f; }
-    else if (lunarDay <= 8)  { phaseName = "Ban Nguyet Dau";   moonPct = 50; }
-    else if (lunarDay <= 13) { phaseName = "Trang Truong Dan"; moonPct = 50 + (lunarDay - 8) * 6.0f; }
-    else if (lunarDay <= 16) { phaseName = "Trang Tron (Ram)"; moonPct = 100; }
-    else if (lunarDay <= 21) { phaseName = "Trang Khuyet Dan"; moonPct = 100 - (lunarDay - 16) * 6.0f; }
-    else if (lunarDay <= 23) { phaseName = "Ban Nguyet Cuoi";  moonPct = 50; }
-    else                     { phaseName = "Trang Tan Cuoi";   moonPct = 50 - (lunarDay - 23) * 7.0f; }
+    const char* phaseName = getMoonPhaseNameI18n(lunarDay);
 
     // Header (Y = cardY + 11): Phase Name (Font 2)
     _spr.setTextDatum(ML_DATUM);
@@ -653,14 +630,14 @@ void Display::renderPage0_WeatherClock() {
     snprintf(alDayStr, sizeof(alDayStr), "%02d/%02d", lDate.day, lDate.month);
     _spr.setTextDatum(TL_DATUM);
     _spr.setTextColor(C_WHITE);
-    _spr.drawString(alDayStr, rightX + 48, cardY + 31, 4);
+    _spr.drawString(alDayStr, rightX + 46, cardY + 31, 4);
 
     _spr.setTextColor(RGB565(140, 205, 255));
-    _spr.drawString("AL", rightX + 48 + _spr.textWidth(alDayStr, 4) + 4, cardY + 33, 2);
+    _spr.drawString((getLanguage() == LANG_VI ? "AL" : "LUN"), rightX + 46 + _spr.textWidth(alDayStr, 4) + 3, cardY + 33, 2);
 
     // Can Chi day placed 6px cleanly below 04/09 AL — NEVER overlaps!
     char dayCanChiBuf[28];
-    snprintf(dayCanChiBuf, sizeof(dayCanChiBuf), "Ngay %s", lDate.dayCanChi);
+    snprintf(dayCanChiBuf, sizeof(dayCanChiBuf), (getLanguage() == LANG_VI ? "Ngay %s" : "Day %s"), lDate.dayCanChi);
     _spr.setTextDatum(TL_DATUM);
     _spr.setTextColor(RGB565(255, 215, 0)); // Gold
     _spr.drawString(dayCanChiBuf, rightX + 50, cardY + 60, 1);
@@ -672,7 +649,7 @@ void Display::renderPage0_WeatherClock() {
 #define POPUP_DIVIDER_COLOR RGB565(75, 75, 85) // Unified neutral cool slate gray for all popups
 
 static void toVNFloat(char* str) {
-    if (!str) return;
+    if (!str || getLanguage() != LANG_VI) return;
     for (char* p = str; *p; p++) {
         if (*p == '.') *p = ',';
     }
@@ -746,16 +723,7 @@ void Display::renderWeatherPopup() {
     _spr.setTextColor(RGB565(90, 130, 180));
     _spr.drawString("•", degX + 23, 58, 2);
 
-    const char* condStr = "Quang dang";
-    switch (wType) {
-        case WEATHER_CLEAR:  condStr = night ? "Dem quang" : "Troi nang dep"; break;
-        case WEATHER_CLOUDY: condStr = "Nhieu may"; break;
-        case WEATHER_RAIN:   condStr = "Troi mua rao"; break;
-        case WEATHER_STORM:  condStr = "Mua dong set"; break;
-        case WEATHER_SNOW:   condStr = "Tuyet roi"; break;
-        case WEATHER_MIST:   condStr = "Suong mu"; break;
-        default:             condStr = "Troi mat me"; break;
-    }
+    const char* condStr = getWeatherConditionI18n(wType, night, true);
     _spr.setTextColor(RGB565(255, 215, 0)); // Gold
     _spr.drawString(condStr, degX + 33, 58, 2);
 
@@ -817,10 +785,15 @@ void Display::renderWeatherPopup() {
     for (int d = 0; d < 3; d++) {
         int16_t colCenterX = startX + d * colW + colW / 2;
 
+        time_t fNow = time(NULL);
+        struct tm fTm;
+        localtime_r(&fNow, &fTm);
+        int fWday = (fTm.tm_wday + d + 1) % 7;
+
         // 1. Tên Thứ (Font 2)
         _spr.setTextDatum(MC_DATUM);
         _spr.setTextColor(C_WHITE);
-        _spr.drawString(w.forecast[d].dayName, colCenterX, 128, 2);
+        _spr.drawString(getShortDayNameI18n(fWday), colCenterX, 128, 2);
 
         // 2. Weather Icon mini
         drawForecastIcon(colCenterX, 156, w.forecast[d].type);
@@ -828,7 +801,7 @@ void Display::renderWeatherPopup() {
         // 3. Trạng thái (Font 1, Gold)
         _spr.setTextDatum(MC_DATUM);
         _spr.setTextColor(RGB565(255, 215, 0));
-        _spr.drawString(w.forecast[d].condText, colCenterX, 182, 1);
+        _spr.drawString(getWeatherConditionI18n(w.forecast[d].type, false, false), colCenterX, 182, 1);
 
         // 4. Nhiệt độ Min - Max
         char tRange[16];
@@ -853,20 +826,20 @@ void Display::renderLunarPopup() {
 
     uint8_t lunarDay = ld.day;
     float moonPct = 0;
-    const char* phaseName = "Trang Non";
-    if (lunarDay <= 1)       { phaseName = "Trang Non";        moonPct = 0; }
-    else if (lunarDay <= 6)  { phaseName = "Trang Luoi Liem";  moonPct = lunarDay * 6.7f; }
-    else if (lunarDay <= 8)  { phaseName = "Ban Nguyet Dau";   moonPct = 50; }
-    else if (lunarDay <= 13) { phaseName = "Trang Truong Dan"; moonPct = 50 + (lunarDay - 8) * 6.0f; }
-    else if (lunarDay <= 16) { phaseName = "Trang Tron (Ram)"; moonPct = 100; }
-    else if (lunarDay <= 21) { phaseName = "Trang Khuyet Dan"; moonPct = 100 - (lunarDay - 16) * 6.0f; }
-    else if (lunarDay <= 23) { phaseName = "Ban Nguyet Cuoi";  moonPct = 50; }
-    else                     { phaseName = "Trang Tan Cuoi";   moonPct = 50 - (lunarDay - 23) * 7.0f; }
+    if (lunarDay <= 1)       { moonPct = 0; }
+    else if (lunarDay <= 6)  { moonPct = lunarDay * 6.7f; }
+    else if (lunarDay <= 8)  { moonPct = 50; }
+    else if (lunarDay <= 13) { moonPct = 50 + (lunarDay - 8) * 6.0f; }
+    else if (lunarDay <= 16) { moonPct = 100; }
+    else if (lunarDay <= 21) { moonPct = 100 - (lunarDay - 16) * 6.0f; }
+    else if (lunarDay <= 23) { moonPct = 50; }
+    else                     { moonPct = 50 - (lunarDay - 23) * 7.0f; }
+    const char* phaseName = getMoonPhaseNameI18n(lunarDay);
 
     // 1. Header (Y = 10..38): Tiêu đề + Nút đóng tròn [X]
     _spr.setTextDatum(ML_DATUM);
     _spr.setTextColor(RGB565(255, 215, 0));
-    _spr.drawString("THIEN VAN & AM LICH", 16, 23, 2);
+    _spr.drawString(L(TXT_ASTRONOMY_LUNAR), 16, 23, 2);
 
     // Nút [X] Đóng Popup — Chuẩn phong cách Windows 11 nền xanh bo tròn góc
     drawPopupCloseButton();
@@ -883,7 +856,7 @@ void Display::renderLunarPopup() {
     _spr.drawString(phaseName, 88, 68, 4);
 
     char illuBuf[32];
-    snprintf(illuBuf, sizeof(illuBuf), "Do sang mat trang: %.0f%%", moonPct);
+    snprintf(illuBuf, sizeof(illuBuf), (getLanguage() == LANG_VI ? "Do sang mat trang: %.0f%%" : "Moon Illumination: %.0f%%"), moonPct);
     _spr.setTextColor(RGB565(140, 205, 255));
     _spr.drawString(illuBuf, 88, 96, 2);
 
@@ -894,9 +867,9 @@ void Display::renderLunarPopup() {
     // Row 1: Ngày âm lịch
     _spr.setTextDatum(ML_DATUM);
     _spr.setTextColor(RGB565(170, 200, 230));
-    _spr.drawString("Ngay am lich:", 18, 138, 2);
+    _spr.drawString(L(TXT_LUNAR_DATE), 18, 138, 2);
     char lDateBuf[24];
-    snprintf(lDateBuf, sizeof(lDateBuf), "%02d thang %02d", ld.day, ld.month);
+    snprintf(lDateBuf, sizeof(lDateBuf), (getLanguage() == LANG_VI ? "%02d thang %02d" : "Day %02d, Month %02d"), ld.day, ld.month);
     _spr.setTextDatum(MR_DATUM);
     _spr.setTextColor(C_WHITE);
     _spr.drawString(lDateBuf, 302, 138, 2);
@@ -904,7 +877,7 @@ void Display::renderLunarPopup() {
     // Row 2: Ngày can chi
     _spr.setTextDatum(ML_DATUM);
     _spr.setTextColor(RGB565(170, 200, 230));
-    _spr.drawString("Ngay can chi:", 18, 164, 2);
+    _spr.drawString(L(TXT_DAY_CANCHI), 18, 164, 2);
     _spr.setTextDatum(MR_DATUM);
     _spr.setTextColor(RGB565(255, 215, 0)); // Gold
     _spr.drawString(ld.dayCanChi, 302, 164, 2);
@@ -912,7 +885,7 @@ void Display::renderLunarPopup() {
     // Row 3: Năm can chi
     _spr.setTextDatum(ML_DATUM);
     _spr.setTextColor(RGB565(170, 200, 230));
-    _spr.drawString("Nam can chi:", 18, 190, 2);
+    _spr.drawString(L(TXT_YEAR_CANCHI), 18, 190, 2);
     char yrBuf[32];
     snprintf(yrBuf, sizeof(yrBuf), "%s (2026)", ld.yearCanChi);
     _spr.setTextDatum(MR_DATUM);
@@ -1065,7 +1038,7 @@ void Display::renderAlarmPopup() {
     drawBellIcon(18, 23, _alarmEnabled);
     _spr.setTextDatum(ML_DATUM);
     _spr.setTextColor(RGB565(255, 215, 0));
-    _spr.drawString("CAI DAT BAO THUC", 36, 23, 2);
+    _spr.drawString((getLanguage() == LANG_VI ? "CAI DAT BAO THUC" : "ALARM SETTINGS"), 36, 23, 2);
 
     // Nút [X] Đóng Popup — Chuẩn phong cách Windows 11 nền xanh bo tròn góc
     drawPopupCloseButton();
@@ -1117,20 +1090,20 @@ void Display::renderAlarmPopup() {
         _spr.fillSmoothRoundRect(btnX, btnY, btnW, btnH, 18, RGB565(35, 190, 110), RGB565(10, 15, 26));
         _spr.setTextDatum(MC_DATUM);
         _spr.setTextColor(RGB565(10, 30, 18));
-        _spr.drawString("DANG BAT BAO THUC", 160, btnY + btnH / 2, 2);
+        _spr.drawString((getLanguage() == LANG_VI ? "DANG BAT BAO THUC" : "ALARM ENABLED"), 160, btnY + btnH / 2, 2);
     } else {
         _spr.fillSmoothRoundRect(btnX, btnY, btnW, btnH, 18, RGB565(25, 32, 45), RGB565(10, 15, 26));
         _spr.drawRoundRect(btnX, btnY, btnW, btnH, 18, RGB565(55, 70, 95));
         _spr.setTextDatum(MC_DATUM);
         _spr.setTextColor(RGB565(150, 165, 185));
-        _spr.drawString("DANG TAT BAO THUC", 160, btnY + btnH / 2, 2);
+        _spr.drawString((getLanguage() == LANG_VI ? "DANG TAT BAO THUC" : "ALARM DISABLED"), 160, btnY + btnH / 2, 2);
     }
 
     if (strlen(_alarmMessage) > 0) {
         _spr.setTextDatum(MC_DATUM);
         _spr.setTextColor(RGB565(140, 175, 220));
         char noteBuf[64];
-        snprintf(noteBuf, sizeof(noteBuf), "Loi nhan: %s", _alarmMessage);
+        snprintf(noteBuf, sizeof(noteBuf), (getLanguage() == LANG_VI ? "Loi nhan: %s" : "Note: %s"), _alarmMessage);
         _spr.drawString(noteBuf, 160, 226, 1);
     }
 }
@@ -1171,13 +1144,13 @@ void Display::renderAlarmToggleBtnOnly() {
         _spr.fillSmoothRoundRect(btnX, btnY, btnW, btnH, 18, RGB565(35, 190, 110), RGB565(10, 15, 26));
         _spr.setTextDatum(MC_DATUM);
         _spr.setTextColor(RGB565(10, 30, 18));
-        _spr.drawString("DANG BAT BAO THUC", 160, btnY + btnH / 2, 2);
+        _spr.drawString((getLanguage() == LANG_VI ? "DANG BAT BAO THUC" : "ALARM ENABLED"), 160, btnY + btnH / 2, 2);
     } else {
         _spr.fillSmoothRoundRect(btnX, btnY, btnW, btnH, 18, RGB565(25, 32, 45), RGB565(10, 15, 26));
         _spr.drawRoundRect(btnX, btnY, btnW, btnH, 18, RGB565(55, 70, 95));
         _spr.setTextDatum(MC_DATUM);
         _spr.setTextColor(RGB565(150, 165, 185));
-        _spr.drawString("DANG TAT BAO THUC", 160, btnY + btnH / 2, 2);
+        _spr.drawString((getLanguage() == LANG_VI ? "DANG TAT BAO THUC" : "ALARM DISABLED"), 160, btnY + btnH / 2, 2);
     }
     // Cập nhật cả icon chuông trên header
     drawBellIcon(18, 23, _alarmEnabled);
@@ -1210,7 +1183,7 @@ void Display::renderAlarmRingingScreen() {
     // 2. Dòng thông báo nổi bật
     _spr.setTextDatum(MC_DATUM);
     _spr.setTextColor(flash ? C_WHITE : C_GOLD);
-    _spr.drawString("BAO THUC!", 160, 60, 4);
+    _spr.drawString((getLanguage() == LANG_VI ? "BAO THUC!" : "ALARM ALERT!"), 160, 60, 4);
 
     // 3. Hiển thị giờ hiện tại to rõ Font 6
     time_t now = time(NULL);
@@ -1240,9 +1213,9 @@ void Display::renderAlarmRingingScreen() {
     _spr.drawRoundRect(b1X, b1Y, b1W, b1H, 16, C_WHITE);
     _spr.setTextDatum(MC_DATUM);
     _spr.setTextColor(RGB565(20, 20, 20));
-    _spr.drawString("BAO LAI", b1X + b1W / 2, b1Y + 22, 2);
+    _spr.drawString((getLanguage() == LANG_VI ? "BAO LAI" : "SNOOZE"), b1X + b1W / 2, b1Y + 22, 2);
     _spr.setTextColor(RGB565(50, 40, 0));
-    _spr.drawString("+5 PHUT", b1X + b1W / 2, b1Y + 44, 2);
+    _spr.drawString((getLanguage() == LANG_VI ? "+5 PHUT" : "+5 MINS"), b1X + b1W / 2, b1Y + 44, 2);
 
     // Nút Phải: TẮT CHUÔNG
     int16_t b2X = 166, b2Y = 160, b2W = 140, b2H = 64;
@@ -1250,9 +1223,9 @@ void Display::renderAlarmRingingScreen() {
     _spr.drawRoundRect(b2X, b2Y, b2W, b2H, 16, C_WHITE);
     _spr.setTextDatum(MC_DATUM);
     _spr.setTextColor(C_WHITE);
-    _spr.drawString("TAT CHUONG", b2X + b2W / 2, b2Y + 22, 2);
+    _spr.drawString((getLanguage() == LANG_VI ? "TAT CHUONG" : "DISMISS"), b2X + b2W / 2, b2Y + 22, 2);
     _spr.setTextColor(RGB565(255, 200, 200));
-    _spr.drawString("DUNG HAN", b2X + b2W / 2, b2Y + 44, 2);
+    _spr.drawString((getLanguage() == LANG_VI ? "DUNG HAN" : "STOP"), b2X + b2W / 2, b2Y + 44, 2);
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -2096,15 +2069,15 @@ void Display::renderCalibrationScreen() {
     _spr.fillSprite(TFT_BLACK);
     _spr.setTextColor(TFT_WHITE, TFT_BLACK);
     _spr.setTextDatum(TC_DATUM);
-    _spr.drawString("HIEU CHUAN CAM UNG (TOUCH)", 160, 10, 2);
+    _spr.drawString((getLanguage() == LANG_VI ? "HIEU CHUAN CAM UNG (TOUCH)" : "TOUCH CALIBRATION"), 160, 10, 2);
 
     CalibState state = touch.getCalibState();
     if (state == CALIB_DONE) {
         _spr.setTextColor(TFT_GREEN, TFT_BLACK);
         _spr.setTextDatum(MC_DATUM);
-        _spr.drawString("HIEU CHUAN THANH CONG!", 160, 100, 4);
+        _spr.drawString((getLanguage() == LANG_VI ? "HIEU CHUAN THANH CONG!" : "CALIBRATION SUCCESSFUL!"), 160, 100, 4);
         _spr.setTextColor(TFT_WHITE, TFT_BLACK);
-        _spr.drawString("Dang luu vao NVS Flash...", 160, 135, 2);
+        _spr.drawString((getLanguage() == LANG_VI ? "Dang luu vao NVS Flash..." : "Saving to NVS Flash..."), 160, 135, 2);
         return;
     }
 
@@ -2115,18 +2088,18 @@ void Display::renderCalibrationScreen() {
     switch (state) {
         case CALIB_WAIT_TL:
             tx = CALIB_TL_X; ty = CALIB_TL_Y;
-            hint = "Chay tam do GOC TREN - TRAI";
-            step = "Buoc 1/3";
+            hint = (getLanguage() == LANG_VI ? "Cham tam do GOC TREN - TRAI" : "Tap target TOP - LEFT");
+            step = (getLanguage() == LANG_VI ? "Buoc 1/3" : "Step 1/3");
             break;
         case CALIB_WAIT_TR:
             tx = CALIB_TR_X; ty = CALIB_TR_Y;
-            hint = "Chay tam do GOC TREN - PHAI";
-            step = "Buoc 2/3";
+            hint = (getLanguage() == LANG_VI ? "Cham tam do GOC TREN - PHAI" : "Tap target TOP - RIGHT");
+            step = (getLanguage() == LANG_VI ? "Buoc 2/3" : "Step 2/3");
             break;
         case CALIB_WAIT_BL:
             tx = CALIB_BL_X; ty = CALIB_BL_Y;
-            hint = "Chay tam do GOC DUOI - TRAI";
-            step = "Buoc 3/3";
+            hint = (getLanguage() == LANG_VI ? "Cham tam do GOC DUOI - TRAI" : "Tap target BOTTOM - LEFT");
+            step = (getLanguage() == LANG_VI ? "Buoc 3/3" : "Step 3/3");
             break;
         default:
             break;
@@ -2297,26 +2270,28 @@ void Display::renderPage1_Calendar() {
     _spr.setTextDatum(MC_DATUM);
     _spr.setTextColor(RGB565(255, 245, 220));
     char titleBuf[32];
-    snprintf(titleBuf, sizeof(titleBuf), "THANG %02d  •  %d", _calMonth, _calYear);
+    snprintf(titleBuf, sizeof(titleBuf), (getLanguage() == LANG_VI ? "THANG %02d  •  %d" : "MONTH %02d  •  %d"), _calMonth, _calYear);
     _spr.drawString(titleBuf, 160, 17, 2);
 
     // Dòng phụ: Thông tin Âm lịch chi tiết hôm nay (cách đỉnh gáy lò xo 4px)
     bool isCurrentMonth = (_calYear == curYear && _calMonth == curMonth);
-    char subBuf[48];
+    char subBuf[64];
     if (isCurrentMonth) {
         LunarDate todayLunar = LunarCalendar::convertSolar2Lunar(curDay, curMonth, curYear);
-        snprintf(subBuf, sizeof(subBuf), "Hom nay: %02d/%02d AL  -  Nam %s", 
+        snprintf(subBuf, sizeof(subBuf), (getLanguage() == LANG_VI ? "Hom nay: %02d/%02d AL  -  Nam %s" : "Today: %02d/%02d Lunar  -  Year %s"), 
                  todayLunar.day, todayLunar.month, todayLunar.yearCanChi);
         _spr.setTextColor(RGB565(245, 215, 150)); // Gold dịu
     } else {
         LunarDate midLunar = LunarCalendar::convertSolar2Lunar(15, _calMonth, _calYear);
-        snprintf(subBuf, sizeof(subBuf), "Nam %s  •  [Cham ve hom nay]", midLunar.yearCanChi);
+        snprintf(subBuf, sizeof(subBuf), (getLanguage() == LANG_VI ? "Nam %s  •  [Cham ve hom nay]" : "Year %s  •  [Tap for today]"), midLunar.yearCanChi);
         _spr.setTextColor(RGB565(255, 200, 100));
     }
     _spr.drawString(subBuf, 160, 29, 1);
 
     // ── 4. THANH THỨ (T2 to CN, cách đáy gáy lò xo 4px) ───────────────
-    const char* daysOfWeek[] = { "T2", "T3", "T4", "T5", "T6", "T7", "CN" };
+    const char* daysOfWeekVI[] = { "T2", "T3", "T4", "T5", "T6", "T7", "CN" };
+    const char* daysOfWeekEN[] = { "MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN" };
+    const char* const* daysOfWeek = (getLanguage() == LANG_VI) ? daysOfWeekVI : daysOfWeekEN;
     for (int col = 0; col < 7; col++) {
         int16_t hx = 34 + col * 42;
         if (col == 6)      _spr.setTextColor(RGB565(255, 110, 110)); // CN (Sunday) Đỏ San Hô
@@ -2525,7 +2500,7 @@ void Display::renderPage2_Finance() {
     // Header Vàng
     _spr.setTextDatum(TL_DATUM);
     _spr.setTextColor(theme.yellow);
-    _spr.drawString("VANG SJC", leftX + 10, 14, 2);
+    _spr.drawString((getLanguage() == LANG_VI ? "VANG SJC" : "SJC GOLD"), leftX + 10, 14, 2);
 
     char sjcBadge[16];
     bool sjcPos = (fd.sjcChangePercent >= 0);
@@ -2543,19 +2518,19 @@ void Display::renderPage2_Finance() {
     // Hàng 1: MUA
     _spr.setTextDatum(TL_DATUM);
     _spr.setTextColor(theme.textDim);
-    _spr.drawString("MUA", leftX + 10, 37, 1);
+    _spr.drawString((getLanguage() == LANG_VI ? "MUA" : "BUY"), leftX + 10, 37, 1);
     _spr.setTextColor(C_WHITE);
     _spr.drawString(buyStr, leftX + 42, 33, 4);
     _spr.setTextColor(theme.textVDim);
-    _spr.drawString("tr", leftX + 42 + _spr.textWidth(buyStr, 4) + 2, 43, 1);
+    _spr.drawString((getLanguage() == LANG_VI ? "tr" : "M"), leftX + 42 + _spr.textWidth(buyStr, 4) + 2, 43, 1);
 
     // Hàng 2: BÁN
     _spr.setTextColor(theme.textDim);
-    _spr.drawString("BAN", leftX + 10, 58, 1);
+    _spr.drawString((getLanguage() == LANG_VI ? "BAN" : "SELL"), leftX + 10, 58, 1);
     _spr.setTextColor(theme.yellow);
     _spr.drawString(sellStr, leftX + 42, 54, 4);
     _spr.setTextColor(theme.textVDim);
-    _spr.drawString("tr", leftX + 42 + _spr.textWidth(sellStr, 4) + 2, 64, 1);
+    _spr.drawString((getLanguage() == LANG_VI ? "tr" : "M"), leftX + 42 + _spr.textWidth(sellStr, 4) + 2, 64, 1);
 
     // Đường phân cách mờ 1 (đồng bộ thẳng hàng với cột tỉ giá tại Y = 84)
     _spr.drawFastHLine(leftX + 8, 84, cardW - 16, blendColor(theme.cardBorder, theme.bg, 110));
@@ -2563,7 +2538,7 @@ void Display::renderPage2_Finance() {
     // Giá Vàng Thế Giới (Kitco)
     _spr.setTextDatum(TL_DATUM);
     _spr.setTextColor(theme.textDim);
-    _spr.drawString("THE GIOI (KITCO)", leftX + 10, 92, 1);
+    _spr.drawString((getLanguage() == LANG_VI ? "THE GIOI (KITCO)" : "WORLD (KITCO)"), leftX + 10, 92, 1);
 
     char kitcoStr[24];
     char kNum[16];
@@ -2581,7 +2556,7 @@ void Display::renderPage2_Finance() {
     // Biểu đồ 7 ngày Vàng SJC (Vector sắc nét)
     _spr.setTextDatum(TL_DATUM);
     _spr.setTextColor(theme.yellow);
-    _spr.drawString("XU HUONG 7 NGAY", leftX + 10, 146, 1);
+    _spr.drawString((getLanguage() == LANG_VI ? "XU HUONG 7 NGAY" : "7-DAY TREND"), leftX + 10, 146, 1);
 
     drawFinanceSparkline(leftX + 10, 156, cardW - 20, 36, fd.sjc7d, 7, C_GOLD, false);
 
@@ -2590,7 +2565,6 @@ void Display::renderPage2_Finance() {
     struct tm tmNow;
     localtime_r(&rawNow, &tmNow);
     int curWday = tmNow.tm_wday; // 0 = CN, 1 = T2.. 6 = T7
-    const char* wdayNames[7] = { "CN", "T2", "T3", "T4", "T5", "T6", "T7" };
 
     _spr.setTextDatum(MC_DATUM);
     for (int i = 0; i < 7; i++) {
@@ -2601,13 +2575,13 @@ void Display::renderPage2_Finance() {
         } else {
             _spr.setTextColor(theme.textVDim);
         }
-        _spr.drawString(wdayNames[w], dx, 196, 1);
+        _spr.drawString(getShortDayNameI18n(w), dx, 196, 1);
     }
 
     // Call-to-action chân thẻ
     _spr.setTextDatum(MC_DATUM);
     _spr.setTextColor(blendColor(theme.textDim, C_WHITE, 120));
-    _spr.drawString("CHAM XEM CHI TIET >", leftX + cardW / 2, 215, 1);
+    _spr.drawString((getLanguage() == LANG_VI ? "CHAM XEM CHI TIET >" : "TAP FOR DETAILS >"), leftX + cardW / 2, 215, 1);
 
     // ═══════════════════════════════════════════════════════════════════
     //  CỘT PHẢI: TỶ GIÁ NGOẠI TỆ & VĨ MÔ (X = 164, W = 148, Y = 8, H = 224)
@@ -2618,7 +2592,7 @@ void Display::renderPage2_Finance() {
     // Header Tỷ giá
     _spr.setTextDatum(TL_DATUM);
     _spr.setTextColor(theme.accent);
-    _spr.drawString("TI GIA (VND)", rightX + 10, 14, 2);
+    _spr.drawString((getLanguage() == LANG_VI ? "TI GIA (VND)" : "RATES (VND)"), rightX + 10, 14, 2);
     _spr.setTextDatum(TR_DATUM);
     _spr.setTextColor(theme.textDim);
     _spr.drawString("VCB", rightX + cardW - 10, 16, 1);
@@ -2695,7 +2669,7 @@ void Display::renderPage2_Finance() {
     // Call-to-action chân thẻ: THỐNG NHẤT 100% CÂU CHỮ VỚI CỘT VÀNG
     _spr.setTextDatum(MC_DATUM);
     _spr.setTextColor(blendColor(theme.textDim, C_WHITE, 120));
-    _spr.drawString("CHAM XEM CHI TIET >", rightX + cardW / 2, 215, 1);
+    _spr.drawString((getLanguage() == LANG_VI ? "CHAM XEM CHI TIET >" : "TAP FOR DETAILS >"), rightX + cardW / 2, 215, 1);
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -2776,7 +2750,7 @@ void Display::renderFinanceCurrencyPopup() {
         FinanceService::formatVND((long)roundf(fd.cur1Min7d), min1, sizeof(min1));
         FinanceService::formatVND((long)roundf(fd.cur1Max7d), max1, sizeof(max1));
         char range7d[64];
-        snprintf(range7d, sizeof(range7d), "Bien do 7d:   Cao: %s   •   Thap: %s", max1, min1);
+        snprintf(range7d, sizeof(range7d), (getLanguage() == LANG_VI ? "Bien do 7d:   Cao: %s   •   Thap: %s" : "7d Range:   High: %s   •   Low: %s"), max1, min1);
 
         _spr.setTextDatum(TL_DATUM);
         _spr.setTextColor(RGB565(170, 200, 235));
@@ -2787,8 +2761,8 @@ void Display::renderFinanceCurrencyPopup() {
         _spr.drawRoundRect(midX - 125, 96, 250, 20, 10, RGB565(36, 52, 75));
 
         char dayStr[32], dinhStr[32];
-        snprintf(dayStr, sizeof(dayStr), "Day: %s", min1);
-        snprintf(dinhStr, sizeof(dinhStr), "Dinh: %s", max1);
+        snprintf(dayStr, sizeof(dayStr), (getLanguage() == LANG_VI ? "Day: %s" : "Low: %s"), min1);
+        snprintf(dinhStr, sizeof(dinhStr), (getLanguage() == LANG_VI ? "Dinh: %s" : "High: %s"), max1);
 
         _spr.setTextDatum(MR_DATUM);
         _spr.setTextColor(RGB565(160, 205, 255));
@@ -2825,7 +2799,7 @@ void Display::renderFinanceCurrencyPopup() {
         FinanceService::formatVND((long)roundf(fd.cur2Min7d), min2, sizeof(min2));
         FinanceService::formatVND((long)roundf(fd.cur2Max7d), max2, sizeof(max2));
         char range7d[64];
-        snprintf(range7d, sizeof(range7d), "Bien do 7d:   Cao: %s   •   Thap: %s", max2, min2);
+        snprintf(range7d, sizeof(range7d), (getLanguage() == LANG_VI ? "Bien do 7d:   Cao: %s   •   Thap: %s" : "7d Range:   High: %s   •   Low: %s"), max2, min2);
 
         _spr.setTextDatum(TL_DATUM);
         _spr.setTextColor(RGB565(170, 200, 235));
@@ -2836,8 +2810,8 @@ void Display::renderFinanceCurrencyPopup() {
         _spr.drawRoundRect(midX - 125, 96, 250, 20, 10, RGB565(36, 52, 75));
 
         char dayStr[32], dinhStr[32];
-        snprintf(dayStr, sizeof(dayStr), "Day: %s", min2);
-        snprintf(dinhStr, sizeof(dinhStr), "Dinh: %s", max2);
+        snprintf(dayStr, sizeof(dayStr), (getLanguage() == LANG_VI ? "Day: %s" : "Low: %s"), min2);
+        snprintf(dinhStr, sizeof(dinhStr), (getLanguage() == LANG_VI ? "Dinh: %s" : "High: %s"), max2);
 
         _spr.setTextDatum(MR_DATUM);
         _spr.setTextColor(RGB565(160, 205, 255));
@@ -2856,7 +2830,6 @@ void Display::renderFinanceCurrencyPopup() {
     }
 
     // Nhãn 7 ngày gần nhất động (tính lùi từ Hôm nay)
-    const char* wdayNames[7] = { "CN", "T2", "T3", "T4", "T5", "T6", "T7" };
     time_t rawPopTime = time(NULL);
     struct tm tmPop;
     localtime_r(&rawPopTime, &tmPop);
@@ -2871,13 +2844,13 @@ void Display::renderFinanceCurrencyPopup() {
         } else {
             _spr.setTextColor(RGB565(160, 175, 200));
         }
-        _spr.drawString(wdayNames[w], dx, chartY + chartH + 9, 1);
+        _spr.drawString(getShortDayNameI18n(w), dx, chartY + chartH + 9, 1);
     }
 
     // Footer nguồn dữ liệu
     _spr.setTextDatum(MC_DATUM);
     _spr.setTextColor(theme.textVDim);
-    _spr.drawString("Nguon: Vietcombank & ExchangeRate-API", 160, 224, 1);
+    _spr.drawString((getLanguage() == LANG_VI ? "Nguon: Vietcombank & ExchangeRate-API" : "Source: Vietcombank & ExchangeRate-API"), 160, 224, 1);
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -2892,7 +2865,7 @@ void Display::renderFinanceGoldPopup() {
     // Tiêu đề Popup
     _spr.setTextDatum(ML_DATUM);
     _spr.setTextColor(C_GOLD);
-    _spr.drawString("VANG SJC 9999 & THE GIOI", 16, 23, 2);
+    _spr.drawString((getLanguage() == LANG_VI ? "VANG SJC 9999 & THE GIOI" : "SJC GOLD 9999 & WORLD"), 16, 23, 2);
 
     // Nút [X] Đóng Popup — Chuẩn phong cách Windows 11 nền xanh bo tròn góc
     drawPopupCloseButton();
@@ -2902,9 +2875,9 @@ void Display::renderFinanceGoldPopup() {
 
     // Bảng giá SJC & Thế Giới (Bố cục thông thoáng, không đè chữ)
     char sjcBuyStr[32], sjcSellStr[32];
-    snprintf(sjcBuyStr, sizeof(sjcBuyStr), "SJC MUA: %.1f tr", fd.sjcBuy);
+    snprintf(sjcBuyStr, sizeof(sjcBuyStr), (getLanguage() == LANG_VI ? "SJC MUA: %.1f tr" : "SJC BUY: %.1f M"), fd.sjcBuy);
     toVNFloat(sjcBuyStr);
-    snprintf(sjcSellStr, sizeof(sjcSellStr), "BAN: %.1f tr", fd.sjcSell);
+    snprintf(sjcSellStr, sizeof(sjcSellStr), (getLanguage() == LANG_VI ? "BAN: %.1f tr" : "SELL: %.1f M"), fd.sjcSell);
     toVNFloat(sjcSellStr);
 
     _spr.setTextDatum(TL_DATUM);
@@ -2921,13 +2894,13 @@ void Display::renderFinanceGoldPopup() {
     long kw = (long)fd.worldGoldUsd;
     int kdec = (int)(roundf((fd.worldGoldUsd - kw) * 10.0f)) % 10;
     FinanceService::formatVND(kw, kNum, sizeof(kNum));
-    snprintf(kitcoStr, sizeof(kitcoStr), "THE GIOI (KITCO):  $%s,%d / oz", kNum, kdec);
+    snprintf(kitcoStr, sizeof(kitcoStr), (getLanguage() == LANG_VI ? "THE GIOI (KITCO):  $%s,%d / oz" : "WORLD (KITCO):  $%s,%d / oz"), kNum, kdec);
     _spr.setTextDatum(TL_DATUM);
     _spr.setTextColor(RGB565(170, 215, 255));
     _spr.drawString(kitcoStr, 16, 70, 2);
 
     char diffStr[48];
-    snprintf(diffStr, sizeof(diffStr), "Chenh lech trong nuoc: ~%.1f tr/luong", fd.domesticDiffTr);
+    snprintf(diffStr, sizeof(diffStr), (getLanguage() == LANG_VI ? "Chenh lech trong nuoc: ~%.1f tr/luong" : "Domestic spread: ~%.1f M/tael"), fd.domesticDiffTr);
     toVNFloat(diffStr);
     _spr.setTextColor(RGB565(200, 210, 225));
     _spr.drawString(diffStr, 16, 90, 1);
@@ -2938,9 +2911,9 @@ void Display::renderFinanceGoldPopup() {
     _spr.drawRoundRect(midX - 125, 104, 250, 20, 10, RGB565(70, 58, 35));
 
     char dayGStr[32], dinhGStr[32];
-    snprintf(dayGStr, sizeof(dayGStr), "Day: %.1f tr", fd.sjcMin7d);
+    snprintf(dayGStr, sizeof(dayGStr), (getLanguage() == LANG_VI ? "Day: %.1f tr" : "Low: %.1f M"), fd.sjcMin7d);
     toVNFloat(dayGStr);
-    snprintf(dinhGStr, sizeof(dinhGStr), "Dinh: %.1f tr", fd.sjcMax7d);
+    snprintf(dinhGStr, sizeof(dinhGStr), (getLanguage() == LANG_VI ? "Dinh: %.1f tr" : "High: %.1f M"), fd.sjcMax7d);
     toVNFloat(dinhGStr);
 
     _spr.setTextDatum(MR_DATUM);
@@ -2964,7 +2937,6 @@ void Display::renderFinanceGoldPopup() {
     drawFinanceSparkline(chartX, chartY, chartW, chartH, fd.sjc7d, 7, C_GOLD, false);
 
     // Trục 7 ngày gần nhất động (tính lùi từ Hôm nay)
-    const char* wdayNamesG[7] = { "CN", "T2", "T3", "T4", "T5", "T6", "T7" };
     time_t rawGoldTime = time(NULL);
     struct tm tmGold;
     localtime_r(&rawGoldTime, &tmGold);
@@ -2979,13 +2951,13 @@ void Display::renderFinanceGoldPopup() {
         } else {
             _spr.setTextColor(RGB565(180, 185, 195));
         }
-        _spr.drawString(wdayNamesG[w], dx, chartY + chartH + 9, 1);
+        _spr.drawString(getShortDayNameI18n(w), dx, chartY + chartH + 9, 1);
     }
 
     // Footer nguồn
     _spr.setTextDatum(MC_DATUM);
     _spr.setTextColor(theme.textVDim);
-    _spr.drawString("Nguon: SJC & Kitco  •  Don vi: Trieu VND/Luong", 160, 224, 1);
+    _spr.drawString((getLanguage() == LANG_VI ? "Nguon: SJC & Kitco  •  Don vi: Trieu VND/Luong" : "Source: SJC & Kitco  •  Unit: Million VND/Tael"), 160, 224, 1);
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -3069,7 +3041,9 @@ void Display::renderPage3_Pomodoro() {
     _spr.fillSmoothRoundRect(capX, capY, capW, capH, capR, RGB565(20, 26, 38), theme.bg);
     _spr.drawRoundRect(capX, capY, capW, capH, capR, RGB565(36, 48, 68));
 
-    const char* tabNames[] = { "TAP TRUNG", "NGHI 5P", "NGHI 15P" };
+    const char* tabNamesVI[] = { "TAP TRUNG", "NGHI 5P", "NGHI 15P" };
+    const char* tabNamesEN[] = { "FOCUS", "BREAK 5M", "BREAK 15M" };
+    const char* const* tabNames = (getLanguage() == LANG_VI) ? tabNamesVI : tabNamesEN;
     int16_t segX[] = { 47, 123, 199 };
     int16_t segW[] = { 75, 75, 74 };
 
@@ -3136,14 +3110,16 @@ void Display::renderPage3_Pomodoro() {
     int16_t cx2 = 236;
 
     // Dòng trạng thái nhỏ trang nhã (Status tag)
-    const char* statusDesc = "DANG TAP TRUNG";
+    const char* statusDesc = (getLanguage() == LANG_VI) ? "DANG TAP TRUNG" : "FOCUSING...";
     if (_pomoState == POMO_STOPPED) {
-        statusDesc = (_pomoMode == POMO_FOCUS) ? "SAN SANG TAP TRUNG" : "SAN SANG NGHI";
+        statusDesc = (_pomoMode == POMO_FOCUS)
+                     ? ((getLanguage() == LANG_VI) ? "SAN SANG TAP TRUNG" : "READY TO FOCUS")
+                     : ((getLanguage() == LANG_VI) ? "SAN SANG NGHI" : "READY FOR BREAK");
     } else if (_pomoState == POMO_PAUSED) {
-        statusDesc = "DANG TAM DUNG";
+        statusDesc = (getLanguage() == LANG_VI) ? "DANG TAM DUNG" : "PAUSED";
     } else {
-        if (_pomoMode == POMO_SHORT_BREAK) statusDesc = "NGHI NGAN 5 PHUT";
-        else if (_pomoMode == POMO_LONG_BREAK) statusDesc = "NGHI DAI 15 PHUT";
+        if (_pomoMode == POMO_SHORT_BREAK) statusDesc = (getLanguage() == LANG_VI) ? "NGHI NGAN 5 PHUT" : "SHORT BREAK 5M";
+        else if (_pomoMode == POMO_LONG_BREAK) statusDesc = (getLanguage() == LANG_VI) ? "NGHI DAI 15 PHUT" : "LONG BREAK 15M";
     }
     _spr.setTextDatum(MC_DATUM);
     _spr.setTextColor(activeColor);
@@ -3165,43 +3141,43 @@ void Display::renderPage3_Pomodoro() {
         _spr.fillSmoothRoundRect(bX, btnY, bW, btnH, 21, activeColor, theme.bg);
         _spr.setTextDatum(MC_DATUM);
         _spr.setTextColor(C_WHITE);
-        _spr.drawString("BAT DAU", bX + bW / 2, btnY + btnH / 2, 2);
+        _spr.drawString(L(TXT_POMO_START), bX + bW / 2, btnY + btnH / 2, 2);
     } else if (_pomoState == POMO_RUNNING) {
-        // Nút Trái: TAM DUNG
+        // Nút Trái: TAM DUNG / PAUSE
         int16_t b1X = 158, b1W = 74;
         _spr.fillSmoothRoundRect(b1X, btnY, b1W, btnH, 16, RGB565(245, 180, 45), theme.bg);
         _spr.setTextDatum(MC_DATUM);
         _spr.setTextColor(RGB565(20, 20, 25));
-        _spr.drawString("TAM DUNG", b1X + b1W / 2, btnY + btnH / 2, 2);
+        _spr.drawString(L(TXT_POMO_PAUSE), b1X + b1W / 2, btnY + btnH / 2, 2);
 
-        // Nút Phải: DAT LAI
+        // Nút Phải: DAT LAI / RESET
         int16_t b2X = 236, b2W = 74;
         _spr.fillSmoothRoundRect(b2X, btnY, b2W, btnH, 16, RGB565(35, 42, 52), theme.bg);
         _spr.drawRoundRect(b2X, btnY, b2W, btnH, 16, RGB565(65, 78, 95));
         _spr.setTextDatum(MC_DATUM);
         _spr.setTextColor(RGB565(220, 230, 245));
-        _spr.drawString("DAT LAI", b2X + b2W / 2, btnY + btnH / 2, 2);
+        _spr.drawString(L(TXT_POMO_RESET), b2X + b2W / 2, btnY + btnH / 2, 2);
     } else if (_pomoState == POMO_PAUSED) {
-        // Nút Trái: TIEP TUC
+        // Nút Trái: TIEP TUC / RESUME
         int16_t b1X = 158, b1W = 74;
         _spr.fillSmoothRoundRect(b1X, btnY, b1W, btnH, 16, RGB565(35, 215, 140), theme.bg);
         _spr.setTextDatum(MC_DATUM);
         _spr.setTextColor(RGB565(15, 25, 20));
-        _spr.drawString("TIEP TUC", b1X + b1W / 2, btnY + btnH / 2, 2);
+        _spr.drawString((getLanguage() == LANG_VI) ? "TIEP TUC" : "RESUME", b1X + b1W / 2, btnY + btnH / 2, 2);
 
-        // Nút Phải: DAT LAI
+        // Nút Phải: DAT LAI / RESET
         int16_t b2X = 236, b2W = 74;
         _spr.fillSmoothRoundRect(b2X, btnY, b2W, btnH, 16, RGB565(180, 35, 50), theme.bg);
         _spr.drawRoundRect(b2X, btnY, b2W, btnH, 16, RGB565(220, 60, 80));
         _spr.setTextDatum(MC_DATUM);
         _spr.setTextColor(C_WHITE);
-        _spr.drawString("DAT LAI", b2X + b2W / 2, btnY + btnH / 2, 2);
+        _spr.drawString(L(TXT_POMO_RESET), b2X + b2W / 2, btnY + btnH / 2, 2);
     }
 }
 
 // ═══════════════════════════════════════════════════════════════════════
 //  PAGE 4 — SETTINGS (Pure Seamless Android Material 3 List — ZERO CARDS)
-//  No card borders, no nested boxes, full-row touch targets with hairline dividers
+//  6 Rows: Language, Theme, Touch Sound, Alarm Melody, Brightness, System
 // ═══════════════════════════════════════════════════════════════════════
 void Display::renderPage4_Settings() {
     // Nền trơn tĩnh (Solid Velvet) chuẩn màu Theme, loại bỏ toàn bộ sao lốm đốm để text rõ nét
@@ -3210,105 +3186,127 @@ void Display::renderPage4_Settings() {
     // ── 1. Header Bar Phẳng Liền Mạch (Y = 6..24) ────────────────────
     _spr.setTextDatum(TL_DATUM);
     _spr.setTextColor(theme.accent);
-    _spr.drawString("CAI DAT", 20, 8, 2);
+    _spr.drawString(L(TXT_SETTINGS), 20, 8, 2);
 
     _spr.setTextDatum(TR_DATUM);
     _spr.setTextColor(theme.textDim);
     _spr.drawString("SmartDesk V2.1", 300, 10, 1);
 
     // Đường hairline ngăn cách mỏng 1px
-    _spr.drawFastHLine(20, 26, 280, RGB565(32, 42, 58));
+    _spr.drawFastHLine(20, 25, 280, RGB565(32, 42, 58));
 
-    // ── 2. Hàng 1: Giao diện (Theme) (Y = 28..61, Tâm Y = 44) ────────
-    // Icon tròn màu Tím
-    _spr.fillCircle(30, 44, 9, RGB565(130, 65, 210));
+    // ── 2. Hàng 1: Ngôn ngữ (Language) (Y = 26..53, Tâm Y = 39) ───────
+    // Icon tròn màu Xanh ngọc lục bảo
+    _spr.fillCircle(30, 39, 8, RGB565(30, 180, 90));
     _spr.setTextDatum(MC_DATUM);
     _spr.setTextColor(C_WHITE);
-    _spr.drawString("T", 30, 44, 1);
+    _spr.drawString("L", 30, 39, 1);
 
     // Tiêu đề
     _spr.setTextDatum(ML_DATUM);
     _spr.setTextColor(theme.textMain);
-    _spr.drawString("Giao dien (Theme)", 46, 44, 2);
+    _spr.drawString(L(TXT_ROW_LANGUAGE), 46, 39, 2);
+
+    // Giá trị hiện tại + Mũi tên ›
+    _spr.setTextDatum(MR_DATUM);
+    _spr.setTextColor(theme.accent);
+    char langStr[32];
+    snprintf(langStr, sizeof(langStr), "%s  >", getLanguageName());
+    _spr.drawString(langStr, 300, 39, 2);
+
+    // Hairline
+    _spr.drawFastHLine(20, 53, 280, RGB565(24, 32, 46));
+
+    // ── 3. Hàng 2: Giao diện (Theme) (Y = 54..81, Tâm Y = 67) ────────
+    // Icon tròn màu Tím
+    _spr.fillCircle(30, 67, 8, RGB565(130, 65, 210));
+    _spr.setTextDatum(MC_DATUM);
+    _spr.setTextColor(C_WHITE);
+    _spr.drawString("T", 30, 67, 1);
+
+    // Tiêu đề
+    _spr.setTextDatum(ML_DATUM);
+    _spr.setTextColor(theme.textMain);
+    _spr.drawString(L(TXT_ROW_THEME), 46, 67, 2);
 
     // Giá trị hiện tại + Mũi tên ›
     _spr.setTextDatum(MR_DATUM);
     _spr.setTextColor(theme.accent);
     char thStr[32];
     snprintf(thStr, sizeof(thStr), "%s  >", getThemeName());
-    _spr.drawString(thStr, 300, 44, 2);
+    _spr.drawString(thStr, 300, 67, 2);
 
     // Hairline
-    _spr.drawFastHLine(20, 61, 280, RGB565(24, 32, 46));
+    _spr.drawFastHLine(20, 81, 280, RGB565(24, 32, 46));
 
-    // ── 3. Hàng 2: Âm chạm cảm ứng (Touch Sound) (Y = 62..95, Tâm Y = 78) ──
+    // ── 4. Hàng 3: Âm chạm cảm ứng (Touch Sound) (Y = 82..109, Tâm Y = 95) ──
     // Icon tròn màu Xanh ngọc
-    _spr.fillCircle(30, 78, 9, RGB565(0, 170, 220));
+    _spr.fillCircle(30, 95, 8, RGB565(0, 170, 220));
     _spr.setTextDatum(MC_DATUM);
     _spr.setTextColor(C_WHITE);
-    _spr.drawString("S", 30, 78, 1);
+    _spr.drawString("S", 30, 95, 1);
 
     // Tiêu đề
     _spr.setTextDatum(ML_DATUM);
     _spr.setTextColor(theme.textMain);
-    _spr.drawString("Am cham cam ung", 46, 78, 2);
+    _spr.drawString(L(TXT_ROW_TOUCH_SND), 46, 95, 2);
 
     // Giá trị hiện tại + Mũi tên ›
     _spr.setTextDatum(MR_DATUM);
     _spr.setTextColor(theme.accent);
     char sndStr[32];
     snprintf(sndStr, sizeof(sndStr), "%s  >", hardware.getTouchSoundName());
-    _spr.drawString(sndStr, 300, 78, 2);
+    _spr.drawString(sndStr, 300, 95, 2);
 
     // Hairline
-    _spr.drawFastHLine(20, 95, 280, RGB565(24, 32, 46));
+    _spr.drawFastHLine(20, 109, 280, RGB565(24, 32, 46));
 
-    // ── 4. Hàng 3: Chuông báo thức (Alarm Melody) (Y = 96..129, Tâm Y = 112) ──
+    // ── 5. Hàng 4: Chuông báo thức (Alarm Melody) (Y = 110..137, Tâm Y = 123) ──
     // Icon tròn màu Cam san hô
-    _spr.fillCircle(30, 112, 9, RGB565(240, 95, 45));
+    _spr.fillCircle(30, 123, 8, RGB565(240, 95, 45));
     _spr.setTextDatum(MC_DATUM);
     _spr.setTextColor(C_WHITE);
-    _spr.drawString("A", 30, 112, 1);
+    _spr.drawString("A", 30, 123, 1);
 
     // Tiêu đề
     _spr.setTextDatum(ML_DATUM);
     _spr.setTextColor(theme.textMain);
-    _spr.drawString("Dieu chuong bao", 46, 112, 2);
+    _spr.drawString(L(TXT_ROW_ALARM_MEL), 46, 123, 2);
 
     // Giá trị chuông
     _spr.setTextDatum(MR_DATUM);
     _spr.setTextColor(theme.accent);
     char melStr[32];
     snprintf(melStr, sizeof(melStr), "%s >", hardware.getAlarmMelodyName());
-    _spr.drawString(melStr, 242, 112, 2);
+    _spr.drawString(melStr, 242, 123, 2);
 
-    // Nút [THỬ] phát loa
-    _spr.fillRoundRect(250, 101, 50, 22, 11, theme.green);
+    // Nút [THỬ] / [TEST] phát loa
+    _spr.fillRoundRect(250, 113, 50, 20, 10, theme.green);
     _spr.setTextDatum(MC_DATUM);
     _spr.setTextColor(C_BLACK);
-    _spr.drawString("THU", 275, 112, 2);
+    _spr.drawString(L(TXT_TEST), 275, 123, 2);
 
     // Hairline
-    _spr.drawFastHLine(20, 129, 280, RGB565(24, 32, 46));
+    _spr.drawFastHLine(20, 137, 280, RGB565(24, 32, 46));
 
-    // ── 5. Hàng 4: Độ sáng màn hình (Display Brightness) (Y = 130..163, Tâm Y = 146) ──
+    // ── 6. Hàng 5: Độ sáng màn hình (Display Brightness) (Y = 138..165, Tâm Y = 151) ──
     // Icon tròn màu Vàng nắng
-    _spr.fillCircle(30, 146, 9, RGB565(245, 175, 25));
+    _spr.fillCircle(30, 151, 8, RGB565(245, 175, 25));
     _spr.setTextDatum(MC_DATUM);
     _spr.setTextColor(C_BLACK);
-    _spr.drawString("B", 30, 146, 1);
+    _spr.drawString("B", 30, 151, 1);
 
     // Tiêu đề
     _spr.setTextDatum(ML_DATUM);
     _spr.setTextColor(theme.textMain);
-    _spr.drawString("Do sang", 46, 146, 2);
+    _spr.drawString(L(TXT_ROW_BRIGHTNESS), 46, 151, 2);
 
-    // Thanh tiến trình độ sáng liền mạch (X = 112, Y = 142, W = 88, H = 8)
-    _spr.fillRoundRect(112, 142, 88, 8, 4, RGB565(25, 34, 48));
+    // Thanh tiến trình độ sáng liền mạch (X = 112, Y = 147, W = 88, H = 8)
+    _spr.fillRoundRect(112, 147, 88, 8, 4, RGB565(25, 34, 48));
     bool isAuto = hardware.isAutoBrightness();
     int fillW = map(hardware.getBacklight(), 0, 100, 0, 88);
     if (fillW > 0) {
-        _spr.fillRoundRect(112, 142, fillW, 8, 4, isAuto ? theme.green : theme.accent);
+        _spr.fillRoundRect(112, 147, fillW, 8, 4, isAuto ? theme.green : theme.accent);
     }
 
     // Phần trăm
@@ -3316,57 +3314,65 @@ void Display::renderPage4_Settings() {
     snprintf(bStr, sizeof(bStr), "%d%%", hardware.getBacklight());
     _spr.setTextDatum(ML_DATUM);
     _spr.setTextColor(theme.textDim);
-    _spr.drawString(bStr, 204, 146, 1);
+    _spr.drawString(bStr, 204, 151, 1);
 
     // Nút [AUTO]
-    _spr.fillRoundRect(246, 135, 54, 22, 11, isAuto ? RGB565(15, 60, 40) : RGB565(20, 28, 42));
-    _spr.drawRoundRect(246, 135, 54, 22, 11, isAuto ? theme.green : RGB565(44, 58, 82));
+    _spr.fillRoundRect(246, 140, 54, 22, 11, isAuto ? RGB565(15, 60, 40) : RGB565(20, 28, 42));
+    _spr.drawRoundRect(246, 140, 54, 22, 11, isAuto ? theme.green : RGB565(44, 58, 82));
     _spr.setTextDatum(MC_DATUM);
     _spr.setTextColor(isAuto ? theme.green : theme.textDim);
-    _spr.drawString("AUTO", 273, 146, 1);
+    _spr.drawString(L(TXT_AUTO), 273, 151, 1);
 
     // Hairline
-    _spr.drawFastHLine(20, 163, 280, RGB565(24, 32, 46));
+    _spr.drawFastHLine(20, 165, 280, RGB565(24, 32, 46));
 
-    // ── 6. Hàng 5: Hệ thống & WiFi (Y = 164..194, Tâm Y = 178) ───────
+    // ── 7. Hàng 6: Hệ thống & WiFi (Y = 166..196, Tâm Y = 181) ───────
     // Icon tròn màu Xanh dương
-    _spr.fillCircle(30, 178, 9, RGB565(45, 125, 245));
+    _spr.fillCircle(30, 181, 8, RGB565(45, 125, 245));
     _spr.setTextDatum(MC_DATUM);
     _spr.setTextColor(C_WHITE);
-    _spr.drawString("i", 30, 178, 1);
+    _spr.drawString("i", 30, 181, 1);
 
     // Tiêu đề
     _spr.setTextDatum(ML_DATUM);
     _spr.setTextColor(theme.textMain);
-    _spr.drawString("smartdesk.local", 46, 178, 2);
+    _spr.drawString(L(TXT_SYSTEM_IP), 46, 181, 2);
 
     // IP Address
     String ipStr = "IP: " + WiFi.localIP().toString();
     _spr.setTextDatum(MR_DATUM);
     _spr.setTextColor(theme.textDim);
-    _spr.drawString(ipStr.c_str(), 300, 178, 1);
+    _spr.drawString(ipStr.c_str(), 300, 181, 1);
 }
 
 // ─── Touch Handler for Page 4 Settings (Full-Row Taps) ────────────────
 bool Display::handleTouchSettings(int16_t x, int16_t y) {
-    // ── Hàng 1: Đổi Giao diện (Theme) (Y: 26..61) ──
-    if (y >= 26 && y <= 61) {
+    // ── Hàng 1: Đổi Ngôn ngữ (Language) (Y: 26..53) ──
+    if (y >= 26 && y <= 53) {
+        toggleLanguage();
+        hardware.playTouchSound();
+        _lastRender = 0;
+        return true;
+    }
+
+    // ── Hàng 2: Đổi Giao diện (Theme) (Y: 54..81) ──
+    if (y >= 54 && y <= 81) {
         nextTheme();
         hardware.playTouchSound();
         _lastRender = 0;
         return true;
     }
 
-    // ── Hàng 2: Đổi Âm chạm cảm ứng (Touch Sound) (Y: 62..95) ──
-    if (y >= 62 && y <= 95) {
+    // ── Hàng 3: Đổi Âm chạm cảm ứng (Touch Sound) (Y: 82..109) ──
+    if (y >= 82 && y <= 109) {
         hardware.nextTouchSound();
         hardware.playTouchSound();
         _lastRender = 0;
         return true;
     }
 
-    // ── Hàng 3: Chuông báo thức (Alarm Melody) (Y: 96..129) ──
-    if (y >= 96 && y <= 129) {
+    // ── Hàng 4: Chuông báo thức (Alarm Melody) (Y: 110..137) ──
+    if (y >= 110 && y <= 137) {
         if (x >= 246) {
             // Nút [THỬ]: Phát chuông trên loa ngoài GPIO 26
             hardware.playAlarmMelody();
@@ -3381,8 +3387,8 @@ bool Display::handleTouchSettings(int16_t x, int16_t y) {
         }
     }
 
-    // ── Hàng 4: Độ sáng màn hình (Y: 130..163) ──
-    if (y >= 130 && y <= 163) {
+    // ── Hàng 5: Độ sáng màn hình (Y: 138..165) ──
+    if (y >= 138 && y <= 165) {
         if (x >= 240) {
             // Nút [AUTO]: Bật / tắt cảm biến quang LDR
             hardware.setAutoBrightness(!hardware.isAutoBrightness());
@@ -3402,8 +3408,8 @@ bool Display::handleTouchSettings(int16_t x, int16_t y) {
         }
     }
 
-    // ── Hàng 5: Thông tin hệ thống (Y: 164..194) ──
-    if (y >= 164 && y <= 194) {
+    // ── Hàng 6: Thông tin hệ thống (Y: 166..196) ──
+    if (y >= 166 && y <= 196) {
         hardware.playTouchSound();
         return true;
     }

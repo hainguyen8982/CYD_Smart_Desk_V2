@@ -30,6 +30,7 @@
 
 // ─── Timing ──────────────────────────────────────────────────────────
 #define WEATHER_FETCH_INTERVAL  600000  // 10 min
+#define FINANCE_FETCH_INTERVAL  900000  // 15 min
 #define LDR_CHECK_INTERVAL      500     // 500 ms
 #define DISPLAY_FPS_INTERVAL    33      // ~30 FPS target
 

@@ -4,12 +4,13 @@
 // ═══════════════════════════════════════════════════════════════════════
 #include "WeatherService.h"
 #include "Display.h"
+#include "NetworkTask.h"
 #include <WiFiManager.h>
 
 WeatherService weather;
 
 WeatherService::WeatherService()
-    : _lastFetch(0), _lastNtpAttempt(0), _timeSynced(false), _cityDetected(false),
+    : _mutex(xSemaphoreCreateMutex()), _lastFetch(0), _lastNtpAttempt(0), _timeSynced(false), _cityDetected(false),
       _lat(10.8231f), _lon(106.6297f) {
     memset(&_data, 0, sizeof(_data));
     strncpy(_data.city, "TP. HCM", sizeof(_data.city)); // Default to Saigon coordinates
@@ -53,14 +54,20 @@ void WeatherService::begin() {
         }
 
         display.showBootStatus("Updating Weather...", 94);
-        _detectCityFromIP();
-        _fetchWeather();
+        fetchDirect();
         display.showBootStatus("System Ready!", 100);
         delay(400);
     } else {
         display.showBootStatus("System Ready!", 100);
         delay(400);
     }
+}
+
+WeatherData WeatherService::getData() const {
+    if (_mutex) xSemaphoreTake(_mutex, portMAX_DELAY);
+    WeatherData copy = _data;
+    if (_mutex) xSemaphoreGive(_mutex);
+    return copy;
 }
 
 void WeatherService::update() {
@@ -80,21 +87,23 @@ void WeatherService::update() {
             }
         }
     }
-
-    unsigned long now = millis();
-    if (now - _lastFetch >= WEATHER_FETCH_INTERVAL || _lastFetch == 0) {
-        if (_timeSynced) {
-            _fetchWeather();
-            _lastFetch = now;
-        }
-    }
 }
 
 void WeatherService::fetchNow() {
+    // Non-blocking trigger to background Core 0 task
+    networkTask.triggerWeather();
+}
+
+void WeatherService::fetchDirect() {
     if (isConnected()) {
+        _detectCityFromIP();
         _fetchWeather();
         _lastFetch = millis();
     }
+}
+
+void WeatherService::fetchBackground() {
+    fetchDirect();
 }
 
 WeatherType WeatherService::getType() const {
@@ -233,6 +242,7 @@ void WeatherService::_fetchWeather() {
         DeserializationError err = deserializeJson(doc, payload);
 
         if (!err && !doc["current"].isNull()) {
+            if (_mutex) xSemaphoreTake(_mutex, portMAX_DELAY);
             _data.temp       = doc["current"]["temperature_2m"] | 26.0f;
             _data.humidity   = doc["current"]["relative_humidity_2m"] | 75;
             _data.windSpeed  = doc["current"]["wind_speed_10m"] | 10.0f;
@@ -326,6 +336,7 @@ void WeatherService::_fetchWeather() {
             }
 
             _data.valid = true;
+            if (_mutex) xSemaphoreGive(_mutex);
 
             Serial.printf("[Weather] ✓ Open-Meteo OK: %.1f°C, %s, %d%%RH, Wind: %.1f km/h, UV: %.1f | Next 3 days forecast loaded\n",
                 _data.temp, _data.main, _data.humidity, _data.windSpeed, _data.uvIndex);

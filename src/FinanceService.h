@@ -9,6 +9,8 @@
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
 
 struct FinanceData {
     // ── Vàng SJC 9999 ──
@@ -57,16 +59,18 @@ public:
     FinanceService();
 
     void begin();               // Khởi tạo, tải bộ nhớ đệm NVS
-    void update();              // Kiểm tra định kỳ (mỗi 15 phút)
-    void fetchNow();            // Buộc cập nhật ngay lập tức
+    void update();              // Kiểm tra định kỳ (ủy quyền cho Core 0 NetworkTask)
+    void fetchNow();            // Buộc cập nhật ngay lập tức (không chặn)
+    void fetchDirect();         // Cập nhật đồng bộ trực tiếp (dùng lúc boot splash)
+    void fetchBackground();     // Cập nhật chạy ngầm trên Core 0
 
-    // Tùy chỉnh cặp ngoại tệ (lưu vào NVS và tự làm mới)
+    // Tùy chỉnh cặp ngoại tệ (lưu vào NVS và tự làm mới qua background task)
     void setCurrencies(const char* c1, const char* c2);
 
-    const FinanceData& getData() const { return _data; }
-    bool isValid() const { return _data.valid; }
-    const char* getCur1() const { return _data.cur1Code; }
-    const char* getCur2() const { return _data.cur2Code; }
+    FinanceData getData() const;
+    bool isValid() const;
+    String getCur1() const;
+    String getCur2() const;
 
     static void formatVND(long value, char* out, size_t outSize);
 
@@ -78,6 +82,7 @@ private:
     void _fetchCrypto();
 
     FinanceData   _data;
+    mutable SemaphoreHandle_t _mutex;
     unsigned long _lastFetch;
     bool          _isFetching;
 };
