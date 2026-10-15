@@ -37,11 +37,6 @@ private:
     void _loadSettings();
     void _saveSettings();
 
-    void _drawTomato(TFT_eSprite& spr, int16_t cx, int16_t cy, bool isFocus, uint16_t bgColor);
-    void _drawCat(TFT_eSprite& spr, int16_t cx, int16_t cy, uint8_t pomoState, uint8_t pomoMode, uint16_t remainingSec, uint16_t bgColor);
-    void _drawShiba(TFT_eSprite& spr, int16_t cx, int16_t cy, uint8_t pomoState, uint8_t pomoMode, uint16_t remainingSec, uint16_t bgColor);
-    void _drawCapybara(TFT_eSprite& spr, int16_t cx, int16_t cy, uint8_t pomoState, uint8_t pomoMode, uint16_t remainingSec, uint16_t bgColor);
-
     DeskPetType _type;
 };
 
