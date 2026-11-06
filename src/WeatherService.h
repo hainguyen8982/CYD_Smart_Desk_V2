@@ -58,7 +58,8 @@ struct WeatherData {
 class WeatherService {
 public:
     WeatherService();
-    void begin();                       // Connect WiFi via WiFiManager
+    void begin();                       // Connect WiFi via WiFiProfileManager / QR Portal
+    void startWiFiSetupPortal();        // Launch on-screen QR Code setup portal on CYD
     void update();                      // Periodic check (now delegates to background task)
     void fetchNow();                    // Request immediate background fetch
     void fetchDirect();                 // Direct synchronous fetch (used during boot splash)

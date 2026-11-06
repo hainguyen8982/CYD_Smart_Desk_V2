@@ -139,5 +139,36 @@ graph TD
 - [x] **Giai đoạn 5:** Triển khai `FinanceService` tích hợp 3 API trực tuyến thực tế (Vàng SJC & mảng 7 ngày `Vang.today`, Tỉ giá ngoại tệ `ExchangeRate-API`, Vàng thế giới Kitco & Bitcoin `Binance`) kèm bộ nhớ đệm NVS Flash dự phòng khi offline.
 - [x] **Giai đoạn 6:** Hoàn thiện Page 3 (Pomodoro Split Layout + Chú cà chua Tomato Mascot + Nút công thái học).
 - [x] **Giai đoạn 7A:** Web Portal cấu hình cặp ngoại tệ tùy chọn linh hoạt (USD, EUR, CAD, JPY, GBP, AUD, SGD, CNY, KRW, CHF, THB) đồng bộ NVS Flash & màn hình thời gian thực.
-- [ ] **Giai đoạn 7B:** Web Portal nâng cao (Cấu hình Báo thức từ xa, chỉnh Thành phố/WiFi, bật/tắt Auto-Brightness LDR) & Popup Cài đặt nhanh trên Dock.
+- [x] **Giai đoạn 7B:** Web Portal nâng cao (Cấu hình Báo thức từ xa, chỉnh Âm thanh, PWA Standalone, Quản lý Nguồn Office Mode & Nút Power ⏻, Cảm biến LDR thông minh).
 - [ ] **Giai đoạn 8:** Tối ưu hóa, stress test 48h không tràn RAM, đóng gói thương mại hoàn chỉnh.
+
+---
+
+## 7. TÍNH NĂNG NGHIÊN CỨU & PHÁT TRIỂN TIẾP THEO (FUTURE BACKLOG)
+
+Dưới đây là 2 tính năng chiến lược đã được ghi nhận để nghiên cứu và triển khai ở các bản cập nhật tiếp theo:
+
+### 7.1. Hiển thị Mã QR Kết nối Nhanh (Quick QR Code Connect)
+* **Mục tiêu:** Đơn giản hóa tối đa quy trình thiết lập lần đầu (Out-of-the-Box Experience) cho khách hàng văn phòng không rành kỹ thuật.
+* **Kịch bản 1 — Kết nối AP cài đặt WiFi:**
+  * Khi thiết bị chưa kết nối được WiFi (vào chế độ AP `CYD-SmartDesk-V2`), màn hình CYD sẽ tự động render một mã QR chuẩn WiFi:
+    `WIFI:S:CYD-SmartDesk-V2;T:nopass;;`
+  * Khách chỉ cần mở camera điện thoại quét mã QR $\rightarrow$ Điện thoại tự động bắt WiFi của SmartDesk và bật trang cấu hình mà không cần nhập mật khẩu hay tìm tên mạng thủ công.
+* **Kịch bản 2 — Truy cập Web Dashboard:**
+  * Tại trang Cài đặt (Settings Page) hoặc Popup Mạng, hiển thị mã QR chứa đường dẫn truy cập trực tiếp (`http://smartdesk.local` hoặc địa chỉ IP `http://192.168.x.x`).
+  * Đồng nghiệp hoặc chủ nhân chỉ cần quét mã là mở ngay giao diện điều khiển trên điện thoại.
+* **Kỹ thuật dự kiến:** Tích hợp thư viện sinh QR gọn nhẹ (như `qrencode-esp32` hoặc `qrcode.h` ~3KB RAM) để vẽ các module pixel đen/trắng trực tiếp lên `_spr`.
+
+---
+
+### 7.2. Biển Tên Chức Danh Để Bàn Kỹ Thuật Số (Digital Desk Nameplate Mode)
+* **Mục tiêu:** Biến chiếc CYD SmartDesk thành một bảng tên chức danh cao cấp, chuyên nghiệp đặt tại bàn làm việc công sở khi tiếp khách, đối tác hoặc họp nội bộ.
+* **Tính năng giao diện:**
+  * **Họ và tên:** Font chữ lớn, nét thanh lịch hiện đại, phát sáng neon tinh tế.
+  * **Chức vụ / Phòng ban:** (VD: *TRƯỞNG PHÒNG MARKETING*, *SENIOR SOFTWARE ENGINEER*, *GIÁM ĐỐC KINH DOANH*).
+  * **Tên Công ty / Đơn vị & Thông tin liên hệ:** Logo nhỏ hoặc dòng email/số máy nhánh/Telegram.
+  * **Hiệu ứng thị giác:** Khung viền mạ vàng kim (Gold Foil) hoặc bạc Obsidian sang trọng, hiệu ứng lấp lánh (Shimmer/Sparkle) chuyển động chậm không gây mất tập trung.
+* **Cấu hình trực quan qua Web Dashboard:**
+  * Nhập họ tên, chức vụ, chọn màu viền phong thủy theo mệnh hoặc nhận diện thương hiệu công ty.
+  * Chuyển đổi nhanh giữa chế độ *Đồng hồ* và chế độ *Biển tên chức danh* chỉ bằng 1 nút bấm trên điện thoại.
+

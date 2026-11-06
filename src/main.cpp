@@ -92,9 +92,14 @@ void loop() {
     // 2. Auto-adjust backlight according to ambient room light (LDR)
     hardware.updateAutoBrightness();
 
-    // 3. Check touch tap events (switches pages or wakes dock with audio feedback)
+    // 3. Check touch tap events (wakes screen if asleep, or switches pages/wakes dock)
     uint16_t tx, ty;
     if (touch.checkTap(&tx, &ty)) {
+        if (hardware.isScreenOff()) {
+            hardware.turnScreenOn();
+            hardware.playTouchSound();
+            return; // Wake tap only, don't trigger underlying page controls
+        }
         display.handleTouch(tx, ty);
     }
 
@@ -104,7 +109,19 @@ void loop() {
     // 5. Update finance rates periodically (every 15m)
     finance.update();
 
-    // 6. Maintain Web Dashboard server
+    // 6. Handle on-screen WiFi Setup Portal requests safely from main loop
+    if (webDashboard.isPortalRequested()) {
+        webDashboard.clearPortalRequest();
+        Serial.println("[System] WiFi Setup Portal requested -> Stopping WebDashboard to free Port 80...");
+        webDashboard.stop();
+        delay(300);
+        weather.startWiFiSetupPortal();
+        if (WiFi.status() == WL_CONNECTED) {
+            webDashboard.begin();
+        }
+    }
+
+    // Maintain Web Dashboard server
     if (weather.isConnected() && !webDashboard.isRunning()) {
         webDashboard.begin();
     }

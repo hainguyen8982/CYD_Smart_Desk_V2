@@ -85,6 +85,16 @@ void NetworkTask::_taskWorker(void* arg) {
 
                 self->_isBusy = false;
             }
+        } else {
+            // Mất kết nối WiFi: Tự động thử kết nối lại ngầm trên Core 0 sau mỗi 15 giây
+            // Hoàn toàn không làm ảnh hưởng hay gián đoạn vòng lặp đồ họa và đồng hồ trên Core 1
+            unsigned long now = millis();
+            static unsigned long lastReconnectAttempt = 0;
+            if (now - lastReconnectAttempt >= 15000 || lastReconnectAttempt == 0) {
+                lastReconnectAttempt = now;
+                Serial.println("[NetworkTask] Core 0: WiFi lost! Reconnecting in background...");
+                WiFi.reconnect();
+            }
         }
 
         // Sleep 500ms on Core 0 before checking next cycle

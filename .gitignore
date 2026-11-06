@@ -3,3 +3,5 @@
 *.bak
 *.log
 scratch/
+__pycache__/
+*.pyc

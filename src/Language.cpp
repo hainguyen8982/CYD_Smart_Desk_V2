@@ -29,6 +29,8 @@ static const char* const STRINGS_VI[TXT_KEY_COUNT] = {
     "Am cham cam ung",
     // TXT_ROW_ALARM_MEL
     "Dieu chuong bao",
+    // TXT_ROW_STARTUP_SND
+    "Am khoi dong",
     // TXT_ROW_BRIGHTNESS
     "Do sang",
 
@@ -114,6 +116,8 @@ static const char* const STRINGS_EN[TXT_KEY_COUNT] = {
     "Touch Sound",
     // TXT_ROW_ALARM_MEL
     "Alarm Melody",
+    // TXT_ROW_STARTUP_SND
+    "Boot Sound",
     // TXT_ROW_BRIGHTNESS
     "Brightness",
 
@@ -197,10 +201,10 @@ static const char* const TOUCH_SND_NAMES_EN[] = {
 
 // Alarm melody names
 static const char* const ALARM_NAMES_VI[] = {
-    "Co dien", "Nhe nhang", "Cyberpunk", "Em diu"
+    "Co dien", "Nhe nhang", "Cyber", "Em diu"
 };
 static const char* const ALARM_NAMES_EN[] = {
-    "Classic", "Melodic", "Cyberpunk", "Gentle Chime"
+    "Classic", "Melodic", "Cyber", "Gentle"
 };
 
 void initLanguage() {
@@ -246,6 +250,27 @@ const char* getTouchSoundNameI18n(uint8_t id) {
 const char* getAlarmMelodyNameI18n(uint8_t id) {
     if (id >= 4) id = 1;
     return (_currentLang == LANG_VI) ? ALARM_NAMES_VI[id] : ALARM_NAMES_EN[id];
+}
+
+static const char* const STARTUP_NAMES_VI[] = {
+    "Marimba",
+    "Pha le",
+    "Cyber",
+    "Retro",
+    "Tat am"
+};
+
+static const char* const STARTUP_NAMES_EN[] = {
+    "Marimba",
+    "Crystal",
+    "Cyber",
+    "Retro",
+    "Mute"
+};
+
+const char* getStartupSoundNameI18n(uint8_t id) {
+    if (id >= 5) id = 0;
+    return (_currentLang == LANG_VI) ? STARTUP_NAMES_VI[id] : STARTUP_NAMES_EN[id];
 }
 
 const char* getDayNameI18n(uint8_t wday) {

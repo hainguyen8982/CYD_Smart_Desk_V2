@@ -7,8 +7,23 @@
 
 #include <Arduino.h>
 
-// ─── Hardware Pinout (ESP32-2432S028 CYD board) ──────────────────────
-#define PIN_TFT_BL      21      // Backlight PWM
+// ─── Hardware Pinout ──────────────────────────────────────────────────
+#ifdef BOARD_NICEMCU_28IPS
+// NiceMCU-32S-DEV 2.8" IPS
+#define PIN_TFT_BL       25      // Backlight PWM on GPIO 25
+#define PIN_LDR          34      // Light-dependent resistor (analog)
+#define PIN_SPEAKER      26      // Onboard speaker / audio amp (DAC2)
+#define PIN_RGB_RED       4      // RGB LED red
+#define PIN_RGB_GREEN    16      // RGB LED green
+#define PIN_RGB_BLUE     17      // RGB LED blue
+#define PIN_TOUCH_SDA    33      // CST816D I2C SDA
+#define PIN_TOUCH_SCL    32      // CST816D I2C SCL
+#define PIN_TOUCH_INT    36      // CST816D Interrupt
+#define PIN_TOUCH_RST     2      // CST816D Reset (shared with LCD RST)
+#define PIN_BOOT_BTN      0      // BOOT button
+#else
+// ESP32-2432S028 CYD board
+#define PIN_TFT_BL       21      // Backlight PWM
 #define PIN_LDR          34      // Light-dependent resistor (analog)
 #define PIN_SPEAKER      26      // Onboard speaker / buzzer
 #define PIN_RGB_RED       4      // RGB LED red
@@ -17,10 +32,18 @@
 #define PIN_TOUCH_CS     33      // Touch chip select (SPI)
 #define PIN_TOUCH_IRQ    36      // Touch interrupt
 #define PIN_BOOT_BTN      0      // BOOT button (active LOW)
+#endif
 
 // ─── Display ─────────────────────────────────────────────────────────
 #define SCREEN_W        320
 #define SCREEN_H        240
+
+// ─── Touch type flag ────────────────────────────────────────
+// Define this for boards that use a capacitive touch controller (CST816D).
+// For resistive‑touch boards (original CYD), comment it out.
+// This flag is used to adjust thresholds and enable multitouch where supported.
+#define USE_CAPACITIVE_TOUCH
+
 
 // ─── Defaults ────────────────────────────────────────────────────────
 #define DEFAULT_CITY            "Hanoi"

@@ -4,6 +4,7 @@
 // ═══════════════════════════════════════════════════════════════════════
 #include "DeskMood.h"
 #include "Colors.h"
+#include "Theme.h"
 #include "HardwareManager.h"
 #include "MemeBitmaps.h"
 #include <Preferences.h>
@@ -310,27 +311,27 @@ void DeskMood::renderPage(TFT_eSprite& spr, uint8_t lang, uint16_t themeBg) {
     int16_t pBtnY = 8;
     int16_t pBtnR = 8; // Bo tròn 4 góc r=8 mềm mại, chuẩn Rounded Container, tuyệt đối không vát cạnh
 
-    // Đổ bóng & Nền kính đen mờ (Obsidian Frosted Glass)
-    spr.fillSmoothRoundRect(pBtnX, pBtnY + 2, pBtnW, pBtnH, pBtnR, RGB565(2, 4, 8), themeBg);
-    spr.fillSmoothRoundRect(pBtnX, pBtnY, pBtnW, pBtnH, pBtnR, RGB565(18, 24, 36), themeBg);
-    spr.drawRoundRect(pBtnX, pBtnY, pBtnW, pBtnH, pBtnR, RGB565(55, 70, 95));
+    // Đổ bóng & Nền nút kính bo tròn theo Theme (Card & CardBorder)
+    spr.fillSmoothRoundRect(pBtnX, pBtnY + 2, pBtnW, pBtnH, pBtnR, theme.bg, themeBg);
+    spr.fillSmoothRoundRect(pBtnX, pBtnY, pBtnW, pBtnH, pBtnR, theme.card, themeBg);
+    spr.drawRoundRect(pBtnX, pBtnY, pBtnW, pBtnH, pBtnR, theme.cardBorder);
 
-    // Vẽ icon 2 mũi tên xoay tròn (Cycle / Swap) màu accent neon
-    uint16_t accent = getAccentColor(_mood);
+    // Vẽ icon 2 mũi tên xoay tròn (Cycle / Swap) màu accent neon của Theme
+    uint16_t swapIconColor = theme.accent;
     int16_t icx = pBtnX + 14;
     int16_t icy = pBtnY + 14;
 
     // Mũi tên trên (quay sang phải rồi chúc xuống):
-    spr.drawFastHLine(icx - 5, icy - 5, 8, accent);
-    spr.drawFastVLine(icx - 6, icy - 4, 4, accent);
-    spr.drawLine(icx, icy - 8, icx + 3, icy - 5, accent);
-    spr.drawLine(icx, icy - 2, icx + 3, icy - 5, accent);
+    spr.drawFastHLine(icx - 5, icy - 5, 8, swapIconColor);
+    spr.drawFastVLine(icx - 6, icy - 4, 4, swapIconColor);
+    spr.drawLine(icx, icy - 8, icx + 3, icy - 5, swapIconColor);
+    spr.drawLine(icx, icy - 2, icx + 3, icy - 5, swapIconColor);
 
     // Mũi tên dưới (quay sang trái rồi hất lên):
-    spr.drawFastHLine(icx - 2, icy + 5, 8, accent);
-    spr.drawFastVLine(icx + 6, icy + 1, 4, accent);
-    spr.drawLine(icx, icy + 8, icx - 3, icy + 5, accent);
-    spr.drawLine(icx, icy + 2, icx - 3, icy + 5, accent);
+    spr.drawFastHLine(icx - 2, icy + 5, 8, swapIconColor);
+    spr.drawFastVLine(icx + 6, icy + 1, 4, swapIconColor);
+    spr.drawLine(icx, icy + 8, icx - 3, icy + 5, swapIconColor);
+    spr.drawLine(icx, icy + 2, icx - 3, icy + 5, swapIconColor);
 
     // 3. BIỂN BÁO NEON TỰ ĐỘNG SCALE BÓNG CHUẨN XÁC THEO ĐỘ DÀI TEXT (Y = 166..194)
     // Nếu mood hiện tại được custom -> Hiển thị text custom riêng của mood đó!
@@ -351,7 +352,8 @@ void DeskMood::renderPage(TFT_eSprite& spr, uint8_t lang, uint16_t themeBg) {
     int16_t tagR = tagH / 2;
 
     // Đổ bóng & Nền viên thuốc Neon
-    spr.fillSmoothRoundRect(cx - tagW / 2, tagY + 2, tagW, tagH, tagR, RGB565(4, 6, 10), themeBg);
+    uint16_t accent = getAccentColor(_mood);
+    spr.fillSmoothRoundRect(cx - tagW / 2, tagY + 2, tagW, tagH, tagR, theme.bg, themeBg);
     spr.fillSmoothRoundRect(cx - tagW / 2, tagY, tagW, tagH, tagR, accent, themeBg);
     spr.drawRoundRect(cx - tagW / 2, tagY, tagW, tagH, tagR, C_WHITE);
 
@@ -365,7 +367,7 @@ void DeskMood::renderPage(TFT_eSprite& spr, uint8_t lang, uint16_t themeBg) {
                          ? _customMsgs[_mood]
                          : getMessage(_mood, lang);
     spr.setTextDatum(MC_DATUM);
-    spr.setTextColor(C_WHITE);
+    spr.setTextColor(theme.textMain);
     spr.drawString(msgStr, cx, 200, 2);
 
     // 5. CHẤM CHỈ THỊ 6 TRẠNG THÁI (Y = 222)
@@ -375,7 +377,7 @@ void DeskMood::renderPage(TFT_eSprite& spr, uint8_t lang, uint16_t themeBg) {
         if (i == (int)_mood) {
             spr.fillSmoothRoundRect(dx - 6, 220, 13, 5, 2, accent, themeBg);
         } else {
-            spr.fillSmoothCircle(dx, 222, 2, RGB565(60, 75, 100), themeBg);
+            spr.fillSmoothCircle(dx, 222, 2, theme.track, themeBg);
         }
     }
 }

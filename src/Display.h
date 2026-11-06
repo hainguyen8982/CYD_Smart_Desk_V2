@@ -43,6 +43,10 @@ public:
     bool isAlarmEnabled() const { return _alarmEnabled; }
     const char* getAlarmMessage() const { return _alarmMessage; }
 
+    // ── WiFi Setup Portal Screen ──────────────────────────────
+    void renderWiFiSetupScreen(const char* qrText = nullptr, int remainingSec = 120);
+    void renderWiFiConnectedScreen(const char* ssid, const char* ip);
+
 private:
     TFT_eSPI      _tft;
     TFT_eSprite   _spr;           // Full-screen double-buffer sprite
@@ -66,6 +70,7 @@ private:
     PopupState    _activePopup;
     uint8_t       _currencyTab;        // 0 = USD, 1 = EUR
     uint8_t       _settingsTab;        // 0 = Theme, 1 = Sound, 2 = System
+    bool          _settingsSoundIsStartup; // Toggle between Alarm melody and Boot sound on Settings row 4
     void          renderWeatherPopup();
     void          renderLunarPopup();
     void          renderAlarmPopup();
@@ -147,7 +152,7 @@ private:
     void renderPage4_Settings() { renderPage5_Settings(); }
     bool handleTouchSettings(int16_t x, int16_t y);
 
-    // ── Smart Dock & Calibration ─────────────────────────────
+    // ── Smart Dock & Calibration ────────────────────────────
     void renderDock();
     void renderCalibrationScreen();
     void drawDockIconHome(int16_t cx, int16_t cy, bool isActive);
@@ -156,6 +161,7 @@ private:
     void drawDockIconPomodoro(int16_t cx, int16_t cy, bool isActive);
     void drawDockIconMood(int16_t cx, int16_t cy, bool isActive);
     void drawDockIconTheme(int16_t cx, int16_t cy, bool isActive);
+    void drawDockIconPower(int16_t cx, int16_t cy);
 
     // ── Background & Visual Elements ─────────────────────────
     void drawBackground();

@@ -71,6 +71,25 @@ Tải app miễn phí **"NFC Tools"** từ kho ứng dụng:
 
 ---
 
+### D. 🚀 Mẹo "Pro" cho iOS: Quét là Mở Safari Luôn (Không Cần Bấm Thông Báo)
+
+Mặc định trên iOS, khi quẹt thẻ NFC ghi URL thông thường, Apple sẽ hiện một thanh thông báo banner hỏi *"Có mở trong Safari không?"* vì lý do bảo mật. 
+
+Để **chạm là mở Safari / Dashboard ngay lập tức trong 0.5 giây (bỏ qua thông báo)**, bạn dùng tính năng **Phím tắt (Apple Shortcuts)**:
+
+1. Mở ứng dụng **Phím tắt (Shortcuts)** có sẵn trên iPhone.
+2. Chọn tab **Tự động hóa (Automation)** ở góc dưới màn hình.
+3. Bấm dấu **`+`** (Tạo tự động hóa mới).
+4. Cuộn xuống chọn mục **NFC**.
+5. Bấm nút **Quét (Scan)** $\rightarrow$ Áp lưng điện thoại vào tem NFC $\rightarrow$ Đặt tên: `SmartDesk CYD`.
+6. Tại mục thực thi: Chọn **Chạy ngay lập tức (Run Immediately)** và tắt công tắc **Thông báo khi chạy (Notify When Run)** $\rightarrow$ Bấm **Tiếp (Next)**.
+7. Chọn **Tác vụ mới** $\rightarrow$ Tìm và chọn lệnh **Mở URL (Open URLs)**.
+8. Điền link: `http://smartdesk.local` $\rightarrow$ Bấm **Xong (Done)**.
+
+> **Trải nghiệm thực tế:** Giờ đây chỉ cần điện thoại sáng màn hình, chạm lưng vào thẻ NFC là Dashboard SmartDesk sẽ tự động nhảy lên toàn màn hình ngay tức khắc, không hỏi han, không độ trễ!
+
+---
+
 ## 📍 4. Gợi Ý Vị Trí Dán Thẻ NFC Trên Bàn Làm Việc
 
 - **Góc chân đế màn hình CYD:** Khách tới bàn hoặc chính bạn chỉ cần đưa điện thoại quẹt nhẹ vào chân đế là mở ngay dashboard điều khiển.

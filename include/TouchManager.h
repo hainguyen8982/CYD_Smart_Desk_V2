@@ -36,7 +36,13 @@ public:
 
     // ── Calibration ───────────────────────────────────────────
     void startCalibration();
-    bool isCalibrating() const { return _calibState != CALIB_NONE; }
+    bool isCalibrating() const {
+#ifdef BOARD_NICEMCU_28IPS
+        return false; // Capacitive touch is factory calibrated
+#else
+        return _calibState != CALIB_NONE;
+#endif
+    }
     CalibState getCalibState() const { return _calibState; }
     bool isCalibrated() const { return _calibValid; }
     void processCalibration();

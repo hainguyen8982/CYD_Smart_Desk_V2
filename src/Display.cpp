@@ -19,10 +19,12 @@
 #include "FabXLogo.h"
 #include "DeskPet.h"
 #include "DeskMood.h"
+#include "WebDashboard.h"
 #include <WiFi.h>
 #include <LittleFS.h>
 #include <Preferences.h>
 #include <time.h>
+#include <qrcode.h>
 
 Display display;
 
@@ -33,6 +35,7 @@ Display::Display()
     : _tft(), _spr(&_tft), _sprReady(false), _lastRender(0),
       _currentPage(PAGE_CLOCK), _dockVisible(true), _lastDockActivity(0),
       _activePopup(POPUP_NONE), _currencyTab(0), _settingsTab(0),
+      _settingsSoundIsStartup(true),
       _alarmEnabled(false), _alarmHour(7), _alarmMinute(0),
       _alarmRinging(false), _alarmRingStart(0), _lastAlarmBeepTick(0),
       _alarmSnoozed(false), _alarmSnoozeUntil(0), _alarmLastTriggerDay(-1),
@@ -58,6 +61,15 @@ void Display::begin() {
             Serial.println("[Display] Purged legacy /wallpaper.jpg");
         }
     }
+
+#ifdef BOARD_NICEMCU_28IPS
+    // Hardware reset shared between ST7789 Display and CST816D Touch (GPIO 2)
+    pinMode(PIN_TOUCH_RST, OUTPUT);
+    digitalWrite(PIN_TOUCH_RST, LOW);
+    delay(30);
+    digitalWrite(PIN_TOUCH_RST, HIGH);
+    delay(50);
+#endif
 
     _tft.init();
     delay(100);
@@ -938,6 +950,10 @@ void Display::setAlarm(uint8_t h, uint8_t m, bool enabled, const char* msg) {
         strlcpy(_alarmMessage, msg, sizeof(_alarmMessage));
     }
     saveAlarmSettings();
+    if (_activePopup == POPUP_ALARM && _sprReady) {
+        renderAlarmPopup();
+        _spr.pushSprite(0, 0);
+    }
     _lastRender = 0;
 }
 
@@ -952,12 +968,10 @@ void Display::checkAlarmTick() {
             return;
         }
 
-        // Tạo chuỗi âm báo thức cách quãng 900ms (non-blocking)
-        if (now - _lastAlarmBeepTick >= 900) {
+        // Phát đúng giai điệu báo thức người dùng đã cài đặt (cách quãng 1100ms)
+        if (now - _lastAlarmBeepTick >= 1100) {
             _lastAlarmBeepTick = now;
-            hardware.playBeep(2400, 100);
-            delay(35);
-            hardware.playBeep(2800, 120);
+            hardware.playAlarmTune();
         }
         return;
     }
@@ -990,6 +1004,10 @@ void Display::checkAlarmTick() {
 }
 
 void Display::triggerAlarm() {
+    // 1. Tự động bật sáng màn hình nếu đang tắt (do hẹn giờ hoặc bấm nút Power)
+    if (hardware.isScreenOff()) {
+        hardware.turnScreenOn();
+    }
     _alarmRinging = true;
     _alarmRingStart = millis();
     _lastAlarmBeepTick = 0;
@@ -1620,7 +1638,8 @@ void Display::drawGlassCardAccent(int16_t x, int16_t y, int16_t w, int16_t h,
 void Display::setPage(uint8_t p) {
     if (p <= PAGE_SETTINGS && _currentPage != p) {
         _currentPage = p;
-        wakeDock();
+        _dockVisible = false;
+        _lastRender = 0;
     }
 }
 
@@ -1869,25 +1888,32 @@ bool Display::handleTouch(uint16_t x, uint16_t y) {
     }
 
     // 3. ƯU TIÊN TUYỆT ĐỐI CHO THANH DOCK:
-    // Khi thanh Dock đang hiển thị:
+    // Khi thanh Dock đang hiển thị (Mở rộng vùng nhận cảm ứng của các icon Dock từ Y >= 178..239
+    // để bù trừ góc nghiêng ngón tay sát viền dưới màn hình):
     if (_dockVisible) {
-        if (y >= 185) {
-            // Chạm vào vùng Dock -> Xử lý chức năng chuyển trang / đổi theme
-            wakeDock(); // Reset 5s auto-hide timer
+        if (y >= 178) {
+            // Chạm vào các icon trên thanh Dock -> Chuyển trang và tự ẩn Dock ngay sau đó
+            _lastRender = 0;
             hardware.playClick();
-            if (x < 80)                   { setPage(PAGE_CLOCK);    return true; }
-            else if (x >= 80 && x < 120)  { setPage(PAGE_CALENDAR); return true; }
-            else if (x >= 120 && x < 160) { setPage(PAGE_FINANCE);  return true; }
-            else if (x >= 160 && x < 200) { setPage(PAGE_POMODORO); return true; }
-            else if (x >= 200 && x < 240) { setPage(PAGE_MOOD);     return true; }
-            else if (x >= 240)            { setPage(PAGE_SETTINGS); return true; }
+            if (x < 58)                   { setPage(PAGE_CLOCK);    _dockVisible = false; return true; }
+            else if (x >= 58 && x < 94)   { setPage(PAGE_CALENDAR); _dockVisible = false; return true; }
+            else if (x >= 94 && x < 130)  { setPage(PAGE_FINANCE);  _dockVisible = false; return true; }
+            else if (x >= 130 && x < 166) { setPage(PAGE_POMODORO); _dockVisible = false; return true; }
+            else if (x >= 166 && x < 202) { setPage(PAGE_MOOD);     _dockVisible = false; return true; }
+            else if (x >= 202 && x < 241) { setPage(PAGE_SETTINGS); _dockVisible = false; return true; }
+            else if (x >= 241) {
+                // NÚT POWER ⏻: Tắt màn hình ngay lập tức!
+                _dockVisible = false;
+                hardware.turnScreenOff();
+                return true;
+            }
+            _dockVisible = false;
             return true;
         } else {
-            // Nhấn ra ngoài vùng Dock (Y < 185) -> TẮT THANH DOCK NGAY
-            // Cảm ứng của các chức năng màn hình lúc này CHƯA được kích hoạt
+            // Nhấn ra phía trên thanh Dock (Y < 178) -> CHỈ ẩn thanh Dock (tuyệt đối KHÔNG kích hoạt nút chức năng bên dưới!)
             _dockVisible = false;
-            hardware.playClick();
-            _lastRender = 0; // Vẽ lại màn hình với Dock đã ẩn
+            _lastRender = 0;
+            hardware.playTouchSound();
             return true;
         }
     }
@@ -2079,11 +2105,12 @@ bool Display::handleTouch(uint16_t x, uint16_t y) {
         }
     }
 
-    // 8. Khi Dock đang ẩn, chạm vào vùng dưới màn hình (Y >= 210) sẽ đánh thức Dock
+    // 8. Khi Dock đang ẩn, CHỈ đánh thức Dock khi chạm đúng vào vùng Viên thuốc chỉ báo ở chính giữa đáy màn hình (X: 105..215, Y >= 208)
     if (!_dockVisible) {
-        if (y >= 210) {
+        if (y >= 208 && x >= 105 && x <= 215) {
             wakeDock();
             hardware.playClick();
+            _lastRender = 0;
             return true;
         }
         return false;
@@ -2145,17 +2172,205 @@ void Display::renderCalibrationScreen() {
     _spr.drawString(hint, 160, 130, 2);
 }
 
+void Display::renderWiFiSetupScreen(const char* qrText, int remainingSec) {
+    if (!_sprReady) return;
+
+    // 1. Clean Obsidian Dark Background (No stray shining star/sparkle dots)
+    _spr.fillSprite(RGB565(7, 11, 20));
+
+    // 2. Integrated Top Header Bar
+    _spr.fillRect(0, 0, 320, 34, RGB565(12, 18, 30));
+    _spr.drawFastHLine(0, 34, 320, RGB565(0, 229, 255));
+
+    // Glowing Radar status dot on left
+    _spr.fillCircle(18, 17, 5, RGB565(0, 229, 255));
+    _spr.drawCircle(18, 17, 8, RGB565(0, 100, 140));
+
+    _spr.setTextDatum(ML_DATUM);
+    _spr.setTextColor(TFT_WHITE, RGB565(12, 18, 30));
+    _spr.drawString("CYD SMARTDESK", 34, 17, 2);
+
+    // Modern Capsule Badge on top right
+    _spr.fillRoundRect(194, 6, 114, 22, 11, RGB565(18, 30, 48));
+    _spr.drawRoundRect(194, 6, 114, 22, 11, RGB565(0, 229, 255));
+    _spr.setTextDatum(MC_DATUM);
+    _spr.setTextColor(RGB565(0, 229, 255), RGB565(18, 30, 48));
+    _spr.drawString((getLanguage() == LANG_EN) ? "WIFI SETUP" : "CAI DAT WIFI", 251, 17, 2);
+
+    // 3. Left Hero: Premium Optical QR Showcase Tile (High contrast, 116px enlarged)
+    // Card dimensions: X=14, Y=44, W=126, H=126, R=10
+    int16_t cardX = 14;
+    int16_t cardY = 44;
+    int16_t cardW = 126;
+    int16_t cardH = 126;
+
+    // Outer soft cyan accent border
+    _spr.drawRoundRect(cardX - 1, cardY - 1, cardW + 2, cardH + 2, 11, RGB565(0, 180, 230));
+    _spr.fillRoundRect(cardX, cardY, cardW, cardH, 10, TFT_WHITE);
+
+    // Generate & draw QR code (Version 3: 29x29 modules, 4px per module = 116x116px)
+    QRCode qrcode;
+    uint8_t qrcodeData[qrcode_getBufferSize(3)];
+    qrcode_initText(&qrcode, qrcodeData, 3, ECC_LOW, qrText ? qrText : "WIFI:S:CYD-SmartDesk-V2;T:nopass;;");
+
+    const uint8_t modSize = 4;
+    int16_t qrPx = qrcode.size * modSize; // 29 * 4 = 116
+    int16_t qrStartX = cardX + (cardW - qrPx) / 2; // 14 + 5 = 19
+    int16_t qrStartY = cardY + (cardH - qrPx) / 2; // 44 + 5 = 49
+
+    for (uint8_t y = 0; y < qrcode.size; y++) {
+        for (uint8_t x = 0; x < qrcode.size; x++) {
+            if (qrcode_getModule(&qrcode, x, y)) {
+                _spr.fillRect(qrStartX + x * modSize, qrStartY + y * modSize, modSize, modSize, TFT_BLACK);
+            }
+        }
+    }
+
+    // Camera icon hint under QR — shifted down to Y=181 for clear breathing room
+    _spr.setTextDatum(MC_DATUM);
+    _spr.setTextColor(RGB565(130, 160, 200), RGB565(7, 11, 20));
+    _spr.drawString((getLanguage() == LANG_EN) ? "Scan with Camera" : "Quet bang Camera", 77, 181, 1);
+
+    // 4. Right Side: Card & Quick Pairing Guide (Bordered card containing all text neatly)
+    int16_t rightCardX = 150;
+    int16_t rightCardY = 44;
+    int16_t rightCardW = 158;
+    int16_t rightCardH = 136;
+
+    _spr.fillRoundRect(rightCardX, rightCardY, rightCardW, rightCardH, 8, RGB565(14, 20, 32));
+    _spr.drawRoundRect(rightCardX, rightCardY, rightCardW, rightCardH, 8, RGB565(36, 54, 80));
+
+    // Card Title
+    _spr.setTextDatum(TL_DATUM);
+    _spr.setTextColor(RGB565(0, 229, 255), RGB565(14, 20, 32));
+    _spr.drawString((getLanguage() == LANG_EN) ? "QUICK PAIRING" : "KET NOI NHANH", rightCardX + 10, rightCardY + 8, 2);
+
+    _spr.drawFastHLine(rightCardX + 8, rightCardY + 26, rightCardW - 16, RGB565(25, 38, 56));
+
+    // Step 1
+    _spr.fillCircle(rightCardX + 16, rightCardY + 39, 7, RGB565(0, 229, 255));
+    _spr.setTextDatum(MC_DATUM);
+    _spr.setTextColor(RGB565(10, 16, 26), RGB565(0, 229, 255));
+    _spr.drawString("1", rightCardX + 16, rightCardY + 39, 1);
+
+    _spr.setTextDatum(TL_DATUM);
+    _spr.setTextColor(TFT_WHITE, RGB565(14, 20, 32));
+    _spr.drawString((getLanguage() == LANG_EN) ? "Open phone camera" : "Mo Camera quet QR", rightCardX + 28, rightCardY + 32, 1);
+    _spr.setTextColor(RGB565(120, 145, 175), RGB565(14, 20, 32));
+    _spr.drawString((getLanguage() == LANG_EN) ? "Tap popup to join" : "Cham thong bao vao mang", rightCardX + 28, rightCardY + 43, 1);
+
+    // Step 2
+    _spr.fillCircle(rightCardX + 16, rightCardY + 63, 7, RGB565(0, 229, 255));
+    _spr.setTextDatum(MC_DATUM);
+    _spr.setTextColor(RGB565(10, 16, 26), RGB565(0, 229, 255));
+    _spr.drawString("2", rightCardX + 16, rightCardY + 63, 1);
+
+    _spr.setTextDatum(TL_DATUM);
+    _spr.setTextColor(TFT_WHITE, RGB565(14, 20, 32));
+    _spr.drawString((getLanguage() == LANG_EN) ? "Select WiFi & save" : "Chon WiFi phong & luu", rightCardX + 28, rightCardY + 56, 1);
+    _spr.setTextColor(RGB565(120, 145, 175), RGB565(14, 20, 32));
+    _spr.drawString((getLanguage() == LANG_EN) ? "Config page opens auto" : "Trang web tu dong mo", rightCardX + 28, rightCardY + 67, 1);
+
+    // Manual Hotspot Info Pill inside card
+    int16_t pillX = rightCardX + 8;
+    int16_t pillY = rightCardY + 80;
+    int16_t pillW = rightCardW - 16;
+    int16_t pillH = 48;
+    _spr.fillRoundRect(pillX, pillY, pillW, pillH, 5, RGB565(9, 14, 23));
+    _spr.drawRoundRect(pillX, pillY, pillW, pillH, 5, RGB565(28, 42, 64));
+
+    _spr.setTextDatum(TL_DATUM);
+    _spr.setTextColor(RGB565(0, 229, 255), RGB565(9, 14, 23));
+    _spr.drawString("WiFi: CYD-SmartDesk-V2", pillX + 6, pillY + 5, 1);
+    _spr.setTextColor(RGB565(160, 185, 215), RGB565(9, 14, 23));
+    _spr.drawString((getLanguage() == LANG_EN) ? "Pass: None (Open)" : "Pass: Trong (Mo)", pillX + 6, pillY + 18, 1);
+    _spr.setTextColor(RGB565(100, 130, 165), RGB565(9, 14, 23));
+    _spr.drawString("IP: 192.168.4.1", pillX + 6, pillY + 31, 1);
+
+    // 5. Bottom Touch Action Bar
+    // Tactile Skip Button on Left (X: 14, Y: 190, W: 126, H: 38, R=8)
+    _spr.fillRoundRect(14, 190, 126, 38, 8, RGB565(22, 30, 46));
+    _spr.drawRoundRect(14, 190, 126, 38, 8, RGB565(52, 74, 108));
+    _spr.setTextDatum(MC_DATUM);
+    _spr.setTextColor(RGB565(190, 215, 245), RGB565(22, 30, 46));
+    _spr.drawString((getLanguage() == LANG_EN) ? "X  Skip (Offline)" : "X  Dung Offline", 77, 209, 2);
+
+    // Right Side: Live status indicator card (X: 150, Y: 190, W: 158, H: 38, R=8)
+    _spr.fillRoundRect(150, 190, 158, 38, 8, RGB565(14, 20, 32));
+    _spr.drawRoundRect(150, 190, 158, 38, 8, RGB565(36, 54, 80));
+
+    _spr.fillCircle(162, 209, 3, RGB565(0, 229, 255));
+    _spr.setTextDatum(ML_DATUM);
+    _spr.setTextColor(RGB565(0, 229, 255), RGB565(14, 20, 32));
+    _spr.drawString((getLanguage() == LANG_EN) ? "Waiting for device..." : "Dang cho ket noi...", 172, 201, 1);
+
+    char timeoutStr[32];
+    snprintf(timeoutStr, sizeof(timeoutStr),
+             (getLanguage() == LANG_EN) ? "Auto exit in %ds" : "Tu dong thoat sau %ds",
+             remainingSec);
+    _spr.setTextColor(RGB565(120, 145, 175), RGB565(14, 20, 32));
+    _spr.drawString(timeoutStr, 172, 217, 1);
+
+    _spr.pushSprite(0, 0);
+}
+
+void Display::renderWiFiConnectedScreen(const char* ssid, const char* ip) {
+    if (!_sprReady) return;
+
+    drawBackground();
+
+    // Top integrated status bar
+    _spr.fillRect(0, 0, 320, 34, RGB565(12, 18, 30));
+    _spr.drawFastHLine(0, 34, 320, RGB565(0, 230, 118));
+
+    _spr.fillCircle(18, 17, 5, RGB565(0, 230, 118));
+    _spr.setTextDatum(ML_DATUM);
+    _spr.setTextColor(TFT_WHITE, RGB565(12, 18, 30));
+    _spr.drawString("CYD SMARTDESK", 34, 17, 2);
+
+    _spr.fillRoundRect(194, 6, 114, 22, 11, RGB565(18, 38, 30));
+    _spr.drawRoundRect(194, 6, 114, 22, 11, RGB565(0, 230, 118));
+    _spr.setTextDatum(MC_DATUM);
+    _spr.setTextColor(RGB565(0, 230, 118), RGB565(18, 38, 30));
+    _spr.drawString("CONNECTED", 251, 17, 2);
+
+    // Centered Hero Success Card
+    _spr.fillRoundRect(24, 46, 272, 176, 14, RGB565(14, 22, 34));
+    _spr.drawRoundRect(24, 46, 272, 176, 14, RGB565(0, 230, 118));
+
+    // Green Glowing Success Badge
+    _spr.fillCircle(160, 84, 24, RGB565(0, 200, 100));
+    _spr.drawCircle(160, 84, 27, RGB565(100, 255, 180));
+    _spr.setTextDatum(MC_DATUM);
+    _spr.setTextColor(TFT_WHITE, RGB565(0, 200, 100));
+    _spr.drawString("OK", 160, 84, 4);
+
+    _spr.setTextColor(RGB565(0, 230, 118), RGB565(14, 22, 34));
+    _spr.drawString((getLanguage() == LANG_EN) ? "WIFI CONNECTED!" : "DA KET NOI WIFI!", 160, 126, 4);
+
+    char buf[64];
+    _spr.setTextColor(TFT_WHITE, RGB565(14, 22, 34));
+    snprintf(buf, sizeof(buf), "SSID: %s", ssid ? ssid : "Connected");
+    _spr.drawString(buf, 160, 156, 2);
+
+    _spr.setTextColor(RGB565(0, 229, 255), RGB565(14, 22, 34));
+    snprintf(buf, sizeof(buf), "IP: %s", ip ? ip : "192.168.x.x");
+    _spr.drawString(buf, 160, 184, 2);
+
+    _spr.pushSprite(0, 0);
+}
+
 void Display::renderDock() {
     if (!_dockVisible) {
-        // Subtle indicator pill bar when auto-hidden (H=2px at very bottom)
-        _spr.fillRoundRect(140, 237, 40, 2, 1, theme.accent);
+        // Viên thuốc chỉ báo Dock ở chính giữa sát mép dưới (X: 134..186, Y: 236, W=52, H=3px)
+        _spr.fillRoundRect(134, 236, 52, 3, 1, theme.accent);
         return;
     }
 
-    // Centered Floating Solid Obsidian Dock Capsule (Seamless, no split line)
-    int16_t dockX = 38;
+    // Centered Floating Solid Obsidian Dock Capsule (Expanded for 7 slots)
+    int16_t dockX = 22;
     int16_t dockY = 196;
-    int16_t dockW = 244;
+    int16_t dockW = 276;
     int16_t dockH = 36;
     int16_t dockR = 18;
 
@@ -2171,17 +2386,17 @@ void Display::renderDock() {
     // 4. Subtle specular highlight on top edge
     _spr.drawFastHLine(dockX + dockR, dockY, dockW - dockR * 2, RGB565(140, 190, 245));
 
-    // 6 Vector Icon Slots (spaced 40px apart)
+    // 6 Navigation Icon Slots (spaced 36px apart: 40, 76, 112, 148, 184, 220)
     for (int i = 0; i < 6; i++) {
-        int16_t cx = dockX + 22 + i * 40;
+        int16_t cx = dockX + 18 + i * 36;
         int16_t cy = dockY + dockH / 2;
         bool isActive = (_currentPage == i);
 
         if (isActive) {
-            // Nền tối nhẹ cho icon đang được chọn (Bo góc tròn thực sự r=10)
-            _spr.fillRoundRect(cx - 16, dockY + 4, 32, 28, 10, RGB565(18, 24, 36));
-            // Đường bao khi chọn icon 1px, màu xanh lá, 4 góc bo tròn thực sự (r=10, không bị vát)
-            _spr.drawRoundRect(cx - 16, dockY + 4, 32, 28, 10, RGB565(0, 230, 118));
+            // Nền tối nhẹ cho icon đang được chọn (Bo góc tròn thực sự r=9)
+            _spr.fillRoundRect(cx - 15, dockY + 4, 30, 28, 9, RGB565(18, 24, 36));
+            // Đường bao khi chọn icon 1px, màu xanh lá, 4 góc bo tròn thực sự
+            _spr.drawRoundRect(cx - 15, dockY + 4, 30, 28, 9, RGB565(0, 230, 118));
         }
 
         switch (i) {
@@ -2193,6 +2408,14 @@ void Display::renderDock() {
             case 5: drawDockIconTheme(cx, cy, isActive); break;
         }
     }
+
+    // Hairline divider separating Navigation from System Power Button
+    _spr.drawFastVLine(241, dockY + 7, 22, RGB565(40, 56, 80));
+
+    // 7th Slot: Red Power Button (⏻)
+    int16_t powerCx = 269;
+    int16_t powerCy = dockY + dockH / 2;
+    drawDockIconPower(powerCx, powerCy);
 }
 
 // ─── Professional 20x20 Color Glyph Renderer (Vibrant & Crisp) ────────
@@ -2231,6 +2454,24 @@ void Display::drawDockIconMood(int16_t cx, int16_t cy, bool isActive) {
 
 void Display::drawDockIconTheme(int16_t cx, int16_t cy, bool isActive) {
     drawDockBitmap20(_spr, cx, cy, dock_pro_theme_20x20);
+}
+
+void Display::drawDockIconPower(int16_t cx, int16_t cy) {
+    // 1. Sleek crimson accent pill background
+    _spr.fillRoundRect(cx - 15, cy - 14, 30, 28, 9, RGB565(36, 10, 16));
+    _spr.drawRoundRect(cx - 15, cy - 14, 30, 28, 9, RGB565(140, 28, 42));
+
+    // 2. Neon Crimson Power Icon (⏻)
+    _spr.drawCircle(cx, cy + 1, 7, RGB565(255, 65, 80));
+    _spr.drawCircle(cx, cy + 1, 6, RGB565(255, 65, 80));
+
+    // Clear top opening of ring
+    _spr.fillRect(cx - 3, cy - 7, 7, 5, RGB565(36, 10, 16));
+
+    // Crisp vertical tick through center with glowing white core
+    _spr.drawFastVLine(cx - 1, cy - 6, 7, RGB565(255, 120, 130));
+    _spr.drawFastVLine(cx, cy - 7, 8, TFT_WHITE);
+    _spr.drawFastVLine(cx + 1, cy - 6, 7, RGB565(255, 120, 130));
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -3068,10 +3309,10 @@ void Display::renderPage3_Pomodoro() {
     drawBackground();
 
     // ── 1. THANH CHỌN CHẾ ĐỘ DẠNG VIÊN THUỐC HỢP NHẤT (Top Segmented Capsule) ──
-    // Y = 8..28 (H=20px), Capsule nền tối bo tròn X = 45..275 (W=230px)
+    // Y = 8..28 (H=20px), Capsule nền bo tròn X = 45..275 (W=230px) theo Theme
     int16_t capX = 45, capY = 8, capW = 230, capH = 20, capR = 10;
-    _spr.fillSmoothRoundRect(capX, capY, capW, capH, capR, RGB565(20, 26, 38), theme.bg);
-    _spr.drawRoundRect(capX, capY, capW, capH, capR, RGB565(36, 48, 68));
+    _spr.fillSmoothRoundRect(capX, capY, capW, capH, capR, theme.card, theme.bg);
+    _spr.drawRoundRect(capX, capY, capW, capH, capR, theme.cardBorder);
 
     const char* tabNamesVI[] = { "TAP TRUNG", "NGHI 5P", "NGHI 15P" };
     const char* tabNamesEN[] = { "FOCUS", "BREAK 5M", "BREAK 15M" };
@@ -3080,22 +3321,22 @@ void Display::renderPage3_Pomodoro() {
     int16_t segW[] = { 75, 75, 74 };
 
     uint16_t modeColors[] = {
-        RGB565(255, 30, 0),    // Focus: Đỏ Cà Chua nguyên bản
-        RGB565(35, 210, 140),  // Short Break: Mint Green
-        RGB565(55, 175, 255)   // Long Break: Sky Blue
+        theme.accent,     // Focus: Rực rỡ theo màu nhấn chủ đạo của Theme (Cyan/Amber/Pink/Emerald...)
+        theme.green,      // Short Break: Xanh lá dịu mắt thư giãn
+        theme.accentSec   // Long Break: Màu phụ phối của Theme
     };
     uint16_t activeColor = modeColors[_pomoMode];
 
     for (int i = 0; i < 3; i++) {
         bool isActive = (_pomoMode == i);
         if (isActive) {
-            _spr.fillSmoothRoundRect(segX[i], capY + 1, segW[i], capH - 2, 8, activeColor, RGB565(20, 26, 38));
+            _spr.fillSmoothRoundRect(segX[i], capY + 1, segW[i], capH - 2, 8, activeColor, theme.card);
             _spr.setTextDatum(MC_DATUM);
             _spr.setTextColor(C_WHITE);
             _spr.drawString(tabNames[i], segX[i] + segW[i] / 2, capY + capH / 2, 1);
         } else {
             _spr.setTextDatum(MC_DATUM);
-            _spr.setTextColor(RGB565(120, 140, 170));
+            _spr.setTextColor(theme.textDim);
             _spr.drawString(tabNames[i], segX[i] + segW[i] / 2, capY + capH / 2, 1);
         }
     }
@@ -3105,8 +3346,8 @@ void Display::renderPage3_Pomodoro() {
     int16_t cx = 88, ringCy = 126;
     int16_t outerR = 68, innerR = 61;
 
-    // Vòng ray nền MÀU XÁM TRUNG TÍNH (Neutral Slate Gray, TUYỆT ĐỐI KHÔNG XANH NAVY)
-    _spr.drawArc(cx, ringCy, outerR, innerR, 0, 360, RGB565(75, 75, 75), theme.bg, true);
+    // Vòng ray nền hòa sắc cùng màu Track của Theme
+    _spr.drawArc(cx, ringCy, outerR, innerR, 0, 360, theme.track, theme.bg, true);
 
     // Vẽ Desk Pet Mascot (Cà chua / Mèo / Shiba / Capybara) ở trung tâm vòng tròn
     deskPet.render(_spr, cx, ringCy + 1, _pomoState, _pomoMode, _pomoRemainingSec, theme.bg);
@@ -3156,18 +3397,18 @@ void Display::renderPage3_Pomodoro() {
     _spr.setTextColor(activeColor);
     _spr.drawString(statusDesc, cx2, 48, 2);
 
-    // Đồng hồ số đếm ngược Font 6 cực to, sắc nét, nổi bật hoàn toàn (Y=104)
+    // Đồng hồ số đếm ngược Font 6 cực to, sắc nét, đồng bộ Theme Text (Y=104)
     char timeBuf[16];
     snprintf(timeBuf, sizeof(timeBuf), "%02d:%02d", _pomoRemainingSec / 60, _pomoRemainingSec % 60);
     _spr.setTextDatum(MC_DATUM);
-    _spr.setTextColor(C_WHITE);
+    _spr.setTextColor(theme.textMain);
     _spr.drawString(timeBuf, cx2, 104, 6);
 
     // ── 4. CỤM NÚT ĐIỀU KHIỂN CÔNG THÁI HỌC (Y = 152..194, H = 42px — Rộng rãi, kết thúc tại Y=194) ──
     int16_t btnY = 152, btnH = 42;
 
     if (_pomoState == POMO_STOPPED) {
-        // Nút Start lớn bo tròn viên thuốc (Radius 21)
+        // Nút Start lớn bo tròn viên thuốc (Radius 21) theo Theme Accent
         int16_t bX = 162, bW = 148;
         _spr.fillSmoothRoundRect(bX, btnY, bW, btnH, 21, activeColor, theme.bg);
         _spr.setTextDatum(MC_DATUM);
@@ -3181,27 +3422,27 @@ void Display::renderPage3_Pomodoro() {
         _spr.setTextColor(RGB565(20, 20, 25));
         _spr.drawString(L(TXT_POMO_PAUSE), b1X + b1W / 2, btnY + btnH / 2, 2);
 
-        // Nút Phải: DAT LAI / RESET
+        // Nút Phải: DAT LAI / RESET (Hòa nhập tông Card & Border của Theme)
         int16_t b2X = 236, b2W = 74;
-        _spr.fillSmoothRoundRect(b2X, btnY, b2W, btnH, 16, RGB565(35, 42, 52), theme.bg);
-        _spr.drawRoundRect(b2X, btnY, b2W, btnH, 16, RGB565(65, 78, 95));
+        _spr.fillSmoothRoundRect(b2X, btnY, b2W, btnH, 16, theme.card, theme.bg);
+        _spr.drawRoundRect(b2X, btnY, b2W, btnH, 16, theme.cardBorder);
         _spr.setTextDatum(MC_DATUM);
-        _spr.setTextColor(RGB565(220, 230, 245));
+        _spr.setTextColor(theme.textMain);
         _spr.drawString(L(TXT_POMO_RESET), b2X + b2W / 2, btnY + btnH / 2, 2);
     } else if (_pomoState == POMO_PAUSED) {
         // Nút Trái: TIEP TUC / RESUME
         int16_t b1X = 158, b1W = 74;
-        _spr.fillSmoothRoundRect(b1X, btnY, b1W, btnH, 16, RGB565(35, 215, 140), theme.bg);
+        _spr.fillSmoothRoundRect(b1X, btnY, b1W, btnH, 16, theme.green, theme.bg);
         _spr.setTextDatum(MC_DATUM);
         _spr.setTextColor(RGB565(15, 25, 20));
         _spr.drawString((getLanguage() == LANG_VI) ? "TIEP TUC" : "RESUME", b1X + b1W / 2, btnY + btnH / 2, 2);
 
-        // Nút Phải: DAT LAI / RESET
+        // Nút Phải: DAT LAI / RESET (Hòa nhập tông Card & Border của Theme)
         int16_t b2X = 236, b2W = 74;
-        _spr.fillSmoothRoundRect(b2X, btnY, b2W, btnH, 16, RGB565(180, 35, 50), theme.bg);
-        _spr.drawRoundRect(b2X, btnY, b2W, btnH, 16, RGB565(220, 60, 80));
+        _spr.fillSmoothRoundRect(b2X, btnY, b2W, btnH, 16, theme.card, theme.bg);
+        _spr.drawRoundRect(b2X, btnY, b2W, btnH, 16, theme.cardBorder);
         _spr.setTextDatum(MC_DATUM);
-        _spr.setTextColor(C_WHITE);
+        _spr.setTextColor(theme.textMain);
         _spr.drawString(L(TXT_POMO_RESET), b2X + b2W / 2, btnY + btnH / 2, 2);
     }
 }
@@ -3215,246 +3456,352 @@ void Display::renderPage4_Mood() {
 
 // ═══════════════════════════════════════════════════════════════════════
 //  PAGE 5 — SETTINGS (Pure Seamless Android Material 3 List — ZERO CARDS)
-//  6 Rows: Language, Theme, Touch Sound, Alarm Melody, Brightness, System
+// ═══════════════════════════════════════════════════════════════════════
+//  PAGE 5 — SETTINGS (Ergonomic Bento Control Center — PA1)
+//  • Top Card: Wide Brightness Slider + [AUTO] Pill (Y: 8..50, H=42px)
+//  • Middle 2x2 Bento Grid (Each Tile: 146x52px — Huge touch target!):
+//      [Tile 1: Language]        [Tile 2: Theme Style]
+//      [Tile 3: Touch Sound]     [Tile 4: Boot / Alarm Sound + TEST]
+//  • Bottom Bar: System IP Status + [WIFI] Setup Button (Y: 168..198, H=30px)
 // ═══════════════════════════════════════════════════════════════════════
 void Display::renderPage5_Settings() {
-    // Nền trơn tĩnh (Solid Velvet) chuẩn màu Theme, loại bỏ toàn bộ sao lốm đốm để text rõ nét
+    // Nền trơn tĩnh (Solid Velvet) chuẩn màu Theme để chữ và thẻ nổi bật sắc nét
     _spr.fillSprite(theme.bg);
 
-    // ── 1. Header Bar Phẳng Liền Mạch (Y = 6..24) ────────────────────
-    _spr.setTextDatum(TL_DATUM);
-    _spr.setTextColor(theme.accent);
-    _spr.drawString(L(TXT_SETTINGS), 20, 8, 2);
+    bool isVI = (getLanguage() == LANG_VI);
+    uint16_t cardBg = blendColor(theme.card, theme.bg, 110);
+    uint16_t borderCol = blendColor(theme.cardBorder, theme.bg, 120);
 
-    _spr.setTextDatum(TR_DATUM);
-    _spr.setTextColor(theme.textDim);
-    _spr.drawString("SmartDesk V2.1", 300, 10, 1);
+    // ═══════════════════════════════════════════════════════════════════
+    //  1. THẺ TRÊN CÙNG: ĐỘ SÁNG MÀN HÌNH [ - ] [ ☀️ 85% ] [ + ] [AUTO]
+    //     (X: 10..310, Y: 6..52, H=46px — Vừa bấm nút [-] [+], vừa chạm/kéo thanh)
+    // ═══════════════════════════════════════════════════════════════════
+    int16_t brY = 6, brH = 46;
+    _spr.fillSmoothRoundRect(10, brY, 300, brH, 10, cardBg, theme.bg);
+    _spr.drawRoundRect(10, brY, 300, brH, 10, borderCol);
 
-    // Đường hairline ngăn cách mỏng 1px
-    _spr.drawFastHLine(20, 25, 280, RGB565(32, 42, 58));
-
-    // ── 2. Hàng 1: Ngôn ngữ (Language) (Y = 26..53, Tâm Y = 39) ───────
-    // Icon tròn màu Xanh ngọc lục bảo
-    _spr.fillCircle(30, 39, 8, RGB565(30, 180, 90));
-    _spr.setTextDatum(MC_DATUM);
-    _spr.setTextColor(C_WHITE);
-    _spr.drawString("L", 30, 39, 1);
-
-    // Tiêu đề
-    _spr.setTextDatum(ML_DATUM);
-    _spr.setTextColor(theme.textMain);
-    _spr.drawString(L(TXT_ROW_LANGUAGE), 46, 39, 2);
-
-    // Giá trị hiện tại + Mũi tên ›
-    _spr.setTextDatum(MR_DATUM);
-    _spr.setTextColor(theme.accent);
-    char langStr[32];
-    snprintf(langStr, sizeof(langStr), "%s  >", getLanguageName());
-    _spr.drawString(langStr, 300, 39, 2);
-
-    // Hairline
-    _spr.drawFastHLine(20, 53, 280, RGB565(24, 32, 46));
-
-    // ── 3. Hàng 2: Giao diện (Theme) (Y = 54..81, Tâm Y = 67) ────────
-    // Icon tròn màu Tím
-    _spr.fillCircle(30, 67, 8, RGB565(130, 65, 210));
-    _spr.setTextDatum(MC_DATUM);
-    _spr.setTextColor(C_WHITE);
-    _spr.drawString("T", 30, 67, 1);
-
-    // Tiêu đề
-    _spr.setTextDatum(ML_DATUM);
-    _spr.setTextColor(theme.textMain);
-    _spr.drawString(L(TXT_ROW_THEME), 46, 67, 2);
-
-    // Giá trị hiện tại + Mũi tên ›
-    _spr.setTextDatum(MR_DATUM);
-    _spr.setTextColor(theme.accent);
-    char thStr[32];
-    snprintf(thStr, sizeof(thStr), "%s  >", getThemeName());
-    _spr.drawString(thStr, 300, 67, 2);
-
-    // Hairline
-    _spr.drawFastHLine(20, 81, 280, RGB565(24, 32, 46));
-
-    // ── 4. Hàng 3: Âm chạm cảm ứng (Touch Sound) (Y = 82..109, Tâm Y = 95) ──
-    // Icon tròn màu Xanh ngọc
-    _spr.fillCircle(30, 95, 8, RGB565(0, 170, 220));
-    _spr.setTextDatum(MC_DATUM);
-    _spr.setTextColor(C_WHITE);
-    _spr.drawString("S", 30, 95, 1);
-
-    // Tiêu đề
-    _spr.setTextDatum(ML_DATUM);
-    _spr.setTextColor(theme.textMain);
-    _spr.drawString(L(TXT_ROW_TOUCH_SND), 46, 95, 2);
-
-    // Giá trị hiện tại + Mũi tên ›
-    _spr.setTextDatum(MR_DATUM);
-    _spr.setTextColor(theme.accent);
-    char sndStr[32];
-    snprintf(sndStr, sizeof(sndStr), "%s  >", hardware.getTouchSoundName());
-    _spr.drawString(sndStr, 300, 95, 2);
-
-    // Hairline
-    _spr.drawFastHLine(20, 109, 280, RGB565(24, 32, 46));
-
-    // ── 5. Hàng 4: Chuông báo thức (Alarm Melody) (Y = 110..137, Tâm Y = 123) ──
-    // Icon tròn màu Cam san hô
-    _spr.fillCircle(30, 123, 8, RGB565(240, 95, 45));
-    _spr.setTextDatum(MC_DATUM);
-    _spr.setTextColor(C_WHITE);
-    _spr.drawString("A", 30, 123, 1);
-
-    // Tiêu đề
-    _spr.setTextDatum(ML_DATUM);
-    _spr.setTextColor(theme.textMain);
-    _spr.drawString(L(TXT_ROW_ALARM_MEL), 46, 123, 2);
-
-    // Giá trị chuông
-    _spr.setTextDatum(MR_DATUM);
-    _spr.setTextColor(theme.accent);
-    char melStr[32];
-    snprintf(melStr, sizeof(melStr), "%s >", hardware.getAlarmMelodyName());
-    _spr.drawString(melStr, 242, 123, 2);
-
-    // Nút [THỬ] / [TEST] phát loa
-    _spr.fillRoundRect(250, 113, 50, 20, 10, theme.green);
-    _spr.setTextDatum(MC_DATUM);
-    _spr.setTextColor(C_BLACK);
-    _spr.drawString(L(TXT_TEST), 275, 123, 2);
-
-    // Hairline
-    _spr.drawFastHLine(20, 137, 280, RGB565(24, 32, 46));
-
-    // ── 6. Hàng 5: Độ sáng màn hình (Display Brightness) (Y = 138..165, Tâm Y = 151) ──
-    // Icon tròn màu Vàng nắng
-    _spr.fillCircle(30, 151, 8, RGB565(245, 175, 25));
-    _spr.setTextDatum(MC_DATUM);
-    _spr.setTextColor(C_BLACK);
-    _spr.drawString("B", 30, 151, 1);
-
-    // Tiêu đề
-    _spr.setTextDatum(ML_DATUM);
-    _spr.setTextColor(theme.textMain);
-    _spr.drawString(L(TXT_ROW_BRIGHTNESS), 46, 151, 2);
-
-    // Thanh tiến trình độ sáng liền mạch (X = 112, Y = 147, W = 88, H = 8)
-    _spr.fillRoundRect(112, 147, 88, 8, 4, RGB565(25, 34, 48));
+    int16_t brCy = brY + brH / 2; // Y = 29
     bool isAuto = hardware.isAutoBrightness();
-    int fillW = map(hardware.getBacklight(), 0, 100, 0, 88);
+    uint16_t barCol = isAuto ? theme.green : theme.accent;
+    int curBri = hardware.getBacklight();
+
+    // Nút [ - ] lớn bên trái (X = 16..54, W = 38, H = 32, bo tròn mượt Smooth Pill 2px concentric)
+    uint16_t btnBorder = RGB565(65, 85, 118);
+    uint16_t btnFill   = RGB565(20, 28, 42);
+    _spr.fillSmoothRoundRect(16, brCy - 16, 38, 32, 10, btnBorder, cardBg);
+    _spr.fillSmoothRoundRect(18, brCy - 14, 34, 28, 8, btnFill, btnBorder);
+    _spr.setTextDatum(MC_DATUM);
+    _spr.setTextColor(theme.textMain);
+    _spr.drawString("-", 35, brCy, 4);
+
+    // Thanh độ sáng dạng viên thuốc dày (X = 60..196, W = 136, H = 30)
+    int16_t slX = 60, slW = 136, slH = 30;
+    int16_t slY = brCy - slH / 2;
+    uint16_t slBorder = isAuto ? theme.green : RGB565(60, 80, 112);
+    uint16_t slTrack  = RGB565(15, 22, 34);
+    _spr.fillSmoothRoundRect(slX, slY, slW, slH, 10, slBorder, cardBg);
+    _spr.fillSmoothRoundRect(slX + 2, slY + 2, slW - 4, slH - 4, 8, slTrack, slBorder);
+
+    int fillW = map(curBri, 0, 100, 0, slW - 4);
     if (fillW > 0) {
-        _spr.fillRoundRect(112, 147, fillW, 8, 4, isAuto ? theme.green : theme.accent);
+        if (fillW < 16) fillW = 16;
+        uint16_t fillBg = blendColor(barCol, slTrack, 165);
+        _spr.fillSmoothRoundRect(slX + 2, slY + 2, fillW, slH - 4, 8, fillBg, slTrack);
     }
 
-    // Phần trăm
-    char bStr[8];
-    snprintf(bStr, sizeof(bStr), "%d%%", hardware.getBacklight());
-    _spr.setTextDatum(ML_DATUM);
-    _spr.setTextColor(theme.textDim);
-    _spr.drawString(bStr, 204, 151, 1);
+    // Icon Mặt trời nhỏ + Số % độ sáng nằm gọn bên trong lòng thanh trượt
+    _spr.fillCircle(slX + 16, brCy, 5, RGB565(250, 185, 30));
+    _spr.fillCircle(slX + 16, brCy, 2, C_BLACK);
 
-    // Nút [AUTO]
-    _spr.fillRoundRect(246, 140, 54, 22, 11, isAuto ? RGB565(15, 60, 40) : RGB565(20, 28, 42));
-    _spr.drawRoundRect(246, 140, 54, 22, 11, isAuto ? theme.green : RGB565(44, 58, 82));
+    char bStr[12];
+    snprintf(bStr, sizeof(bStr), "%d%%", curBri);
+    _spr.setTextDatum(MC_DATUM);
+    _spr.setTextColor(C_WHITE);
+    _spr.drawString(bStr, slX + slW / 2 + 6, brCy, 2);
+
+    // Nút [ + ] lớn bên phải thanh trượt (X = 202..240, W = 38, H = 32)
+    _spr.fillSmoothRoundRect(202, brCy - 16, 38, 32, 10, btnBorder, cardBg);
+    _spr.fillSmoothRoundRect(204, brCy - 14, 34, 28, 8, btnFill, btnBorder);
+    _spr.setTextDatum(MC_DATUM);
+    _spr.setTextColor(theme.textMain);
+    _spr.drawString("+", 221, brCy, 4);
+
+    // Nút [AUTO] to rõ ngoài cùng bên phải (X = 246..304, W = 58, H = 32)
+    uint16_t autoBorder = isAuto ? theme.green : btnBorder;
+    uint16_t autoFill   = isAuto ? RGB565(15, 65, 42) : btnFill;
+    _spr.fillSmoothRoundRect(246, brCy - 16, 58, 32, 10, autoBorder, cardBg);
+    _spr.fillSmoothRoundRect(248, brCy - 14, 54, 28, 8, autoFill, autoBorder);
     _spr.setTextDatum(MC_DATUM);
     _spr.setTextColor(isAuto ? theme.green : theme.textDim);
-    _spr.drawString(L(TXT_AUTO), 273, 151, 1);
+    _spr.drawString(L(TXT_AUTO), 275, brCy, 2);
 
-    // Hairline
-    _spr.drawFastHLine(20, 165, 280, RGB565(24, 32, 46));
+    // ═══════════════════════════════════════════════════════════════════
+    //  2. LƯỚI BENTO 2×2: 4 Ô ĐIỀU KHIỂN LỚN (Mỗi ô: W = 146px, H = 64px)
+    //     • Hàng 1: Y = 59..123 (H = 64px)
+    //     • Hàng 2: Y = 130..194 (H = 64px)
+    //     • Cột Trái: X = 10..156 | Cột Phải: X = 164..310
+    // ═══════════════════════════════════════════════════════════════════
+    int16_t tW = 146, tH = 64;
+    int16_t leftX = 10, rightX = 164;
+    int16_t row1Y = 59, row2Y = 130;
 
-    // ── 7. Hàng 6: Hệ thống & WiFi (Y = 166..196, Tâm Y = 181) ───────
-    // Icon tròn màu Xanh dương
-    _spr.fillCircle(30, 181, 8, RGB565(45, 125, 245));
+    // ── Ô 1 (Trái - Trên): NGÔN NGỮ / LANGUAGE ─────────────────────────
+    _spr.fillSmoothRoundRect(leftX, row1Y, tW, tH, 10, cardBg, theme.bg);
+    _spr.drawRoundRect(leftX, row1Y, tW, tH, 10, borderCol);
+
+    _spr.fillCircle(leftX + 18, row1Y + 19, 8, RGB565(30, 180, 90));
     _spr.setTextDatum(MC_DATUM);
     _spr.setTextColor(C_WHITE);
-    _spr.drawString("i", 30, 181, 1);
+    _spr.drawString("L", leftX + 18, row1Y + 19, 1);
 
-    // Tiêu đề
+    _spr.setTextDatum(ML_DATUM);
+    _spr.setTextColor(theme.textDim);
+    _spr.drawString(isVI ? "NGON NGU" : "LANGUAGE", leftX + 32, row1Y + 19, 1);
+
     _spr.setTextDatum(ML_DATUM);
     _spr.setTextColor(theme.textMain);
-    _spr.drawString(L(TXT_SYSTEM_IP), 46, 181, 2);
+    _spr.drawString(getLanguageName(), leftX + 12, row1Y + 45, 2);
 
-    // IP Address
-    String ipStr = "IP: " + WiFi.localIP().toString();
     _spr.setTextDatum(MR_DATUM);
+    _spr.setTextColor(theme.accent);
+    _spr.drawString(">", leftX + tW - 10, row1Y + 45, 2);
+
+    // ── Ô 2 (Phải - Trên): GIAO DIỆN / THEME ───────────────────────────
+    _spr.fillSmoothRoundRect(rightX, row1Y, tW, tH, 10, cardBg, theme.bg);
+    _spr.drawRoundRect(rightX, row1Y, tW, tH, 10, borderCol);
+
+    _spr.fillCircle(rightX + 18, row1Y + 19, 8, RGB565(130, 65, 210));
+    _spr.setTextDatum(MC_DATUM);
+    _spr.setTextColor(C_WHITE);
+    _spr.drawString("T", rightX + 18, row1Y + 19, 1);
+
+    _spr.setTextDatum(ML_DATUM);
     _spr.setTextColor(theme.textDim);
-    _spr.drawString(ipStr.c_str(), 300, 181, 1);
+    _spr.drawString(isVI ? "GIAO DIEN" : "THEME STYLE", rightX + 32, row1Y + 19, 1);
+
+    _spr.setTextDatum(ML_DATUM);
+    _spr.setTextColor(theme.accent);
+    _spr.drawString(getThemeName(), rightX + 12, row1Y + 45, 2);
+
+    _spr.setTextDatum(MR_DATUM);
+    _spr.setTextColor(theme.accent);
+    _spr.drawString(">", rightX + tW - 10, row1Y + 45, 2);
+
+    // ── Ô 3 (Trái - Dưới): ÂM CHẠM CẢM ỨNG / TOUCH SOUND ───────────────
+    _spr.fillSmoothRoundRect(leftX, row2Y, tW, tH, 10, cardBg, theme.bg);
+    _spr.drawRoundRect(leftX, row2Y, tW, tH, 10, borderCol);
+
+    _spr.fillCircle(leftX + 18, row2Y + 19, 8, RGB565(0, 170, 220));
+    _spr.setTextDatum(MC_DATUM);
+    _spr.setTextColor(C_WHITE);
+    _spr.drawString("S", leftX + 18, row2Y + 19, 1);
+
+    _spr.setTextDatum(ML_DATUM);
+    _spr.setTextColor(theme.textDim);
+    _spr.drawString(isVI ? "AM CHAM" : "TOUCH SOUND", leftX + 32, row2Y + 19, 1);
+
+    _spr.setTextDatum(ML_DATUM);
+    _spr.setTextColor(theme.textMain);
+    _spr.drawString(hardware.getTouchSoundName(), leftX + 12, row2Y + 45, 2);
+
+    _spr.setTextDatum(MR_DATUM);
+    _spr.setTextColor(theme.accent);
+    _spr.drawString(">", leftX + tW - 10, row2Y + 45, 2);
+
+    // ── Ô 4 (Phải - Dưới): ÂM KHỞI ĐỘNG ↔ CHUÔNG BÁO (Cách 1: Nút lật chế độ bên phải) ──
+    _spr.fillSmoothRoundRect(rightX, row2Y, tW, tH, 10, cardBg, theme.bg);
+    _spr.drawRoundRect(rightX, row2Y, tW, tH, 10, borderCol);
+
+    if (_settingsSoundIsStartup) {
+        _spr.fillCircle(rightX + 18, row2Y + 19, 8, RGB565(0, 200, 240));
+        _spr.setTextDatum(MC_DATUM);
+        _spr.setTextColor(C_BLACK);
+        _spr.drawString("K", rightX + 18, row2Y + 19, 1);
+
+        _spr.setTextDatum(ML_DATUM);
+        _spr.setTextColor(theme.textDim);
+        _spr.drawString(isVI ? "KHOI DONG" : "BOOT SND", rightX + 30, row2Y + 19, 1);
+
+        _spr.setTextDatum(ML_DATUM);
+        _spr.setTextColor(theme.textMain);
+        _spr.drawString(hardware.getStartupSoundName(), rightX + 12, row2Y + 45, 2);
+
+        // Nút chuyển sang Báo thức ở cột phải (Smooth Pill đồng tâm R=13, inset 2px R=11)
+        uint16_t swBorder = RGB565(240, 105, 50);
+        uint16_t swFill   = RGB565(48, 24, 18);
+        _spr.fillSmoothRoundRect(rightX + 86, row2Y + 16, 52, 26, 13, swBorder, cardBg);
+        _spr.fillSmoothRoundRect(rightX + 88, row2Y + 18, 48, 22, 11, swFill, swBorder);
+        _spr.setTextDatum(MC_DATUM);
+        _spr.setTextColor(RGB565(255, 165, 110));
+        _spr.drawString(isVI ? "CHUONG" : "ALARM", rightX + 112, row2Y + 29, 1);
+    } else {
+        _spr.fillCircle(rightX + 18, row2Y + 19, 8, RGB565(240, 95, 45));
+        _spr.setTextDatum(MC_DATUM);
+        _spr.setTextColor(C_WHITE);
+        _spr.drawString("A", rightX + 18, row2Y + 19, 1);
+
+        _spr.setTextDatum(ML_DATUM);
+        _spr.setTextColor(theme.textDim);
+        _spr.drawString(isVI ? "BAO THUC" : "ALARM", rightX + 30, row2Y + 19, 1);
+
+        _spr.setTextDatum(ML_DATUM);
+        _spr.setTextColor(theme.textMain);
+        _spr.drawString(hardware.getAlarmMelodyName(), rightX + 12, row2Y + 45, 2);
+
+        // Nút chuyển về Khởi động ở cột phải (Smooth Pill đồng tâm R=13, inset 2px R=11)
+        uint16_t swBorder = RGB565(0, 200, 240);
+        uint16_t swFill   = RGB565(14, 38, 52);
+        _spr.fillSmoothRoundRect(rightX + 86, row2Y + 16, 52, 26, 13, swBorder, cardBg);
+        _spr.fillSmoothRoundRect(rightX + 88, row2Y + 18, 48, 22, 11, swFill, swBorder);
+        _spr.setTextDatum(MC_DATUM);
+        _spr.setTextColor(RGB565(110, 230, 255));
+        _spr.drawString(isVI ? "K.DONG" : "BOOT", rightX + 112, row2Y + 29, 1);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  3. THANH ĐÁY: TRẠNG THÁI MẠNG IP & NÚT [ĐỔI WIFI] (X: 10..310, Y: 201..231, H=30px)
+    //     Phủ kín cân đối toàn màn hình (không còn khoảng đen trống thừa phía dưới!)
+    // ═══════════════════════════════════════════════════════════════════
+    int16_t botY = 201, botH = 30;
+    _spr.fillSmoothRoundRect(10, botY, 300, botH, 9, cardBg, theme.bg);
+    _spr.drawRoundRect(10, botY, 300, botH, 9, borderCol);
+
+    int16_t botCy = botY + botH / 2; // Y = 216
+
+    // Chấm tròn trạng thái mạng (Xanh lá khi Online, Đỏ khi Offline)
+    bool wifiOk = WiFi.isConnected();
+    _spr.fillCircle(24, botCy, 4, wifiOk ? theme.green : theme.red);
+
+    String ipStr = wifiOk ? ("IP: " + WiFi.localIP().toString()) : (isVI ? "WiFi: Chua ket noi" : "WiFi: Offline");
+    _spr.setTextDatum(ML_DATUM);
+    _spr.setTextColor(theme.textMain);
+    _spr.drawString(ipStr.c_str(), 36, botCy, 2);
+
+    // Nút [ĐỔI WIFI] / [WIFI QR] bo tròn viên thuốc khử răng cưa đồng tâm (Smooth Pill R=11, inset 2px R=9)
+    _spr.fillSmoothRoundRect(224, botCy - 11, 80, 22, 11, theme.accent, cardBg);
+    _spr.fillSmoothRoundRect(226, botCy - 9, 76, 18, 9, RGB565(20, 38, 66), theme.accent);
+    _spr.setTextDatum(MC_DATUM);
+    _spr.setTextColor(theme.accent);
+    _spr.drawString(isVI ? "DOI WIFI" : "WIFI QR", 264, botCy, 1);
 }
 
-// ─── Touch Handler for Page 4 Settings (Full-Row Taps) ────────────────
+// ─── Touch Handler for Page 5 Settings (Bento Grid 2x2 + Wide Slider) ──
 bool Display::handleTouchSettings(int16_t x, int16_t y) {
-    // ── Hàng 1: Đổi Ngôn ngữ (Language) (Y: 26..53) ──
-    if (y >= 26 && y <= 53) {
-        toggleLanguage();
-        hardware.playTouchSound();
-        _lastRender = 0;
-        return true;
-    }
-
-    // ── Hàng 2: Đổi Giao diện (Theme) (Y: 54..81) ──
-    if (y >= 54 && y <= 81) {
-        nextTheme();
-        hardware.playTouchSound();
-        _lastRender = 0;
-        return true;
-    }
-
-    // ── Hàng 3: Đổi Âm chạm cảm ứng (Touch Sound) (Y: 82..109) ──
-    if (y >= 82 && y <= 109) {
-        hardware.nextTouchSound();
-        hardware.playTouchSound();
-        _lastRender = 0;
-        return true;
-    }
-
-    // ── Hàng 4: Chuông báo thức (Alarm Melody) (Y: 110..137) ──
-    if (y >= 110 && y <= 137) {
-        if (x >= 246) {
-            // Nút [THỬ]: Phát chuông trên loa ngoài GPIO 26
-            hardware.playAlarmMelody();
-            _lastRender = 0;
-            return true;
-        } else {
-            // Chạm vào thân hàng: Chuyển điệu chuông tiếp theo
-            hardware.nextAlarmMelody();
-            hardware.playTouchSound();
-            _lastRender = 0;
-            return true;
-        }
-    }
-
-    // ── Hàng 5: Độ sáng màn hình (Y: 138..165) ──
-    if (y >= 138 && y <= 165) {
-        if (x >= 240) {
-            // Nút [AUTO]: Bật / tắt cảm biến quang LDR
+    // ── 1. Thẻ Độ sáng trên cùng (Y: 0..55 — H=55px bao phủ cả sát mép trên) ──
+    if (y <= 55) {
+        if (x >= 244) {
+            // Nút [AUTO] (X: 244..319): Bật / tắt cảm biến quang LDR tự động
             hardware.setAutoBrightness(!hardware.isAutoBrightness());
             hardware.playTouchSound();
             _lastRender = 0;
             return true;
-        } else {
-            // Chạm vào thanh trượt hoặc nửa trái hàng: Tăng/chỉnh độ sáng tuần hoàn
+        } else if (x <= 56) {
+            // Nút [ - ] bên trái (X: 0..56): Giảm độ sáng từng nấc 10% (Tối thiểu 5%)
             hardware.setAutoBrightness(false);
             int curB = hardware.getBacklight();
-            curB += 20;
-            if (curB > 100) curB = 20;
-            hardware.setBacklight(curB);
+            int newB = ((curB - 1) / 10) * 10;
+            if (newB < 5) newB = 5;
+            hardware.setBacklight(newB);
+            hardware.playTouchSound();
+            _lastRender = 0;
+            return true;
+        } else if (x >= 200 && x < 244) {
+            // Nút [ + ] bên phải thanh (X: 200..243): Tăng độ sáng từng nấc 10% (Tối đa 100%)
+            hardware.setAutoBrightness(false);
+            int curB = hardware.getBacklight();
+            int newB = ((curB / 10) + 1) * 10;
+            if (newB > 100) newB = 100;
+            hardware.setBacklight(newB);
+            hardware.playTouchSound();
+            _lastRender = 0;
+            return true;
+        } else {
+            // Thanh độ sáng ở giữa (X: 57..199): Chạm trực tiếp hoặc kéo trượt mượt mà 5%..100%
+            bool wasAuto = hardware.isAutoBrightness();
+            hardware.setAutoBrightness(false);
+            int oldB = hardware.getBacklight();
+            int newB = map(constrain((int)x, 62, 194), 62, 194, 5, 100);
+            newB = ((newB + 2) / 5) * 5; // Làm tròn mỗi bậc 5%
+            newB = constrain(newB, 5, 100);
+            if (newB != oldB || wasAuto) {
+                hardware.setBacklight(newB);
+                // Chỉ phát âm chạm nhẹ khi nhảy qua từng mốc 10% để không làm khựng thao tác kéo trượt
+                if (wasAuto || (newB / 10) != (oldB / 10)) {
+                    hardware.playTouchSound();
+                }
+                _lastRender = 0;
+            }
+            return true;
+        }
+    }
+
+    // ── 2. Hàng 1 của Bento Grid (Y: 56..126 — Cao 70px) ──────────────────
+    if (y >= 56 && y <= 126) {
+        if (x < 160) {
+            // Ô 1 (Trái - Trên): Đổi Ngôn ngữ (Tiếng Việt <-> English)
+            toggleLanguage();
+            hardware.playTouchSound();
+            _lastRender = 0;
+            return true;
+        } else {
+            // Ô 2 (Phải - Trên): Đổi Giao diện (Theme kế tiếp)
+            nextTheme();
             hardware.playTouchSound();
             _lastRender = 0;
             return true;
         }
     }
 
-    // ── Hàng 6: Thông tin hệ thống (Y: 166..196) ──
-    if (y >= 166 && y <= 196) {
-        hardware.playTouchSound();
-        return true;
+    // ── 3. Hàng 2 của Bento Grid (Y: 127..200 — Bao phủ dư thêm 6px dưới đáy 2 card để bấm dòng chữ dưới không lệch) ──
+    if (y >= 127 && y <= 200) {
+        if (x < 160) {
+            // Ô 3 (Trái - Dưới): Đổi Âm chạm cảm ứng (nextTouchSound đã tự phát thử âm mới)
+            hardware.nextTouchSound();
+            _lastRender = 0;
+            return true;
+        } else {
+            // Ô 4 (Phải - Dưới): Âm Khởi động ↔ Chuông Báo thức (Cách 1)
+            // • Cột phải (x >= 246, suốt chiều cao ô): Nút [CHUONG]/[ALARM] <-> [K.DONG]/[BOOT] để lật chế độ
+            // • Cột trái (x < 246, suốt chiều cao ô): Đổi giai điệu kế tiếp và tự phát thử ngay!
+            if (x >= 246) {
+                _settingsSoundIsStartup = !_settingsSoundIsStartup;
+                hardware.playTouchSound();
+                _lastRender = 0;
+                return true;
+            } else {
+                if (_settingsSoundIsStartup) {
+                    hardware.nextStartupSound();
+                    if (hardware.getStartupSound() != STARTUP_SND_MUTE) {
+                        hardware.playStartupSound();
+                    } else {
+                        hardware.playTouchSound();
+                    }
+                } else {
+                    hardware.nextAlarmMelody();
+                    hardware.playAlarmMelody();
+                }
+                _lastRender = 0;
+                return true;
+            }
+        }
+    }
+
+    // ── 4. Thanh Đáy Hệ thống & WiFi (Y: 201..239) ────────────────────────
+    // • Góc phải (x >= 216): Nút [DOI WIFI] / [WIFI QR] -> Mở trang mã QR cài đặt WiFi
+    // • Chính giữa đáy (x: 105..215, y >= 208): Vùng viên thuốc chỉ báo Dock -> Trả về false để đánh thức Dock!
+    // • Góc trái dưới (x < 105): Chặn cảm ứng tại chỗ để bấm lệch dưới card trái không bao giờ làm bật Dock
+    if (y >= 201) {
+        if (x >= 216) {
+            hardware.playTouchSound();
+            webDashboard.requestWiFiPortal();
+            _lastRender = 0;
+            return true;
+        }
+        if (x >= 105 && x <= 215 && y >= 208) {
+            return false; // Cho phép đi xuống bước đánh thức thanh Dock
+        }
+        return true; // Chặn mọi điểm chạm lệch bên dưới card trái
     }
 
     return false;
 }
-
-
-
-

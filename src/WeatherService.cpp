@@ -5,7 +5,12 @@
 #include "WeatherService.h"
 #include "Display.h"
 #include "NetworkTask.h"
+#include "WiFiProfileManager.h"
+#include "HardwareManager.h"
+#include "TouchManager.h"
+#include "vn_lunar.h"
 #include <WiFiManager.h>
+#include <esp_wifi.h>
 
 WeatherService weather;
 
@@ -120,57 +125,176 @@ WeatherType WeatherService::getType() const {
 bool WeatherService::isNight() const {
     time_t now = time(NULL);
     if (now < 1600000000) return false; // time not synced
-    if (_data.sunrise == 0 || _data.sunset == 0) {
-        // Fallback: 6 AM – 6 PM is day
-        struct tm t;
-        localtime_r(&now, &t);
-        return (t.tm_hour < 6 || t.tm_hour >= 18);
+    struct tm t;
+    localtime_r(&now, &t);
+    int curMin = t.tm_hour * 60 + t.tm_min;
+    if (_data.sunriseHour == 0 && _data.sunsetHour == 0) {
+        // Fallback: 06:00 – 18:00 is day
+        return (curMin < 6 * 60 || curMin >= 18 * 60);
     }
-    return (now < _data.sunrise || now > _data.sunset);
+    int riseMin = _data.sunriseHour * 60 + _data.sunriseMin;
+    int setMin  = _data.sunsetHour * 60 + _data.sunsetMin;
+    return (curMin < riseMin || curMin >= setMin);
 }
 
 uint8_t WeatherService::getLunarDay() const {
     time_t now = time(NULL);
-    if (now < 1600000000) return 0;
+    if (now < 1600000000) return 1;
     struct tm t;
     localtime_r(&now, &t);
-    // Simplified synodic month calculation
-    // Known new moon: Jan 6, 2000 18:14 UTC (2451550.26 JD)
-    double jd = 367.0 * (1900 + t.tm_year) 
-              - floor(7.0 * ((1900 + t.tm_year) + floor(((t.tm_mon + 1) + 9.0) / 12.0)) / 4.0) 
-              + floor(275.0 * (t.tm_mon + 1) / 9.0) 
-              + t.tm_mday + 1721013.5;
-    double daysSinceNew = jd - 2451550.26;
-    double phase = fmod(daysSinceNew, 29.53058867);
-    if (phase < 0) phase += 29.53058867;
-    return (uint8_t)phase;
+    LunarDate ld = LunarCalendar::convertSolar2Lunar(t.tm_mday, t.tm_mon + 1, t.tm_year + 1900);
+    return (uint8_t)ld.day;
 }
 
 // ─── Private implementation ──────────────────────────────────────────
 
 void WeatherService::_connectWiFi() {
-    Serial.println("[WiFi] Starting WiFiManager...");
+    Serial.println("[WiFi] Starting WiFi Connection Manager...");
     display.showBootStatus("Connecting WiFi...", 35);
+
+    WiFi.mode(WIFI_STA);
+    delay(50);
+    wifiProfiles.begin();
+
+    // 1. Nếu đã có mạng lưu trước đó (hoặc vừa tự động migrate từ ESP32 flash)
+    if (wifiProfiles.getProfileCount() > 0) {
+        display.showBootStatus("Connecting Known WiFi...", 45);
+        if (wifiProfiles.connectBest()) {
+            Serial.printf("[WiFi] Connected to known WiFi! IP: %s\n", WiFi.localIP().toString().c_str());
+            WiFi.setAutoReconnect(true);
+            WiFi.persistent(true);
+            display.showBootStatus("WiFi Connected!", 68);
+            delay(300);
+            return;
+        }
+        Serial.println("[WiFi] Known networks not reachable. Checking direct flash...");
+    }
+
+    // 2. Thử WiFi.begin() trực tiếp lần cuối (dùng thông tin ESP32 NVS tự động) nếu chưa kết nối
+    if (WiFi.status() != WL_CONNECTED) {
+        Serial.println("[WiFi] Trying direct WiFi.begin() from ESP32 flash...");
+        WiFi.begin();
+        unsigned long tryMs = millis();
+        while (WiFi.status() != WL_CONNECTED && millis() - tryMs < 4500) {
+            delay(200);
+        }
+        if (WiFi.status() == WL_CONNECTED) {
+            Serial.printf("[WiFi] Connected via direct WiFi.begin()! SSID: %s, IP: %s\n",
+                          WiFi.SSID().c_str(), WiFi.localIP().toString().c_str());
+            wifiProfiles.saveProfile(WiFi.SSID().c_str(), WiFi.psk().c_str());
+            display.showBootStatus("WiFi Connected!", 68);
+            delay(300);
+            return;
+        }
+    }
+
+    // 3. Nếu thực sự không kết nối được -> Bật Màn hình Mã QR Cài đặt WiFi
+    Serial.println("[WiFi] No reachable network. Launching QR Code Setup...");
+    startWiFiSetupPortal();
+}
+
+void WeatherService::startWiFiSetupPortal() {
+    Serial.println("[WiFi] Launching On-Screen QR Code Setup Portal...");
+    bool wasConnectedBeforePortal = (WiFi.status() == WL_CONNECTED);
+
+    // Hiển thị Màn hình Mã QR trực quan trên CYD
+    display.renderWiFiSetupScreen("WIFI:S:CYD-SmartDesk-V2;T:nopass;;");
 
     WiFiManager wm;
     wm.setConfigPortalTimeout(120);
-    wm.setConnectTimeout(15);
+    wm.setConfigPortalBlocking(false); // Non-blocking để xử lý cảm ứng nút Bỏ qua
     wm.setBreakAfterConfig(true);
+    wm.setDarkMode(true);
+    wm.setTitle("CYD SmartDesk V2");
+    wm.setCustomHeadElement("<style>:root{--bg:#070B14;--accent:#00E5FF;}body{background:#070B14!important;color:#F8FAFC!important;font-family:-apple-system,sans-serif;}h1{color:#00E5FF!important;}button{background:linear-gradient(135deg,#00E5FF,#0077B6)!important;color:#070B14!important;font-weight:bold!important;border-radius:10px!important;padding:12px!important;border:none!important;}</style>");
 
-    wm.setAPCallback([](WiFiManager* myWiFiManager) {
-        Serial.println("[WiFi] Entered AP Config Portal Mode");
-        display.showBootStatus("AP Mode: CYD-SmartDesk-V2", 50);
-    });
+    wm.startConfigPortal("CYD-SmartDesk-V2");
 
-    if (!wm.autoConnect("CYD-SmartDesk-V2")) {
-        Serial.println("[WiFi] Failed to connect, continuing offline");
-        display.showBootStatus("WiFi Offline Mode", 60);
-        delay(600);
+    unsigned long startMs = millis();
+    unsigned long lastTickMs = millis();
+    bool userCancelled = false;
+    bool newConfigConnected = false;
+
+    while (millis() - startMs < 120000UL) {
+        if (wm.process()) {
+            newConfigConnected = true;
+            break;
+        }
+
+        unsigned long elapsed = millis() - startMs;
+        int remainingSec = 120 - (int)(elapsed / 1000);
+        if (remainingSec < 0) remainingSec = 0;
+
+        // Cập nhật màn hình đếm ngược mỗi giây
+        if (millis() - lastTickMs >= 1000) {
+            lastTickMs = millis();
+            display.renderWiFiSetupScreen("WIFI:S:CYD-SmartDesk-V2;T:nopass;;", remainingSec);
+        }
+
+        // Kiểm tra người dùng có chạm nút [ ✕ Bỏ qua / Dùng Offline ] (khu vực nút góc dưới bên trái)
+        // Bỏ qua 350ms đầu tiên để tránh nhận nhầm thao tác nhấc ngón tay khi vừa bấm nút [WIFI QR]
+        uint16_t tx = 0, ty = 0;
+        if (elapsed > 350 && touch.checkTap(&tx, &ty)) {
+            Serial.printf("[WiFi] Tap detected at (%d, %d)\n", tx, ty);
+            if (tx <= 150 && ty >= 175) {
+                Serial.println("[WiFi] User tapped 'Skip / Exit QR Setup'");
+                hardware.playTouchSound();
+                userCancelled = true;
+                break;
+            }
+        }
+
+        // Nếu trước đó chưa có WiFi mà tự kết nối thành công, hoặc portal đã đóng sau khi lưu cấu hình
+        if ((!wasConnectedBeforePortal && WiFi.status() == WL_CONNECTED) || !wm.getConfigPortalActive()) {
+            break;
+        }
+
+        delay(15);
+    }
+
+    if (userCancelled) {
+        wm.stopConfigPortal();
+        if (WiFi.status() != WL_CONNECTED) {
+            display.showBootStatus("WiFi Offline Mode", 60);
+            delay(400);
+        }
         return;
     }
-    Serial.printf("[WiFi] Connected! IP: %s\n", WiFi.localIP().toString().c_str());
-    display.showBootStatus("WiFi Connected!", 68);
-    delay(300);
+
+    if (newConfigConnected || WiFi.status() == WL_CONNECTED) {
+        // Lưu mạng mới vào danh bạ đa mạng NVS
+        String newSSID = wm.getWiFiSSID();
+        String newPass = wm.getWiFiPass();
+        if (newSSID.length() == 0) {
+            newSSID = WiFi.SSID();
+        }
+        if (newPass.length() == 0) {
+            newPass = WiFi.psk();
+        }
+        if (newPass.length() == 0) {
+            wifi_config_t conf;
+            memset(&conf, 0, sizeof(conf));
+            if (esp_wifi_get_config(WIFI_IF_STA, &conf) == ESP_OK) {
+                newPass = String((char*)conf.sta.password);
+            }
+        }
+        if (newSSID.length() > 0) {
+            wifiProfiles.saveProfile(newSSID.c_str(), newPass.c_str());
+        }
+
+        Serial.printf("[WiFi] Setup Success! SSID: %s, IP: %s\n", newSSID.c_str(), WiFi.localIP().toString().c_str());
+        WiFi.setAutoReconnect(true);
+        WiFi.persistent(true);
+
+        // Hiển thị màn hình thành công rực rỡ kèm chuông vui vẻ
+        display.renderWiFiConnectedScreen(newSSID.c_str(), WiFi.localIP().toString().c_str());
+        hardware.playStartupSound();
+        delay(2200);
+    } else {
+        wm.stopConfigPortal();
+        display.showBootStatus("WiFi Offline Mode", 60);
+        delay(400);
+    }
 }
 
 void WeatherService::_syncTime() {
@@ -202,18 +326,24 @@ void WeatherService::_detectCityFromIP() {
             }
 
             // Standard clean Vietnamese city name
-            String cStr = String(city ? city : (region ? region : ""));
-            if (cStr.indexOf("Ho Chi Minh") >= 0 || cStr.indexOf("Saigon") >= 0) {
+            // Combine city and region to improve detection of districts within major cities
+            String cityStr = city ? String(city) : "";
+            String regionStr = region ? String(region) : "";
+            String combined = cityStr + " " + regionStr;
+            // Normalize: remove diacritics for simple substring checks (optional – kept simple)
+            if (combined.indexOf("Ho Chi Minh") >= 0 || combined.indexOf("Saigon") >= 0) {
+                // Any district (e.g., "Quận Bốn") inside Ho Chi Minh City should map to TP. HCM
                 strlcpy(_data.city, "TP. HCM", sizeof(_data.city));
-            } else if (cStr.indexOf("Hanoi") >= 0 || cStr.indexOf("Ha Noi") >= 0) {
+            } else if (combined.indexOf("Hanoi") >= 0 || combined.indexOf("Ha Noi") >= 0) {
                 strlcpy(_data.city, "HA NOI", sizeof(_data.city));
-            } else if (cStr.indexOf("Da Nang") >= 0) {
+            } else if (combined.indexOf("Da Nang") >= 0) {
                 strlcpy(_data.city, "DA NANG", sizeof(_data.city));
-            } else if (cStr.indexOf("Can Tho") >= 0) {
+            } else if (combined.indexOf("Can Tho") >= 0) {
                 strlcpy(_data.city, "CAN THO", sizeof(_data.city));
-            } else if (cStr.indexOf("Hai Phong") >= 0) {
+            } else if (combined.indexOf("Hai Phong") >= 0) {
                 strlcpy(_data.city, "HAI PHONG", sizeof(_data.city));
             } else if (city && strlen(city) > 0) {
+                // Fallback: use the raw city name (e.g., a smaller town)
                 strlcpy(_data.city, city, sizeof(_data.city));
             }
             _cityDetected = true;

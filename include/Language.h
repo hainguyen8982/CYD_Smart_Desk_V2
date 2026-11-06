@@ -21,11 +21,12 @@ enum TextKey {
     TXT_BACK,
     TXT_CLOSE,
 
-    // ── Page 4 Settings Rows ──
+    // Page 4 Settings Rows
     TXT_ROW_LANGUAGE,
     TXT_ROW_THEME,
     TXT_ROW_TOUCH_SND,
     TXT_ROW_ALARM_MEL,
+    TXT_ROW_STARTUP_SND,
     TXT_ROW_BRIGHTNESS,
 
     // ── Page 2 Pomodoro ──
@@ -76,6 +77,7 @@ const char* L(TextKey key);
 // Specialized bilingual helpers
 const char* getTouchSoundNameI18n(uint8_t id);
 const char* getAlarmMelodyNameI18n(uint8_t id);
+const char* getStartupSoundNameI18n(uint8_t id);
 const char* getDayNameI18n(uint8_t wday);
 const char* getShortDayNameI18n(uint8_t wday);
 const char* getMoonPhaseNameI18n(uint8_t lunarDay);

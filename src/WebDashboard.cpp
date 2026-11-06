@@ -11,6 +11,7 @@
 #include "DeskPet.h"
 #include "DeskMood.h"
 #include "AppIcon.h"
+#include "WiFiProfileManager.h"
 #include <ArduinoJson.h>
 #include <ESPmDNS.h>
 #include <LittleFS.h>
@@ -33,6 +34,12 @@ static const char MANIFEST_JSON[] PROGMEM = R"rawliteral({
     {
       "src": "/app-icon.png",
       "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/app-icon.png",
+      "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
     }
@@ -103,7 +110,7 @@ body { background: var(--bg); color: var(--text); padding: 16px; min-height: 100
 .card-title { font-size: 14px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
 
 /* Action Buttons */
-.btn { width: 100%; padding: 13px; border-radius: 12px; border: none; font-size: 14px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s; }
+.btn { width: 100%; min-height: 44px; padding: 13px 16px; border-radius: 12px; border: none; font-size: 14px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s; }
 .btn-primary { background: linear-gradient(135deg, #00B4D8, #0077B6); color: #fff; box-shadow: 0 4px 14px rgba(0, 180, 216, 0.3); }
 .btn-primary:active { transform: scale(0.98); opacity: 0.9; }
 .btn-accent { background: linear-gradient(135deg, #00E5FF, #00A3FF); color: #070B14; font-weight: 700; box-shadow: 0 4px 14px var(--accent-glow); }
@@ -175,8 +182,8 @@ input[type=range] { width: 100%; accent-color: var(--accent); height: 6px; borde
     <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 8px;" data-i18n="sec_pack_sub">Bộ Meme Nhân Vật (Meme Pack):</div>
     <div class="grid-3" id="packButtons" style="margin-bottom: 14px;">
       <button class="btn-chip" onclick="switchPack(0)">🥟 Mochi Guy</button>
-      <button class="btn-chip" onclick="switchPack(1)">⭐ Bé Sao Vàng</button>
-      <button class="btn-chip" onclick="switchPack(2)">🐰 Bé Thỏ Trắng</button>
+      <button class="btn-chip" onclick="switchPack(1)">⭐ Sao Vàng</button>
+      <button class="btn-chip" onclick="switchPack(2)">🐰 Thỏ Trắng</button>
     </div>
 
     <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 8px;" data-i18n="sec_mood_sub">Tâm trạng bàn làm việc (Desk Mood):</div>
@@ -243,12 +250,12 @@ input[type=range] { width: 100%; accent-color: var(--accent); height: 6px; borde
     </div>
 
     <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 8px;" data-i18n="page_sub">Chuyển trang hiển thị:</div>
-    <div id="pageButtons" style="display:grid; grid-template-columns: repeat(6, 1fr); gap: 6px;">
-      <button class="btn-chip" onclick="switchPage(0)">Đồng hồ</button>
-      <button class="btn-chip" onclick="switchPage(1)">Lịch âm</button>
-      <button class="btn-chip" onclick="switchPage(2)">Tài chính</button>
-      <button class="btn-chip" onclick="switchPage(3)">Pomodoro</button>
-      <button class="btn-chip" onclick="switchPage(4)">Tâm trạng</button>
+    <div class="grid-3" id="pageButtons">
+      <button class="btn-chip" onclick="switchPage(0)">🕒 Đồng hồ</button>
+      <button class="btn-chip" onclick="switchPage(1)">📅 Lịch âm</button>
+      <button class="btn-chip" onclick="switchPage(2)">📈 Tài chính</button>
+      <button class="btn-chip" onclick="switchPage(3)">🍅 Pomodoro</button>
+      <button class="btn-chip" onclick="switchPage(4)">🎭 Tâm trạng</button>
       <button class="btn-chip" onclick="switchPage(5)">⚙️ Cài đặt</button>
     </div>
 
@@ -270,6 +277,67 @@ input[type=range] { width: 100%; accent-color: var(--accent); height: 6px; borde
         <span id="brightVal">80%</span>
       </div>
       <input type="range" id="brightSlider" min="10" max="100" value="80" oninput="changeBrightness(this.value)">
+    </div>
+  </div>
+
+  <!-- Office Mode & Power Management Section -->
+  <div class="card">
+    <div class="card-title">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>
+      <span data-i18n="sec_power_title">🏢 Chế độ Văn phòng & Quản lý Nguồn</span>
+    </div>
+
+    <!-- Quick 1-tap Screen Toggle -->
+    <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 12px 14px; margin-bottom: 14px;">
+      <div>
+        <div style="font-size: 13px; font-weight: 700; color: #fff;" data-i18n="screen_pwr_label">Nguồn màn hình CYD:</div>
+        <div id="screenStateBadge" style="font-size: 11px; color: var(--success); font-weight: 600; margin-top: 2px;">🟢 Màn hình đang BẬT</div>
+      </div>
+      <button id="screenPowerBtn" type="button" class="btn btn-outline" style="width: auto; padding: 8px 14px; font-size: 12px; border-radius: 10px; border-color: rgba(255,59,48,0.5); color: #ff6b6b;" onclick="toggleScreenPower()">
+        <span style="font-size: 14px;">⏻</span> <span id="screenPowerBtnText" data-i18n="btn_screen_off">Tắt màn hình ngay</span>
+      </button>
+    </div>
+
+    <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 8px;" data-i18n="power_mode_label">Không gian sử dụng (Profile):</div>
+    <div class="grid-2" id="powerModeButtons" style="margin-bottom: 10px;">
+      <button type="button" class="btn-chip active" onclick="switchPowerMode(0)">
+        <div style="font-weight: 700;" data-i18n="mode_office_title">🏢 Văn phòng (Mặc định)</div>
+        <div style="font-size: 10px; opacity: 0.8; margin-top: 2px;" data-i18n="mode_office_sub">Tắt đen 0% ngoài giờ</div>
+      </button>
+      <button type="button" class="btn-chip" onclick="switchPowerMode(1)">
+        <div style="font-weight: 700;" data-i18n="mode_home_title">🏠 Ở nhà (Đồng hồ đêm)</div>
+        <div style="font-size: 10px; opacity: 0.8; margin-top: 2px;" data-i18n="mode_home_sub">Giảm mờ 5% xem giờ</div>
+      </button>
+    </div>
+
+    <!-- Power Schedule Form -->
+    <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 14px; margin-top: 10px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+        <label for="sleepScheduleEn" id="sleepScheduleEnLabel" style="font-size: 13px; font-weight: 600; color: #fff; cursor: pointer;" data-i18n="sleep_sched_en">Hẹn giờ nghỉ tự động:</label>
+        <input type="checkbox" id="sleepScheduleEn" style="width: 18px; height: 18px; accent-color: var(--accent); cursor: pointer;">
+      </div>
+
+      <div class="grid-2" style="margin-bottom: 12px;">
+        <div>
+          <div id="sleepStartLabel" style="font-size: 11px; color: var(--text-dim); margin-bottom: 4px;" data-i18n="sleep_start_lbl">Tan ca (Tắt màn hình):</div>
+          <input type="time" id="sleepStartTime" class="select-control" value="18:30">
+        </div>
+        <div>
+          <div id="sleepEndLabel" style="font-size: 11px; color: var(--text-dim); margin-bottom: 4px;" data-i18n="sleep_end_lbl">Vào ca (Bật lại):</div>
+          <input type="time" id="sleepEndTime" class="select-control" value="07:45">
+        </div>
+      </div>
+
+      <div id="powerHintText" style="font-size: 11px; color: var(--text-dim); line-height: 1.5; margin-bottom: 12px; border-left: 2px solid var(--accent); padding-left: 8px;" data-i18n="power_hint">
+        • <b>Tối ưu cho văn phòng:</b> Sau giờ làm việc, khi phòng tắt đèn ra về thiết bị sẽ tự động tắt đen hoàn toàn để tiết kiệm điện & bảo vệ màn hình.<br>
+        • <b>Cảm biến LDR thông minh:</b> Dù đã đến giờ hẹn, nếu phòng còn bật đèn làm thêm (OT), màn hình vẫn giữ sáng để phục vụ bạn.<br>
+        • <b>Chạm để bật:</b> Bất cứ lúc nào bạn chạm tay vào màn hình SmartDesk sẽ lập tức bật sáng lại!
+      </div>
+
+      <button type="button" class="btn btn-accent" onclick="savePowerSchedule()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+        <span data-i18n="btn_save_power">Lưu Cài Đặt Hẹn Giờ</span>
+      </button>
     </div>
   </div>
 
@@ -333,6 +401,16 @@ input[type=range] { width: 100%; accent-color: var(--accent); height: 6px; borde
     </div>
     <div class="grid-2">
       <div>
+        <label style="font-size: 12px; color: var(--text-dim); display: block; margin-bottom: 6px;" data-i18n="snd_startup_label">Âm báo khởi động:</label>
+        <select class="select-control" id="startupSndSelect" onchange="changeSound()">
+          <option value="0">🎶 Marimba Acoustic</option>
+          <option value="1">💎 Pha lê (Crystal Chime)</option>
+          <option value="2">⚡ Điện tử (Cyber Synth)</option>
+          <option value="3">🕹️ Cổ điển (Retro 8-Bit)</option>
+          <option value="4">🔇 Tắt âm (Mute)</option>
+        </select>
+      </div>
+      <div>
         <label style="font-size: 12px; color: var(--text-dim); display: block; margin-bottom: 6px;" data-i18n="snd_touch_label">Âm chạm cảm ứng:</label>
         <select class="select-control" id="touchSndSelect" onchange="changeSound()">
           <option value="0">Tắt âm (Mute)</option>
@@ -342,20 +420,24 @@ input[type=range] { width: 100%; accent-color: var(--accent); height: 6px; borde
           <option value="4">Tiếng chim (Chirp)</option>
         </select>
       </div>
-      <div>
-        <label style="font-size: 12px; color: var(--text-dim); display: block; margin-bottom: 6px;" data-i18n="snd_melody_label">Điệu chuông báo thức:</label>
-        <select class="select-control" id="alarmMelodySelect" onchange="changeSound()">
-          <option value="0">Classic Alarm</option>
-          <option value="1">Melodic Chime</option>
-          <option value="2">Cyber Rhythm</option>
-          <option value="3">Gentle Morning</option>
-        </select>
-      </div>
     </div>
-    <div style="margin-top: 12px;">
+    <div style="margin-top: 10px;">
+      <label style="font-size: 12px; color: var(--text-dim); display: block; margin-bottom: 6px;" data-i18n="snd_melody_label">Điệu chuông báo thức:</label>
+      <select class="select-control" id="alarmMelodySelect" onchange="changeSound()">
+        <option value="0">Classic Alarm</option>
+        <option value="1">Melodic Chime</option>
+        <option value="2">Cyber Rhythm</option>
+        <option value="3">Gentle Morning</option>
+      </select>
+    </div>
+    <div class="grid-2" style="margin-top: 12px;">
+      <button class="btn btn-outline" style="border-color:var(--accent); color:var(--accent);" onclick="testStartupSound()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        <span data-i18n="btn_test_startup">Thử âm khởi động</span>
+      </button>
       <button class="btn btn-primary" onclick="testAlarmMelody()">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-        <span data-i18n="btn_test_melody">Phát thử chuông báo thức</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        <span data-i18n="btn_test_melody">Thử chuông báo</span>
       </button>
     </div>
   </div>
@@ -418,9 +500,41 @@ input[type=range] { width: 100%; accent-color: var(--accent); height: 6px; borde
       <div><span data-i18n="wifi_mdns">• Tên miền mDNS: </span><b style="color:var(--accent);">http://smartdesk.local</b></div>
       <div><span data-i18n="wifi_ip_prefix">• Địa chỉ IP hiện tại: </span><span id="wifiIp" style="color:#fff;">...</span><span data-i18n="wifi_rssi_prefix"> (Sóng: </span><span id="wifiRssi">...</span> dBm)</div>
     </div>
-    <button class="btn btn-outline" style="border-color:var(--danger); color:var(--danger); width:100%;" onclick="resetWifi()" data-i18n="btn_reset_wifi">
-      Đổi mạng WiFi / Chuyển mạng mới
-    </button>
+
+    <!-- Multi-WiFi Profiles List -->
+    <div style="margin-bottom: 14px;">
+      <div style="font-size: 12px; font-weight: 600; color: var(--accent); margin-bottom: 8px; display:flex; justify-content:space-between; align-items:center;">
+        <span data-i18n="wifi_saved_title">Mạng đã ghi nhớ (Tối đa 3 mạng):</span>
+        <span id="wifiProfileCount" style="color:var(--text-dim); font-size:11px;">0/3</span>
+      </div>
+      <div id="wifiProfilesList" style="display:flex; flex-direction:column; gap:6px;">
+        <div style="font-size:11px; color:var(--text-dim); font-style:italic; padding:4px 0;">Đang tải danh sách...</div>
+      </div>
+    </div>
+
+    <div style="display:flex; flex-direction:column; gap:8px;">
+      <!-- Collapsible Add WiFi Form -->
+      <div id="addWifiForm" style="display:none; background:rgba(0,229,255,0.06); border:1px solid rgba(0,229,255,0.25); border-radius:12px; padding:12px; margin-bottom:4px;">
+        <div style="font-size:12px; font-weight:700; color:var(--accent); margin-bottom:8px;" data-i18n="wifi_add_title">Nhập thông tin WiFi:</div>
+        <input type="text" id="newWifiSsid" placeholder="Tên WiFi (SSID)" style="width:100%; padding:10px; border-radius:8px; border:1px solid var(--card-border); background:#070B14; color:#fff; font-size:13px; margin-bottom:8px;">
+        <input type="password" id="newWifiPass" placeholder="Mật khẩu WiFi (bỏ trống nếu không pass)" style="width:100%; padding:10px; border-radius:8px; border:1px solid var(--card-border); background:#070B14; color:#fff; font-size:13px; margin-bottom:10px;">
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+          <button class="btn btn-accent" style="padding:10px;" onclick="submitNewWifi()" data-i18n="btn_save_wifi">💾 Lưu mạng</button>
+          <button class="btn btn-outline" style="padding:10px;" onclick="toggleAddWifiForm(false)" data-i18n="btn_cancel">Hủy</button>
+        </div>
+      </div>
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
+        <button class="btn btn-primary" onclick="toggleAddWifiForm(true)" data-i18n="btn_add_wifi">
+          ➕ Nhập WiFi mới
+        </button>
+        <button class="btn btn-outline" onclick="openWiFiPortal()" style="border-color:var(--accent); color:var(--accent);" data-i18n="btn_qr_portal">
+          📷 Quét QR trên CYD
+        </button>
+      </div>
+      <button class="btn btn-outline" style="border-color:rgba(255,59,48,0.4); color:var(--danger); padding:8px; font-size:12px;" onclick="resetWifi()" data-i18n="btn_reset_wifi">
+        Xóa hết & Reset WiFi
+      </button>
+    </div>
   </div>
 
 </div>
@@ -456,9 +570,12 @@ const I18N = {
     sec_pet_sub: "Chọn bạn đồng hành hiển thị ở tâm vòng tròn Pomodoro (gõ phím cùng bạn khi cày deadline):",
     t_pet: "Đã chọn thú cưng: ",
     sec_snd_title: "Âm thanh & Điệu chuông (Loa GPIO 26)",
+    snd_startup_label: "Âm báo khởi động:",
     snd_touch_label: "Âm chạm cảm ứng:",
     snd_melody_label: "Điệu chuông báo thức:",
-    btn_test_melody: "Phát thử chuông báo thức",
+    btn_test_startup: "Thử âm khởi động",
+    btn_test_melody: "Thử chuông báo",
+    t_test_startup: "Đang phát thử âm khởi động...",
     sec_wifi_title: "Cài đặt Mạng & WiFi",
     wifi_mdns: "• Tên miền mDNS: ",
     wifi_ip_prefix: "• Địa chỉ IP hiện tại: ",
@@ -478,8 +595,20 @@ const I18N = {
     btn_reset_mood: "Mặc định",
     t_mood_saved: "Đã lưu trạng thái tùy chỉnh!",
     t_mood_default: "Đã khôi phục nội dung mặc định (Song ngữ)!",
-    btn_reset_wifi: "Đổi mạng WiFi / Chuyển mạng mới",
-    p0: "Đồng hồ", p1: "Lịch âm", p2: "Tài chính", p3: "Pomodoro", p4: "Tâm trạng", p5: "⚙️ Cài đặt",
+    wifi_saved_title: "Mạng đã ghi nhớ (Tối đa 3 mạng):",
+    btn_add_wifi: "➕ Nhập WiFi mới",
+    btn_qr_portal: "📷 Quét QR trên CYD",
+    wifi_add_title: "Nhập thông tin WiFi:",
+    btn_save_wifi: "💾 Lưu mạng",
+    btn_cancel: "Hủy",
+    btn_reset_wifi: "Xóa hết & Reset WiFi",
+    t_wifi_saved: "Đã lưu mạng thành công!",
+    t_ssid_empty: "Vui lòng nhập tên WiFi!",
+    t_wifi_deleted: "Đã xóa mạng: ",
+    t_wifi_del_err: "Lỗi xóa mạng!",
+    t_wifi_portal_prompt: "SmartDesk sẽ mở giao diện Quét QR cài đặt mạng trên màn hình CYD. Bạn có muốn tiếp tục?",
+    t_wifi_del_confirm: "Bạn có chắc muốn xóa mạng này khỏi bộ nhớ SmartDesk?",
+    p0: "🕒 Đồng hồ", p1: "📅 Lịch âm", p2: "📈 Tài chính", p3: "🍅 Pomodoro", p4: "🎭 Tâm trạng", p5: "⚙️ Cài đặt",
     t_page: "Đã chuyển: ",
     t_snd_save: "Đã lưu cấu hình âm thanh!",
     t_snd_err: "Lỗi lưu âm thanh",
@@ -500,11 +629,40 @@ const I18N = {
     cur_sgd: "SGD — Đô la Singapore", cur_cny: "CNY — Nhân dân tệ", cur_krw: "KRW — Won Hàn Quốc",
     cur_chf: "CHF — Franc Thụy Sĩ", cur_thb: "THB — Baht Thái",
     snd_0: "Tắt âm (Mute)", snd_1: "Cơ bản (Click)", snd_2: "Giọt nước (Water)", snd_3: "Tiếng bíp (Beep)", snd_4: "Tiếng chim (Chirp)",
+    sec_power_title: "🏢 Chế độ Văn phòng & Quản lý Nguồn",
+    screen_pwr_label: "Nguồn màn hình CYD:",
+    screen_state_on: "🟢 Màn hình đang BẬT",
+    screen_state_off: "⚫ Màn hình đang TẮT (Chạm CYD để bật)",
+    btn_screen_off: "Tắt màn hình ngay",
+    btn_screen_on: "Bật màn hình",
+    power_mode_label: "Không gian sử dụng (Profile):",
+    mode_office_title: "🏢 Văn phòng (Mặc định)",
+    mode_office_sub: "Tắt đen 0% ngoài giờ",
+    mode_home_title: "🏠 Ở nhà (Đồng hồ đêm)",
+    mode_home_sub: "Giảm mờ 5% xem giờ",
+    sleep_sched_en: "Hẹn giờ nghỉ tự động:",
+    sleep_sched_en_off: "Hẹn giờ tan ca (Tắt màn hình 0%):",
+    sleep_start_lbl_off: "Tan ca (Tắt màn hình):",
+    sleep_end_lbl_off: "Vào ca (Bật lại):",
+    power_hint_off: "• <b>Tối ưu cho văn phòng:</b> Sau giờ làm việc, khi phòng tắt đèn ra về thiết bị sẽ tự động tắt đen hoàn toàn để tiết kiệm điện & bảo vệ màn hình.<br>• <b>Cảm biến LDR thông minh:</b> Dù đã đến giờ hẹn, nếu phòng còn bật đèn làm thêm (OT), màn hình vẫn giữ sáng để phục vụ bạn.<br>• <b>Chạm để bật:</b> Bất cứ lúc nào bạn chạm tay vào màn hình SmartDesk sẽ lập tức bật sáng lại!",
+    sleep_sched_en_hom: "Hẹn giờ đi ngủ (Mờ dịu 5% đêm):",
+    sleep_start_lbl_hom: "Giờ đi ngủ (Dịu mờ 5%):",
+    sleep_end_lbl_hom: "Giờ thức dậy (Sáng lại):",
+    power_hint_hom: "• <b>Đồng hồ đêm êm dịu:</b> Trong khung giờ ngủ, khi phòng tắt đèn màn hình sẽ tự giảm mờ còn 5% để bạn xem giờ ban đêm mà không hề chói mắt.<br>• <b>Tự động theo giấc ngủ:</b> Nếu bạn ngủ sớm tắt đèn trước giờ hẹn, cảm biến LDR sẽ tự động giảm mờ ngay.<br>• <b>Thức khuya bật đèn:</b> Nếu bạn còn thức làm việc, màn hình vẫn giữ độ sáng thoải mái phục vụ bạn!",
+    sleep_start_lbl: "Tan ca (Tắt màn hình):",
+    sleep_end_lbl: "Vào ca (Bật lại):",
+    power_hint: "• <b>Tối ưu cho văn phòng:</b> Sau giờ làm việc, khi phòng tắt đèn ra về thiết bị sẽ tự động tắt đen hoàn toàn để tiết kiệm điện & bảo vệ màn hình.<br>• <b>Cảm biến LDR thông minh:</b> Dù đã đến giờ hẹn, nếu phòng còn bật đèn làm thêm (OT), màn hình vẫn giữ sáng để phục vụ bạn.<br>• <b>Chạm để bật:</b> Bất cứ lúc nào bạn chạm tay vào màn hình SmartDesk sẽ lập tức bật sáng lại!",
+    btn_save_power: "Lưu Cài Đặt Hẹn Giờ",
+    t_mode_office: "Đã chọn: Chế độ Văn phòng (Mặc định)",
+    t_mode_home: "Đã chọn: Chế độ Ở nhà (Đồng hồ đêm)",
+    t_screen_turned_off: "Đã tắt màn hình thiết bị!",
+    t_screen_turned_on: "Đã bật màn hình thiết bị!",
+    t_power_saved: "Đã lưu cài đặt nguồn & lịch làm việc thành công!",
     pwa_title: "Cài đặt SmartDesk App",
     pwa_desc: "Trải nghiệm toàn màn hình như App xịn",
     pwa_btn: "Cài đặt",
     pwa_ios_hint: "Để cài đặt trên iPhone:\n1. Bấm nút Chia sẻ (biểu tượng ⎋ mũi tên lên dưới thanh Safari)\n2. Chọn 'Thêm vào MH chính' (Add to Home Screen).",
-    pwa_android_hint: "Để cài đặt: Bấm menu trình duyệt (dấu 3 chấm) -> Chọn 'Cài đặt ứng dụng' hoặc 'Thêm vào màn hình chính'."
+    pwa_android_hint: "Để cài đặt SmartDesk App trên Android:\n1. Bấm vào biểu tượng 3 chấm (⋮) ở góc trên bên phải Chrome.\n2. Chọn 'Thêm vào màn hình chính' (hoặc 'Cài đặt ứng dụng').\n3. Bấm 'Thêm' để hoàn tất cài đặt."
   },
   1: {
     brand_sub: "Smart Desktop Companion",
@@ -528,6 +686,35 @@ const I18N = {
     page_sub: "Switch Display Page:",
     theme_sub: "Theme Presets:",
     bright_label: "Screen Brightness",
+    sec_power_title: "🏢 Office Mode & Power Management",
+    screen_pwr_label: "CYD Screen Power:",
+    screen_state_on: "🟢 Screen is ON",
+    screen_state_off: "⚫ Screen is OFF (Tap CYD to wake)",
+    btn_screen_off: "Turn Screen Off",
+    btn_screen_on: "Turn Screen On",
+    power_mode_label: "Usage Environment (Profile):",
+    mode_office_title: "🏢 Office (Default)",
+    mode_office_sub: "Black 0% after work hours",
+    mode_home_title: "🏠 Home (Night Clock)",
+    mode_home_sub: "Dim 5% night clock",
+    sleep_sched_en: "Auto Sleep Schedule:",
+    sleep_sched_en_off: "Auto Screen Off Schedule:",
+    sleep_start_lbl_off: "Off Work (Screen Off):",
+    sleep_end_lbl_off: "Start Work (Screen On):",
+    power_hint_off: "• <b>Optimized for Office:</b> After work hours, when room lights are turned off, the screen shuts off completely (0%) to save power and extend LCD life.<br>• <b>Smart Ambient Sensor (LDR):</b> Even past schedule, if office lights remain on (overtime work), the screen stays active for you.<br>• <b>Wake on Touch:</b> Tap anywhere on the CYD screen anytime to wake it up instantly!",
+    sleep_sched_en_hom: "Night Clock Sleep Schedule:",
+    sleep_start_lbl_hom: "Bedtime (Dim to 5%):",
+    sleep_end_lbl_hom: "Wakeup (Restore brightness):",
+    power_hint_hom: "• <b>Gentle Night Clock:</b> During bedtime hours, when room lights are turned off, the screen dims to 5% for easy night viewing without glare.<br>• <b>Adaptive Bedtime:</b> If you sleep early and turn off room lights before schedule, the LDR sensor dims the screen immediately.<br>• <b>Late Night Work:</b> If room lights stay on while you work, the screen maintains comfortable brightness for you!",
+    sleep_start_lbl: "Off Work (Screen Off):",
+    sleep_end_lbl: "Start Work (Screen On):",
+    power_hint: "• <b>Optimized for Office:</b> After work hours, when room lights are turned off, the screen shuts off completely (0%) to save power and extend LCD life.<br>• <b>Smart Ambient Sensor (LDR):</b> Even past schedule, if office lights remain on (overtime work), the screen stays active for you.<br>• <b>Wake on Touch:</b> Tap anywhere on the CYD screen anytime to wake it up instantly!",
+    btn_save_power: "Save Sleep Schedule",
+    t_mode_office: "Selected: Office Mode (Default)",
+    t_mode_home: "Selected: Home Mode (Night Clock)",
+    t_screen_turned_off: "Screen turned off!",
+    t_screen_turned_on: "Screen turned on!",
+    t_power_saved: "Power schedule saved successfully!",
     sec_pet_title: "Pomodoro Companion (Desk Pet)",
     sec_pet_sub: "Select your companion in the center of the Pomodoro dial (types along while you focus):",
     t_pet: "Selected companion: ",
@@ -547,15 +734,30 @@ const I18N = {
     t_mood_saved: "Custom mood status saved!",
     t_mood_default: "Restored to default bilingual status!",
     sec_snd_title: "Sound & Melodies (Speaker GPIO 26)",
+    snd_startup_label: "Startup Boot Sound:",
     snd_touch_label: "Touch sound feedback:",
     snd_melody_label: "Alarm Melody:",
-    btn_test_melody: "Test Alarm Melody",
+    btn_test_startup: "Test Boot Sound",
+    btn_test_melody: "Test Alarm",
+    t_test_startup: "Playing startup boot sound...",
     sec_wifi_title: "Network & WiFi Settings",
     wifi_mdns: "• mDNS Domain: ",
     wifi_ip_prefix: "• Current IP Address: ",
     wifi_rssi_prefix: " (Signal: ",
-    btn_reset_wifi: "Reset WiFi / Setup New Network",
-    p0: "Clock", p1: "Calendar", p2: "Finance", p3: "Pomodoro", p4: "Mood", p5: "⚙️ Settings",
+    wifi_saved_title: "Remembered Networks (Max 3):",
+    btn_add_wifi: "➕ Enter WiFi Info",
+    btn_qr_portal: "📷 Scan QR on CYD",
+    wifi_add_title: "Enter WiFi Credentials:",
+    btn_save_wifi: "💾 Save Network",
+    btn_cancel: "Cancel",
+    btn_reset_wifi: "Clear & Reset All",
+    t_wifi_saved: "Network saved successfully!",
+    t_ssid_empty: "Please enter WiFi SSID!",
+    t_wifi_deleted: "Removed network: ",
+    t_wifi_del_err: "Failed to remove network!",
+    t_wifi_portal_prompt: "SmartDesk will open the on-screen QR Setup Portal on CYD. Continue?",
+    t_wifi_del_confirm: "Are you sure you want to remove this network from memory?",
+    p0: "🕒 Clock", p1: "📅 Calendar", p2: "📈 Finance", p3: "🍅 Pomodoro", p4: "🎭 Mood", p5: "⚙️ Settings",
     t_page: "Switched to: ",
     t_snd_save: "Sound settings saved!",
     t_snd_err: "Failed to save sound settings",
@@ -580,7 +782,7 @@ const I18N = {
     pwa_desc: "Full-screen standalone app experience",
     pwa_btn: "Install",
     pwa_ios_hint: "To install on iPhone:\n1. Tap the Share button in Safari (icon with arrow up)\n2. Tap 'Add to Home Screen'.",
-    pwa_android_hint: "To install: Tap the browser menu (3 dots) -> Select 'Install app' or 'Add to Home screen'."
+    pwa_android_hint: "To install SmartDesk App on Android:\n1. Tap the menu icon (3 dots ⋮) at the top-right of Chrome.\n2. Tap 'Add to Home screen' (or 'Install app').\n3. Tap 'Add' to place the app on your home screen."
   }
 };
 
@@ -641,6 +843,168 @@ function applyLanguage(l) {
     pBtns[4].textContent = dict.p4;
     pBtns[5].textContent = dict.p5;
   }
+
+  // Cập nhật bộ nút Meme Pack theo ngôn ngữ
+  const packNames = (l === 1) 
+    ? ['🥟 Mochi Guy', '⭐ Golden Star', '🐰 White Rabbit']
+    : ['🥟 Mochi Guy', '⭐ Sao Vàng', '🐰 Thỏ Trắng'];
+  const packBtns = document.querySelectorAll('#packButtons .btn-chip');
+  packBtns.forEach((b, idx) => { if (packNames[idx]) b.textContent = packNames[idx]; });
+
+  // Cập nhật các nút Tâm trạng (Desk Mood) theo ngôn ngữ
+  const moodNames = (l === 1)
+    ? ['🟢 Happy', '🔴 Deep Focus', '⚡ Frustrated', '🟡 Drained 0%', '🟣 Bored', '🎉 Weekend / Party']
+    : ['🟢 Vui vẻ', '🔴 Tập trung cao', '⚡ Đang bực mình', '🟡 Sập nguồn 0%', '🟣 Đang chán', '🎉 Cuối tuần / Quẩy'];
+  const moodBtns = document.querySelectorAll('#moodButtons .btn-chip');
+  moodBtns.forEach((b, idx) => { if (moodNames[idx]) b.textContent = moodNames[idx]; });
+
+  // Cập nhật các nút Thú cưng (Desk Pet) theo ngôn ngữ
+  const petNames = (l === 1)
+    ? ['🍅 Tomato', '🐱 Pixel Cat', '🐕 Shiba Inu', '🦫 Capybara']
+    : ['🍅 Cà chua', '🐱 Mèo Pixel', '🐕 Shiba Inu', '🦫 Capybara'];
+  const petBtns = document.querySelectorAll('#petButtons .btn-chip');
+  petBtns.forEach((b, idx) => { if (petNames[idx]) b.textContent = petNames[idx]; });
+
+  // Cập nhật tùy chọn Âm khởi động theo ngôn ngữ
+  const startupSel = document.getElementById('startupSndSelect');
+  if (startupSel && startupSel.options.length >= 2) {
+    startupSel.options[0].textContent = (l === 1) ? '🔔 Enabled' : '🔔 Bật âm khởi động (Enabled)';
+    startupSel.options[1].textContent = (l === 1) ? '🔇 Mute' : '🔇 Tắt âm (Mute)';
+  }
+
+  // Cập nhật tiêu đề và trạng thái tùy chỉnh của Mood Editor
+  updateMoodEditorUI();
+
+  // Cập nhật trạng thái nút nguồn & thông tin chế độ nguồn
+  updateScreenPowerUI();
+  updatePowerScheduleUI();
+}
+
+let currentPowerMode = 0;
+let isScreenOff = false;
+let officeSchedule = { sh: 18, sm: 30, eh: 7, em: 45, en: true };
+let homeSchedule = { sh: 23, sm: 0, eh: 6, em: 30, en: true };
+
+function switchPowerMode(mode) {
+  currentPowerMode = mode;
+  highlightPowerMode(mode);
+  updatePowerScheduleUI();
+  const dict = getDict();
+  showToast(mode === 0 ? dict.t_mode_office : dict.t_mode_home);
+  fetch(`/api/power/schedule?mode=${mode}`).catch(() => {});
+}
+
+function highlightPowerMode(mode) {
+  const btns = document.querySelectorAll('#powerModeButtons .btn-chip');
+  btns.forEach((b, idx) => b.classList.toggle('active', idx === mode));
+}
+
+function updatePowerScheduleUI() {
+  const dict = getDict();
+  const sched = (currentPowerMode === 0) ? officeSchedule : homeSchedule;
+  const sInp = document.getElementById('sleepStartTime');
+  const eInp = document.getElementById('sleepEndTime');
+  const enInp = document.getElementById('sleepScheduleEn');
+  const enLabel = document.getElementById('sleepScheduleEnLabel');
+  const sLabel = document.getElementById('sleepStartLabel');
+  const eLabel = document.getElementById('sleepEndLabel');
+  const hintEl = document.getElementById('powerHintText');
+
+  if (sInp && !sInp.matches(':focus')) {
+    sInp.value = `${String(sched.sh).padStart(2, '0')}:${String(sched.sm).padStart(2, '0')}`;
+  }
+  if (eInp && !eInp.matches(':focus')) {
+    eInp.value = `${String(sched.eh).padStart(2, '0')}:${String(sched.em).padStart(2, '0')}`;
+  }
+  if (enInp && !enInp.matches(':focus')) {
+    enInp.checked = sched.en;
+  }
+
+  if (currentPowerMode === 0) {
+    if (enLabel) enLabel.textContent = dict.sleep_sched_en_off || dict.sleep_sched_en;
+    if (sLabel) sLabel.textContent = dict.sleep_start_lbl_off || dict.sleep_start_lbl;
+    if (eLabel) eLabel.textContent = dict.sleep_end_lbl_off || dict.sleep_end_lbl;
+    if (hintEl) hintEl.innerHTML = dict.power_hint_off || dict.power_hint;
+  } else {
+    if (enLabel) enLabel.textContent = dict.sleep_sched_en_hom || "Hẹn giờ đi ngủ (Mờ dịu 5% đêm):";
+    if (sLabel) sLabel.textContent = dict.sleep_start_lbl_hom || "Giờ đi ngủ (Dịu mờ 5%):";
+    if (eLabel) eLabel.textContent = dict.sleep_end_lbl_hom || "Giờ thức dậy (Sáng lại):";
+    if (hintEl) hintEl.innerHTML = dict.power_hint_hom || "";
+  }
+}
+
+async function toggleScreenPower() {
+  const nextOff = !isScreenOff;
+  try {
+    const res = await fetch(`/api/power/screen?off=${nextOff ? 1 : 0}`);
+    if (res.ok) {
+      isScreenOff = nextOff;
+      updateScreenPowerUI();
+      const dict = getDict();
+      showToast(nextOff ? dict.t_screen_turned_off : dict.t_screen_turned_on);
+    }
+  } catch (e) {
+    showToast(getDict().t_conn_err, false);
+  }
+}
+
+function updateScreenPowerUI() {
+  const badge = document.getElementById('screenStateBadge');
+  const btn = document.getElementById('screenPowerBtn');
+  const btnText = document.getElementById('screenPowerBtnText');
+  const dict = getDict();
+  if (!dict) return;
+  if (isScreenOff) {
+    if (badge) {
+      badge.textContent = dict.screen_state_off;
+      badge.style.color = '#8899B0';
+    }
+    if (btn) {
+      btn.style.borderColor = 'rgba(0, 230, 118, 0.5)';
+      btn.style.color = '#00E676';
+    }
+    if (btnText) btnText.textContent = dict.btn_screen_on;
+  } else {
+    if (badge) {
+      badge.textContent = dict.screen_state_on;
+      badge.style.color = 'var(--success)';
+    }
+    if (btn) {
+      btn.style.borderColor = 'rgba(255, 59, 48, 0.5)';
+      btn.style.color = '#ff6b6b';
+    }
+    if (btnText) btnText.textContent = dict.btn_screen_off;
+  }
+}
+
+async function savePowerSchedule() {
+  const en = document.getElementById('sleepScheduleEn').checked ? 1 : 0;
+  const startTime = document.getElementById('sleepStartTime').value || (currentPowerMode === 0 ? "18:30" : "23:00");
+  const endTime = document.getElementById('sleepEndTime').value || (currentPowerMode === 0 ? "07:45" : "06:30");
+  const sParts = startTime.split(':');
+  const eParts = endTime.split(':');
+  const sh = parseInt(sParts[0], 10);
+  const sm = parseInt(sParts[1], 10);
+  const eh = parseInt(eParts[0], 10);
+  const em = parseInt(eParts[1], 10);
+
+  if (currentPowerMode === 0) {
+    officeSchedule = { sh, sm, eh, em, en: !!en };
+  } else {
+    homeSchedule = { sh, sm, eh, em, en: !!en };
+  }
+
+  const dict = getDict();
+  try {
+    const res = await fetch(`/api/power/schedule?mode=${currentPowerMode}&sh=${sh}&sm=${sm}&eh=${eh}&em=${em}&en=${en}`);
+    if (res.ok) {
+      showToast(dict.t_power_saved);
+    } else {
+      showToast(dict.t_conn_err, false);
+    }
+  } catch (e) {
+    showToast(dict.t_conn_err, false);
+  }
 }
 
 function showToast(msg, isSuccess = true) {
@@ -667,14 +1031,20 @@ let soundDebounce = null;
 function changeSound() {
   const touch = document.getElementById('touchSndSelect').value;
   const melody = document.getElementById('alarmMelodySelect').value;
+  const startup = document.getElementById('startupSndSelect').value;
   clearTimeout(soundDebounce);
   soundDebounce = setTimeout(() => {
     const dict = getDict();
-    fetch(`/api/sound?touch=${touch}&melody=${melody}`)
+    fetch(`/api/sound?touch=${touch}&melody=${melody}&startup=${startup}`)
       .then(r => r.json())
       .then(() => showToast(dict.t_snd_save))
       .catch(() => showToast(dict.t_snd_err, false));
   }, 100);
+}
+
+function testStartupSound() {
+  showToast(getDict().t_test_startup || "Đang phát thử âm khởi động...");
+  fetch('/api/sound?testStartup=1').catch(() => {});
 }
 
 function testAlarmMelody() {
@@ -717,7 +1087,13 @@ function highlightTheme(id) {
   btns.forEach((b, idx) => b.classList.toggle('active', idx === id));
 }
 
-const PET_NAMES = ['Tomato', 'Tuxedo Cat', 'Shiba Inu', 'Capybara'];
+function getPetName(petId) {
+  const arr = (currentLang === 1)
+    ? ['Tomato', 'Pixel Cat', 'Shiba Inu', 'Capybara']
+    : ['Cà chua', 'Mèo Pixel', 'Shiba Inu', 'Capybara'];
+  return arr[petId] || ('Pet ' + petId);
+}
+
 function highlightPet(id) {
   const btns = document.querySelectorAll('#petButtons .btn-chip');
   btns.forEach((b, idx) => b.classList.toggle('active', idx === id));
@@ -725,11 +1101,17 @@ function highlightPet(id) {
 function switchPet(petId) {
   highlightPet(petId);
   const dict = getDict();
-  showToast(`${dict.t_pet}${PET_NAMES[petId] || petId}`);
+  showToast(`${dict.t_pet}${getPetName(petId)}`);
   fetch(`/api/pet?set=${petId}`).catch(() => {});
 }
 
-const PACK_NAMES = ['Đầu trọc Mochi', 'Ngôi sao vàng', 'Bé Thỏ trắng'];
+function getPackName(packId) {
+  const arr = (currentLang === 1)
+    ? ['Mochi Guy', 'Golden Star', 'White Rabbit']
+    : ['Mochi Guy', 'Sao Vàng', 'Thỏ Trắng'];
+  return arr[packId] || ('Pack ' + packId);
+}
+
 function highlightPack(id) {
   const btns = document.querySelectorAll('#packButtons .btn-chip');
   btns.forEach((b, idx) => b.classList.toggle('active', idx === id));
@@ -737,11 +1119,17 @@ function highlightPack(id) {
 function switchPack(packId) {
   highlightPack(packId);
   const dict = getDict();
-  showToast(`${dict.t_pack || "Bộ meme: "}${PACK_NAMES[packId] || packId}`);
+  showToast(`${dict.t_pack || "Bộ meme: "}${getPackName(packId)}`);
   fetch(`/api/mood?pack=${packId}`).catch(() => {});
 }
 
-const MOOD_NAMES = ['🟢 Vui vẻ', '🔴 Tập trung cao', '⚡ Đang bực mình', '🟡 Sập nguồn 0%', '🟣 Đang chán', '🎉 Cuối tuần / Quẩy'];
+function getMoodName(m) {
+  const arr = (currentLang === 1)
+    ? ['🟢 Happy', '🔴 Deep Focus', '⚡ Frustrated', '🟡 Drained 0%', '🟣 Bored', '🎉 Weekend / Party']
+    : ['🟢 Vui vẻ', '🔴 Tập trung cao', '⚡ Đang bực mình', '🟡 Sập nguồn 0%', '🟣 Đang chán', '🎉 Cuối tuần / Quẩy'];
+  return arr[m] || ('Mood ' + m);
+}
+
 let currentEditMood = 0;
 let customMoods = [
   { en: false, tag: "", msg: "" },
@@ -767,6 +1155,21 @@ const QUICK_SUGGESTIONS = [
   [ { t: 'QUAY THOI!', m: 'Toi nay xoa het deadline!' }, { t: 'TGIF - CHILL', m: 'Cuoi tuan roi * Di quau ngay thoi!' } ]
 ];
 
+const QUICK_SUGGESTIONS_EN = [
+  // 0: Happy
+  [ { t: 'JUST CHILLING', m: 'Morning coffee? * My treat!' }, { t: 'GOOD VIBES', m: 'Full of positive energy!' } ],
+  // 1: Focus
+  [ { t: 'IN A SPRINT', m: '100% Focus * Do not disturb!' }, { t: 'DEEP WORK', m: 'Crushing deadlines today!' } ],
+  // 2: Bug
+  [ { t: 'FIXING BUGS', m: 'Please do not interrupt!' }, { t: 'DND - DEBUGGING', m: 'Critical bug in progress!' } ],
+  // 3: Low bat
+  [ { t: 'DRAINED 0%', m: 'Need boba milk tea ASAP!' }, { t: 'BATTERY EMPTY', m: 'Recharging my brain now!' } ],
+  // 4: Chill
+  [ { t: 'SO BORED', m: 'When is it clock-out time?' }, { t: 'SLEEPY VIBES', m: 'Need a 5-min power nap!' } ],
+  // 5: TGIF
+  [ { t: 'PARTY TIME!', m: 'No deadlines tonight!' }, { t: 'TGIF - CHILL', m: 'Weekend mode activated!' } ]
+];
+
 function highlightMood(id) {
   const btns = document.querySelectorAll('#moodButtons .btn-chip');
   btns.forEach((b, idx) => b.classList.toggle('active', idx === id));
@@ -775,7 +1178,7 @@ function highlightMood(id) {
 function renderQuickMoodChips(m) {
   const container = document.getElementById('quickMoodContainer');
   if (!container) return;
-  const list = QUICK_SUGGESTIONS[m] || QUICK_SUGGESTIONS[0];
+  const list = ((currentLang === 1) ? QUICK_SUGGESTIONS_EN : QUICK_SUGGESTIONS)[m] || QUICK_SUGGESTIONS[0];
   container.innerHTML = list.map(item => 
     `<button type="button" class="btn-chip" style="font-size: 11px; padding: 4px 8px;" onclick="setQuickMood('${item.t}', '${item.m}')">${item.t}</button>`
   ).join('');
@@ -784,7 +1187,7 @@ function renderQuickMoodChips(m) {
 function updateMoodEditorUI() {
   const m = currentEditMood;
   const lbl = document.getElementById('curEditMoodName');
-  if (lbl) lbl.textContent = MOOD_NAMES[m] || ('Mood ' + m);
+  if (lbl) lbl.textContent = getMoodName(m);
 
   const cm = customMoods[m] || { en: false, tag: "", msg: "" };
   const toggle = document.getElementById('customMoodToggle');
@@ -805,7 +1208,7 @@ function switchMood(moodId) {
   highlightMood(moodId);
   currentEditMood = moodId;
   const dict = getDict();
-  showToast(`${dict.t_mood}${MOOD_NAMES[moodId] || moodId}`);
+  showToast(`${dict.t_mood}${getMoodName(moodId)}`);
   fetch(`/api/mood?set=${moodId}`).catch(() => {});
   updateMoodEditorUI();
 }
@@ -840,7 +1243,7 @@ function toggleCustomMood(en) {
   if (!en) {
     fetch(`/api/mood?m=${m}&custom=0`)
       .then(r => r.json())
-      .then(() => showToast(`${getDict().t_mood_default || 'Đã khôi phục mặc định: '} ${MOOD_NAMES[m]}!`))
+      .then(() => showToast(`${getDict().t_mood_default || 'Đã khôi phục mặc định: '} ${getMoodName(m)}!`))
       .catch(() => {});
   }
 }
@@ -863,7 +1266,7 @@ async function saveCustomMood() {
   try {
     const res = await fetch(`/api/mood?m=${m}&custom=${en}&tag=${encodeURIComponent(tag)}&msg=${encodeURIComponent(msg)}`);
     if (res.ok) {
-      showToast(`${getDict().t_mood_saved || 'Đã lưu trạng thái: '} ${MOOD_NAMES[m]}!`);
+      showToast(`${getDict().t_mood_saved || 'Đã lưu trạng thái: '} ${getMoodName(m)}!`);
     } else {
       showToast(getDict().t_cmd_err || 'Lỗi khi lưu trạng thái!', false);
     }
@@ -878,7 +1281,7 @@ function resetDefaultMood() {
   updateMoodEditorUI();
   fetch(`/api/mood?m=${m}&custom=0`)
     .then(r => r.json())
-    .then(() => showToast(`${getDict().t_mood_default || 'Đã khôi phục mặc định: '} ${MOOD_NAMES[m]}!`))
+    .then(() => showToast(`${getDict().t_mood_default || 'Đã khôi phục mặc định: '} ${getMoodName(m)}!`))
     .catch(() => {});
 }
 
@@ -991,6 +1394,10 @@ async function fetchStatus() {
       const m = document.getElementById('alarmMelodySelect');
       if (m && !m.matches(':focus')) m.value = data.alarmMelody;
     }
+    if (data.startupSound !== undefined) {
+      const b = document.getElementById('startupSndSelect');
+      if (b && !b.matches(':focus')) b.value = data.startupSound;
+    }
     if (data.pet !== undefined) {
       highlightPet(data.pet);
     }
@@ -1004,6 +1411,34 @@ async function fetchStatus() {
       highlightPack(data.pack);
     }
 
+    if (data.screenOff !== undefined) {
+      isScreenOff = data.screenOff;
+      updateScreenPowerUI();
+    }
+    if (data.powerMode !== undefined) {
+      currentPowerMode = data.powerMode;
+      highlightPowerMode(data.powerMode);
+    }
+    if (data.offSh !== undefined) {
+      officeSchedule = {
+        sh: data.offSh,
+        sm: data.offSm,
+        eh: data.offEh,
+        em: data.offEm,
+        en: !!data.offEn
+      };
+    }
+    if (data.homSh !== undefined) {
+      homeSchedule = {
+        sh: data.homSh,
+        sm: data.homSm,
+        eh: data.homEh,
+        em: data.homEm,
+        en: !!data.homEn
+      };
+    }
+    updatePowerScheduleUI();
+
     const tagInp = document.getElementById('customTagInput');
     const msgInp = document.getElementById('customMsgInput');
     const isEditingCustom = (tagInp && tagInp.matches(':focus')) || (msgInp && msgInp.matches(':focus'));
@@ -1016,6 +1451,10 @@ async function fetchStatus() {
       applyLanguage(data.lang);
     }
 
+    if (data.wifiProfiles && Array.isArray(data.wifiProfiles)) {
+      renderWifiProfiles(data.wifiProfiles);
+    }
+
     isInitialStatusLoaded = true;
   } catch (e) {
     const badge = document.getElementById('statusBadge');
@@ -1025,6 +1464,90 @@ async function fetchStatus() {
       badge.style.color = 'var(--danger)';
       badge.style.borderColor = 'rgba(255, 59, 48, 0.3)';
     }
+  }
+}
+
+function renderWifiProfiles(profiles) {
+  const container = document.getElementById('wifiProfilesList');
+  const countEl = document.getElementById('wifiProfileCount');
+  if (countEl) countEl.textContent = `${profiles.length}/3`;
+  if (!container) return;
+  if (!profiles || profiles.length === 0) {
+    container.innerHTML = `<div style="font-size:11px; color:var(--text-dim); font-style:italic; padding:4px 0;">Chưa lưu mạng nào (Đang dùng AP hoặc mạng mặc định).</div>`;
+    return;
+  }
+  container.innerHTML = profiles.map(p => {
+    const s = String(p.ssid || '');
+    const isAct = !!p.active;
+    return `<div style="display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.04); border:1px solid ${isAct ? 'var(--accent)' : 'var(--card-border)'}; border-radius:10px; padding:7px 12px;">` +
+      `<div style="display:flex; align-items:center; gap:8px; overflow:hidden;">` +
+        `<span style="font-size:13px; color:${isAct ? 'var(--accent)' : '#fff'}; font-weight:${isAct ? '700' : '500'}; white-space:nowrap; text-overflow:ellipsis; overflow:hidden;">${s}</span>` +
+        (isAct ? `<span style="font-size:9px; background:rgba(0,229,255,0.15); color:var(--accent); border:1px solid var(--accent); padding:1px 6px; border-radius:10px; font-weight:700;">ONLINE</span>` : '') +
+      `</div>` +
+      `<button onclick="deleteWifiProfile('${s}')" style="background:none; border:none; color:var(--danger); cursor:pointer; font-size:15px; padding:2px 8px; border-radius:6px; font-weight:bold;" title="Xóa mạng">✕</button>` +
+    `</div>`;
+  }).join('');
+}
+
+async function deleteWifiProfile(ssid) {
+  const dict = getDict();
+  if (!confirm((dict.t_wifi_del_confirm || 'Xác nhận xóa?') + '\n' + ssid)) return;
+  try {
+    const res = await fetch('/api/wifi/delete?ssid=' + encodeURIComponent(ssid), { method: 'POST' });
+    const d = await res.json();
+    if (d.success) {
+      showToast((dict.t_wifi_deleted || 'Đã xóa mạng: ') + ssid);
+      fetchStatus();
+    } else {
+      showToast(dict.t_wifi_del_err || 'Lỗi xóa mạng', false);
+    }
+  } catch (e) {
+    showToast(dict.t_wifi_del_err || 'Lỗi xóa mạng', false);
+  }
+}
+
+function toggleAddWifiForm(show) {
+  const f = document.getElementById('addWifiForm');
+  if (f) f.style.display = show ? 'block' : 'none';
+  if (show) {
+    const inp = document.getElementById('newWifiSsid');
+    if (inp) inp.focus();
+  }
+}
+
+async function submitNewWifi() {
+  const ssid = (document.getElementById('newWifiSsid').value || '').trim();
+  const pass = document.getElementById('newWifiPass').value || '';
+  const dict = getDict();
+  if (!ssid) {
+    showToast(dict.t_ssid_empty || 'Vui lòng nhập tên WiFi', false);
+    return;
+  }
+  try {
+    const res = await fetch(`/api/wifi/add?ssid=${encodeURIComponent(ssid)}&pass=${encodeURIComponent(pass)}`, { method: 'POST' });
+    if (res.ok) {
+      showToast(dict.t_wifi_saved || 'Đã lưu mạng thành công!');
+      toggleAddWifiForm(false);
+      document.getElementById('newWifiSsid').value = '';
+      document.getElementById('newWifiPass').value = '';
+      fetchStatus();
+    } else {
+      showToast(dict.t_cmd_err || 'Lỗi lưu mạng', false);
+    }
+  } catch (e) {
+    showToast(dict.t_conn_err || 'Lỗi kết nối', false);
+  }
+}
+
+async function openWiFiPortal() {
+  const dict = getDict();
+  if (!confirm(dict.t_wifi_portal_prompt || 'Mở màn hình cài đặt WiFi trên CYD?')) return;
+  try {
+    const res = await fetch('/api/wifi/portal', { method: 'POST' });
+    const d = await res.json();
+    showToast(d.message || 'Đang mở màn hình cài đặt WiFi...');
+  } catch (e) {
+    showToast(dict.t_cmd_err || 'Lỗi gửi lệnh', false);
   }
 }
 
@@ -1113,8 +1636,7 @@ function dismissPWA() {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
-  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-  if (isIOS && !isStandalone) {
+  if (!isStandalone) {
     const banner = document.getElementById('pwaBanner');
     if (banner) banner.style.display = 'flex';
   }
@@ -1128,17 +1650,28 @@ startAutoSync();
 </html>
 )rawliteral";
 
-WebDashboard::WebDashboard() : _server(80), _running(false) {}
+WebDashboard::WebDashboard()
+    : _server(80),
+      _running(false),
+      _routesSetup(false),
+      _portalRequested(false),
+      _testTouchRequested(false),
+      _testAlarmRequested(false),
+      _testStartupRequested(false),
+      _wifiResetRequested(false),
+      _wifiResetTime(0) {}
 
 void WebDashboard::begin() {
   if (_running)
     return;
-  _setupRoutes();
+  if (!_routesSetup) {
+    _setupRoutes();
+    _routesSetup = true;
+  }
   _server.begin();
   _running = true;
 
-  // Vô hiệu hóa WiFi Modem Sleep để phản hồi Web tức thì (không bị lag/delay
-  // sau khi idle)
+  // Vô hiệu hóa WiFi Modem Sleep để phản hồi Web tức thì (không bị lag/delay sau khi idle)
   WiFi.setSleep(false);
 
   // Kích hoạt mDNS responder: cho phép truy cập qua http://smartdesk.local/
@@ -1154,8 +1687,34 @@ void WebDashboard::begin() {
                 WiFi.localIP().toString().c_str());
 }
 
+void WebDashboard::stop() {
+  if (!_running) return;
+  _server.end();
+  _running = false;
+  Serial.println("[WebDashboard] HTTP Server stopped cleanly");
+}
+
 void WebDashboard::update() {
-  // ESPAsyncWebServer is asynchronous, no loop polling needed
+  // Xử lý phát thử âm thanh hoặc Reset WiFi trên luồng chính Core 1 (không gây nghẽn async_tcp)
+  if (_testTouchRequested) {
+    _testTouchRequested = false;
+    hardware.playTouchSound();
+  }
+  if (_testAlarmRequested) {
+    _testAlarmRequested = false;
+    hardware.playAlarmMelody();
+  }
+  if (_testStartupRequested) {
+    _testStartupRequested = false;
+    hardware.playStartupSound();
+  }
+  if (_wifiResetRequested && (millis() - _wifiResetTime >= 500)) {
+    _wifiResetRequested = false;
+    Serial.println("[WebDashboard] Executing scheduled WiFi Reset & Reboot...");
+    WiFi.disconnect(true, true);
+    delay(200);
+    ESP.restart();
+  }
 }
 
 void WebDashboard::_setupRoutes() {
@@ -1202,6 +1761,7 @@ void WebDashboard::_setupRoutes() {
     doc["alarmMsg"] = display.getAlarmMessage();
     doc["touchSound"] = hardware.getTouchSound();
     doc["alarmMelody"] = hardware.getAlarmMelody();
+    doc["startupSound"] = hardware.getStartupSound();
     doc["lang"] = (int)getLanguage();
     doc["langName"] = getLanguageName();
     doc["pet"] = (int)deskPet.getType();
@@ -1220,6 +1780,46 @@ void WebDashboard::_setupRoutes() {
         mObj["en"] = deskMood.isCustom((MoodType)i);
         mObj["tag"] = deskMood.getCustomTag((MoodType)i);
         mObj["msg"] = deskMood.getCustomMessage((MoodType)i);
+    }
+
+    doc["screenOff"] = hardware.isScreenOff();
+    doc["powerMode"] = hardware.getPowerMode();
+
+    uint8_t offSh, offSm, offEh, offEm;
+    bool offEn;
+    hardware.getOfficeSchedule(offSh, offSm, offEh, offEm, offEn);
+    doc["offSh"] = offSh;
+    doc["offSm"] = offSm;
+    doc["offEh"] = offEh;
+    doc["offEm"] = offEm;
+    doc["offEn"] = offEn;
+
+    uint8_t homSh, homSm, homEh, homEm;
+    bool homEn;
+    hardware.getHomeSchedule(homSh, homSm, homEh, homEm, homEn);
+    doc["homSh"] = homSh;
+    doc["homSm"] = homSm;
+    doc["homEh"] = homEh;
+    doc["homEm"] = homEm;
+    doc["homEn"] = homEn;
+
+    uint8_t sh, sm, eh, em;
+    bool sEn;
+    hardware.getSleepSchedule(sh, sm, eh, em, sEn);
+    doc["sleepStartH"] = sh;
+    doc["sleepStartM"] = sm;
+    doc["sleepEndH"] = eh;
+    doc["sleepEndM"] = em;
+    doc["sleepEn"] = sEn;
+
+    JsonArray wifiArr = doc["wifiProfiles"].to<JsonArray>();
+    for (uint8_t i = 0; i < wifiProfiles.getProfileCount(); i++) {
+        const WiFiProfile* p = wifiProfiles.getProfile(i);
+        if (p && strlen(p->ssid) > 0) {
+            JsonObject wObj = wifiArr.add<JsonObject>();
+            wObj["ssid"] = p->ssid;
+            wObj["active"] = (WiFi.SSID() == p->ssid);
+        }
     }
 
     String res;
@@ -1309,9 +1909,10 @@ void WebDashboard::_setupRoutes() {
   _server.on("/api/theme", HTTP_GET, [](AsyncWebServerRequest *request) {
     if (request->hasParam("id")) {
       uint8_t id = (uint8_t)request->getParam("id")->value().toInt();
-      request->send(200, "application/json", "{\"success\":true}");
       applyThemePreset(id);
       saveTheme();
+      display.triggerRender();
+      request->send(200, "application/json", "{\"success\":true}");
     } else {
       request->send(400, "application/json", "{\"error\":\"Missing id\"}");
     }
@@ -1323,6 +1924,7 @@ void WebDashboard::_setupRoutes() {
       uint8_t val = (uint8_t)request->getParam("val")->value().toInt();
       hardware.setAutoBrightness(false);
       hardware.setBacklight(val);
+      display.triggerRender();
       request->send(200, "application/json", "{\"success\":true}");
     } else {
       request->send(400, "application/json", "{\"error\":\"Missing val\"}");
@@ -1339,21 +1941,29 @@ void WebDashboard::_setupRoutes() {
     request->send(200, "application/json", "{\"success\":true}");
   });
 
-  // ── GET /api/sound?touch=X&melody=Y&test=1 ─────────────────────
-  _server.on("/api/sound", HTTP_GET, [](AsyncWebServerRequest *request) {
+  // ── GET /api/sound?touch=X&melody=Y&startup=Z&test=1&testStartup=1 ─
+  _server.on("/api/sound", HTTP_GET, [this](AsyncWebServerRequest *request) {
     if (request->hasParam("touch")) {
       uint8_t t = (uint8_t)request->getParam("touch")->value().toInt();
       hardware.setTouchSound(t);
-      hardware.playTouchSound();
+      _testTouchRequested = true;
     }
     if (request->hasParam("melody")) {
       uint8_t m = (uint8_t)request->getParam("melody")->value().toInt();
       hardware.setAlarmMelody(m);
     }
+    if (request->hasParam("startup")) {
+      uint8_t s = (uint8_t)request->getParam("startup")->value().toInt();
+      hardware.setStartupSound(s);
+    }
     if (request->hasParam("test")) {
-      hardware.playAlarmMelody();
+      _testAlarmRequested = true;
+    }
+    if (request->hasParam("testStartup")) {
+      _testStartupRequested = true;
     }
     hardware.saveSoundSettings();
+    display.triggerRender();
     request->send(200, "application/json", "{\"success\":true}");
   });
 
@@ -1369,16 +1979,81 @@ void WebDashboard::_setupRoutes() {
     }
   });
 
+  // ── GET /api/power/screen?off=X ─────────────────────────────────
+  _server.on("/api/power/screen", HTTP_GET, [](AsyncWebServerRequest *request) {
+    if (request->hasParam("off")) {
+      bool off = (request->getParam("off")->value() == "1" || request->getParam("off")->value() == "true");
+      if (off) hardware.turnScreenOff();
+      else hardware.turnScreenOn();
+    } else {
+      hardware.toggleScreenPower();
+    }
+    request->send(200, "application/json", "{\"success\":true}");
+  });
+
+  // ── GET /api/power/schedule?mode=X&sh=Y&sm=Z&eh=A&em=B&en=C ───
+  _server.on("/api/power/schedule", HTTP_GET, [](AsyncWebServerRequest *request) {
+    if (request->hasParam("mode")) {
+      uint8_t mode = (uint8_t)request->getParam("mode")->value().toInt();
+      hardware.setPowerMode(mode);
+    }
+    if (request->hasParam("sh")) {
+      uint8_t sh, sm, eh, em;
+      bool en;
+      hardware.getSleepSchedule(sh, sm, eh, em, en);
+      sh = (uint8_t)request->getParam("sh")->value().toInt();
+      if (request->hasParam("sm")) sm = (uint8_t)request->getParam("sm")->value().toInt();
+      if (request->hasParam("eh")) eh = (uint8_t)request->getParam("eh")->value().toInt();
+      if (request->hasParam("em")) em = (uint8_t)request->getParam("em")->value().toInt();
+      if (request->hasParam("en")) {
+        en = (request->getParam("en")->value() == "1" || request->getParam("en")->value() == "true");
+      }
+      hardware.setSleepSchedule(sh, sm, eh, em, en);
+    }
+    request->send(200, "application/json", "{\"success\":true}");
+  });
+
+  // ── POST /api/wifi/delete?ssid=X: Remove a specific remembered network ───
+  _server.on("/api/wifi/delete", HTTP_POST, [](AsyncWebServerRequest *request) {
+    if (request->hasParam("ssid", true) || request->hasParam("ssid")) {
+      String ssid = request->hasParam("ssid", true) ? request->getParam("ssid", true)->value() : request->getParam("ssid")->value();
+      wifiProfiles.deleteProfile(ssid.c_str());
+      request->send(200, "application/json", "{\"success\":true}");
+    } else {
+      request->send(400, "application/json", "{\"error\":\"Missing ssid\"}");
+    }
+  });
+
+  // ── POST /api/wifi/portal: Trigger on-screen QR Code Portal ────────────
+  _server.on("/api/wifi/portal", HTTP_POST, [](AsyncWebServerRequest *request) {
+    webDashboard.requestWiFiPortal();
+    request->send(200, "application/json", "{\"success\":true,\"message\":\"Dang mo cong cai dat WiFi tren man hinh...\"}");
+  });
+
+  // ── POST /api/wifi/add: Add WiFi profile directly from Web UI ──────────
+  _server.on("/api/wifi/add", HTTP_POST, [](AsyncWebServerRequest *request) {
+    if (request->hasParam("ssid", true) || request->hasParam("ssid")) {
+      String ssid = request->hasParam("ssid", true) ? request->getParam("ssid", true)->value() : request->getParam("ssid")->value();
+      String pass = "";
+      if (request->hasParam("pass", true)) pass = request->getParam("pass", true)->value();
+      else if (request->hasParam("pass")) pass = request->getParam("pass")->value();
+
+      if (ssid.length() > 0) {
+        wifiProfiles.saveProfile(ssid.c_str(), pass.c_str());
+        request->send(200, "application/json", "{\"success\":true}");
+        return;
+      }
+    }
+    request->send(400, "application/json", "{\"error\":\"Missing ssid\"}");
+  });
+
   // ── POST /api/wifi/reset: Reset WiFi credentials & restart into AP mode ──
-  _server.on("/api/wifi/reset", HTTP_POST, [](AsyncWebServerRequest *request) {
+  _server.on("/api/wifi/reset", HTTP_POST, [this](AsyncWebServerRequest *request) {
     request->send(200, "application/json",
                   "{\"success\":true,\"message\":\"Dang xoa WiFi va khoi dong "
                   "vao AP mode...\"}");
-    Serial.println("[WebDashboard] User requested WiFi Reset -> Erasing NVS "
-                   "and restarting into AP mode...");
-    delay(600);
-    WiFi.disconnect(true, true);
-    delay(200);
-    ESP.restart();
+    Serial.println("[WebDashboard] User requested WiFi Reset -> Scheduling NVS erase & restart...");
+    _wifiResetTime = millis();
+    _wifiResetRequested = true;
   });
 }
