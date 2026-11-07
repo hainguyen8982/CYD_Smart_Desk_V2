@@ -63,13 +63,13 @@ const char* DeskMood::getPackName(MoodPack p) const {
 
 const char* DeskMood::getName(MoodType m) const {
     switch (m) {
-        case MOOD_HAPPY:       return "Vui ve";
-        case MOOD_FOCUS:       return "Tap trung";
-        case MOOD_BUG:         return "Dang buc minh";
-        case MOOD_LOW_BATTERY: return "Sap nguon";
-        case MOOD_CHILL:       return "Dang chan";
-        case MOOD_TGIF:        return "Cuoi tuan / Quay";
-        default:               return "Vui ve";
+        case MOOD_HAPPY:       return "Vui vẻ";
+        case MOOD_FOCUS:       return "Tập trung";
+        case MOOD_BUG:         return "Đang bực mình";
+        case MOOD_LOW_BATTERY: return "Sập nguồn";
+        case MOOD_CHILL:       return "Đang chán";
+        case MOOD_TGIF:        return "Cuối tuần / Quẩy";
+        default:               return "Vui vẻ";
     }
 }
 
@@ -88,13 +88,13 @@ const char* DeskMood::getIcon(MoodType m) const {
 const char* DeskMood::getTag(MoodType m, uint8_t lang) const {
     if (lang == 0) { // VI
         switch (m) {
-            case MOOD_HAPPY:       return "VUI VE";
-            case MOOD_FOCUS:       return "TAP TRUNG CAO DO";
-            case MOOD_BUG:         return "DANG CAY CU!";
-            case MOOD_LOW_BATTERY: return "SAP NGUON 0%";
-            case MOOD_CHILL:       return "DANG CHAN / BO PHO";
-            case MOOD_TGIF:        return "QUAY THOI - CUOI TUAN!";
-            default:               return "VUI VE";
+            case MOOD_HAPPY:       return "VUI VẺ";
+            case MOOD_FOCUS:       return "TẬP TRUNG CAO ĐỘ";
+            case MOOD_BUG:         return "ĐANG CAY CÚ!";
+            case MOOD_LOW_BATTERY: return "SẬP NGUỒN 0%";
+            case MOOD_CHILL:       return "ĐANG CHÁN / BƠ PHỜ";
+            case MOOD_TGIF:        return "QUẨY THÔI - CUỐI TUẦN!";
+            default:               return "VUI VẺ";
         }
     } else { // EN
         switch (m) {
@@ -112,22 +112,22 @@ const char* DeskMood::getTag(MoodType m, uint8_t lang) const {
 const char* DeskMood::getMessage(MoodType m, uint8_t lang) const {
     if (lang == 0) { // VI
         switch (m) {
-            case MOOD_HAPPY:       return "Hom nay vui ve * Ca phe khong?";
-            case MOOD_FOCUS:       return "Dang chay deadline * Xin dung lam phien!";
-            case MOOD_BUG:         return "Dang cay cu * Tiep can can than keo quau!";
-            case MOOD_LOW_BATTERY: return "Nao sap sap nguon * Can nap tra sua gap!";
-            case MOOD_CHILL:       return "Qua la chan chuong * Chung nao moi tan ca?";
-            case MOOD_TGIF:        return "Sap tan ca roi * Toi nay xoa het deadline!";
-            default:               return "Chuc mot ngay lam viec tran day nang luong!";
+            case MOOD_HAPPY:       return "Hôm nay vui vẻ • Cà phê không?";
+            case MOOD_FOCUS:       return "Đang chạy deadline • Xin đừng làm phiền!";
+            case MOOD_BUG:         return "Đang cay cú • Tiếp cận cẩn thận kẻo quạu!";
+            case MOOD_LOW_BATTERY: return "Não sắp sập nguồn • Cần nạp trà sữa gấp!";
+            case MOOD_CHILL:       return "Quá là chán chường • Chừng nào mới tan ca?";
+            case MOOD_TGIF:        return "Sắp tan ca rồi • Tối nay xóa hết deadline!";
+            default:               return "Chúc một ngày làm việc tràn đầy năng lượng!";
         }
     } else { // EN
         switch (m) {
-            case MOOD_HAPPY:       return "Good vibes only * Always open for coffee!";
-            case MOOD_FOCUS:       return "In deep focus * Please do not interrupt!";
-            case MOOD_BUG:         return "Dangerously angry * Approach with caution!";
-            case MOOD_LOW_BATTERY: return "Brain at 0% * Needs milk tea recharge!";
-            case MOOD_CHILL:       return "Completely bored * When is shift ending?";
-            case MOOD_TGIF:        return "Weekend is here * Time to celebrate!";
+            case MOOD_HAPPY:       return "Good vibes only • Always open for coffee!";
+            case MOOD_FOCUS:       return "In deep focus • Please do not interrupt!";
+            case MOOD_BUG:         return "Dangerously angry • Approach with caution!";
+            case MOOD_LOW_BATTERY: return "Brain at 0% • Needs milk tea recharge!";
+            case MOOD_CHILL:       return "Completely bored • When is shift ending?";
+            case MOOD_TGIF:        return "Weekend is here • Time to celebrate!";
             default:               return "Have a wonderful productive day!";
         }
     }
@@ -207,14 +207,13 @@ void DeskMood::setCustomForMood(MoodType m, bool enabled, const char* tag, const
     if (m >= MOOD_COUNT) return;
     _customEnabled[m] = enabled;
     if (tag != nullptr) {
-        String cleanTag = sanitizeAscii(String(tag));
-        cleanTag.toUpperCase();
+        String cleanTag = String(tag);
         cleanTag.trim();
         strncpy(_customTags[m], cleanTag.c_str(), sizeof(_customTags[m]) - 1);
         _customTags[m][sizeof(_customTags[m]) - 1] = '\0';
     }
     if (msg != nullptr) {
-        String cleanMsg = sanitizeAscii(String(msg));
+        String cleanMsg = String(msg);
         cleanMsg.trim();
         strncpy(_customMsgs[m], cleanMsg.c_str(), sizeof(_customMsgs[m]) - 1);
         _customMsgs[m][sizeof(_customMsgs[m]) - 1] = '\0';
@@ -293,7 +292,7 @@ static void drawMemeBitmap160(TFT_eSprite& spr, int16_t startX, int16_t startY, 
 // ═══════════════════════════════════════════════════════════════════════
 //  RENDER SIGNBOARD (MEME KHỔNG LỒ 160x160 > 2/3 MÀN HÌNH - KHÔNG VÒNG TRÒN)
 // ═══════════════════════════════════════════════════════════════════════
-void DeskMood::renderPage(TFT_eSprite& spr, uint8_t lang, uint16_t themeBg) {
+void DeskMood::renderPage(VnSprite& spr, uint8_t lang, uint16_t themeBg) {
     // 1. Phông nền toàn màn hình 320x240 sạch sẽ, phẳng hoàn toàn theo Theme
     spr.fillSprite(themeBg);
 
@@ -304,17 +303,16 @@ void DeskMood::renderPage(TFT_eSprite& spr, uint8_t lang, uint16_t themeBg) {
     const uint16_t* memeBmp = getMemeBitmap((uint8_t)_pack, (uint8_t)_mood);
     drawMemeBitmap160(spr, cx - MEME_BITMAP_W / 2, cy - MEME_BITMAP_H / 2, memeBmp);
 
-    // 2b. NÚT ĐỔI BỘ MEME GÓC TRÊN BÊN PHẢI (ICON 2 MŨI TÊN XOAY TRÒN, 4 GÓC BO TRÒN R=8, KHÔNG VÁT CẠNH)
+    // 2b. NÚT ĐỔI BỘ MEME GÓC TRÊN BÊN PHẢI (ICON 2 MŨI TÊN XOAY TRÒN, 4 GÓC BO TRÒN R=8 MỊN MÀNG)
     int16_t pBtnW = 28;
     int16_t pBtnH = 28;
     int16_t pBtnX = 320 - pBtnW - 8; // X = 284..312 (Cách xa meme > 44px, 100% không đè lên tranh)
     int16_t pBtnY = 8;
-    int16_t pBtnR = 8; // Bo tròn 4 góc r=8 mềm mại, chuẩn Rounded Container, tuyệt đối không vát cạnh
+    int16_t pBtnR = 8; // Bo tròn 4 góc r=8 mềm mại đồng tâm
 
-    // Đổ bóng & Nền nút kính bo tròn theo Theme (Card & CardBorder)
-    spr.fillSmoothRoundRect(pBtnX, pBtnY + 2, pBtnW, pBtnH, pBtnR, theme.bg, themeBg);
-    spr.fillSmoothRoundRect(pBtnX, pBtnY, pBtnW, pBtnH, pBtnR, theme.card, themeBg);
-    spr.drawRoundRect(pBtnX, pBtnY, pBtnW, pBtnH, pBtnR, theme.cardBorder);
+    // Đổ bóng & Nền nút kính bo tròn khử răng cưa đồng tâm theo Theme (Card & CardBorder)
+    spr.fillSmoothRoundRect(pBtnX, pBtnY, pBtnW, pBtnH, pBtnR, theme.cardBorder, themeBg);
+    spr.fillSmoothRoundRect(pBtnX + 1, pBtnY + 1, pBtnW - 2, pBtnH - 2, pBtnR - 1, theme.card, theme.cardBorder);
 
     // Vẽ icon 2 mũi tên xoay tròn (Cycle / Swap) màu accent neon của Theme
     uint16_t swapIconColor = theme.accent;
@@ -343,7 +341,7 @@ void DeskMood::renderPage(TFT_eSprite& spr, uint8_t lang, uint16_t themeBg) {
     uint8_t fontToUse = 2; // Font 2 đậm, gọn gàng và đẹp mắt dưới meme khổng lồ
     int16_t textW = spr.textWidth(tagStr, fontToUse);
 
-    // Bóng tự co giãn vừa vặn (padding 18px mỗi bên, bo tròn viên thuốc r=14)
+    // Bóng tự co giãn vừa vặn (padding 18px mỗi bên, bo tròn viên thuốc r=13)
     int16_t tagW = textW + 36;
     if (tagW < 140) tagW = 140;
     if (tagW > 308) tagW = 308;
@@ -351,11 +349,10 @@ void DeskMood::renderPage(TFT_eSprite& spr, uint8_t lang, uint16_t themeBg) {
     int16_t tagY = 166;
     int16_t tagR = tagH / 2;
 
-    // Đổ bóng & Nền viên thuốc Neon
+    // Đổ bóng & Nền viên thuốc Neon khử răng cưa đồng tâm mượt mà
     uint16_t accent = getAccentColor(_mood);
-    spr.fillSmoothRoundRect(cx - tagW / 2, tagY + 2, tagW, tagH, tagR, theme.bg, themeBg);
-    spr.fillSmoothRoundRect(cx - tagW / 2, tagY, tagW, tagH, tagR, accent, themeBg);
-    spr.drawRoundRect(cx - tagW / 2, tagY, tagW, tagH, tagR, C_WHITE);
+    spr.fillSmoothRoundRect(cx - tagW / 2, tagY, tagW, tagH, tagR, C_WHITE, themeBg);
+    spr.fillSmoothRoundRect(cx - tagW / 2 + 1, tagY + 1, tagW - 2, tagH - 2, tagR - 1, accent, C_WHITE);
 
     // Chữ căn giữa chuẩn xác, không bao giờ bị tràn
     spr.setTextDatum(MC_DATUM);
@@ -393,8 +390,8 @@ bool DeskMood::handleTouch(int16_t x, int16_t y) {
         return true;
     }
 
-    // 2. Chạm vào bất kỳ vị trí nào trên meme (trên vùng Dock) để chuyển tâm trạng kế tiếp
-    if (y < 196) {
+    // 2. Chạm vào bất kỳ vị trí nào trên meme hoặc câu Quote (trừ vùng viên thuốc Dock ở đáy) để chuyển tâm trạng kế tiếp
+    if (y < 208 || x < 105 || x > 215) {
         nextMood(); // Xoay vòng tròn 0 -> 1 -> 2 -> 3 -> 4 -> 5 -> 0
         hardware.playClick();
         return true;

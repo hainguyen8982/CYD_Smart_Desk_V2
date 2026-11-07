@@ -7,6 +7,7 @@
 
 #include <Arduino.h>
 #include <TFT_eSPI.h>
+#include "VnFont.h"
 
 enum MoodType : uint8_t {
     MOOD_HAPPY       = 0,   // 🟢 Vui vẻ / Sẵn sàng chém gió (Ready to chat)
@@ -54,7 +55,7 @@ public:
     void setCustomForMood(MoodType m, bool enabled, const char* tag = nullptr, const char* msg = nullptr);
     void resetMoodToDefault(MoodType m);
 
-    void renderPage(TFT_eSprite& spr, uint8_t lang, uint16_t themeBg);
+    void renderPage(VnSprite& spr, uint8_t lang, uint16_t themeBg);
     bool handleTouch(int16_t x, int16_t y);
 
 private:
@@ -65,8 +66,8 @@ private:
     MoodType _mood;
     MoodPack _pack;
     bool     _customEnabled[MOOD_COUNT];
-    char     _customTags[MOOD_COUNT][24];      // Max 20 chars + null for each mood
-    char     _customMsgs[MOOD_COUNT][40];      // Max 36 chars + null for each mood
+    char     _customTags[MOOD_COUNT][48];      // Max UTF-8 bytes for custom mood tag
+    char     _customMsgs[MOOD_COUNT][96];      // Max UTF-8 bytes for custom mood message
 };
 
 extern DeskMood deskMood;

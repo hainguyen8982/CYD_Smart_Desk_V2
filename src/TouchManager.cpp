@@ -4,6 +4,7 @@
 // ═══════════════════════════════════════════════════════════════════════
 #include "TouchManager.h"
 #include "HardwareManager.h"
+#include "Display.h"
 #include <Preferences.h>
 
 TouchManager touch;
@@ -243,21 +244,24 @@ bool TouchManager::checkTap(uint16_t *x, uint16_t *y) {
             int dx = abs((int)currX - (int)_startX);
             int dy = abs((int)currY - (int)_startY);
 
-            // 1. Hỗ trợ kéo trượt (Drag / Slide) siêu nhạy theo trục ngang CHỈ trong vùng Thanh Độ Sáng (Y <= 52)
-            //    Giới hạn vùng Y <= 52 giúp các nút bấm bên dưới không bị nhảy đúp khi ngón tay rung nhẹ 2px!
-            if (_startY <= 52 && currY <= 58 && abs((int)currX - (int)_lastX) >= 2 && (now - _lastTapTime >= 25)) {
+            // 1. Hỗ trợ kéo trượt (Drag / Slide) siêu nhạy theo trục ngang CHỈ khi đang ở trang Cài đặt
+            //    và điểm chạm bắt đầu trong vùng Thanh Độ Sáng (X: 57..199, Y <= 55).
+            //    Khóa tọa độ *x trả về trong [57..199] để khi kéo quá tay sang hai đầu không bấm nhầm nút [-], [+], [AUTO]!
+            if (display.isBrightnessSliderActive() &&
+                _startX >= 57 && _startX <= 199 && _startY <= 55 && currY <= 65 &&
+                abs((int)currX - (int)_lastX) >= 2 && (now - _lastTapTime >= 25)) {
                 _lastTapTime = now;
                 _lastX = currX;
                 _lastY = currY;
-                *x = currX;
-                *y = currY;
+                *x = constrain(currX, (uint16_t)57, (uint16_t)199);
+                *y = constrain(currY, (uint16_t)6, (uint16_t)52);
                 return true;
             }
 
-            // 2. Giữ cố định tại chỗ quá 320ms -> Tự động lặp lại mỗi 140ms (Tăng/giảm độ sáng hoặc giờ báo thức)
-            //    Không lặp lại ở vùng đáy màn hình (_startY >= 166) để tránh tự mở Dock rồi bấm nhầm nút Power!
+            // 2. Giữ cố định tại chỗ quá 320ms -> Tự động lặp lại mỗi 140ms CHỈ cho các nút tăng/giảm
+            //    (Tăng/giảm giờ phút báo thức, nút -/+ độ sáng, chuyển tháng lịch), không lặp trên nút bật/tắt!
             unsigned long heldDuration = now - _touchStartTime;
-            if (_startY < 166 && heldDuration > 320 && (now - _lastTapTime >= 140)) {
+            if (display.isHoldRepeatAllowed(_startX, _startY) && heldDuration > 320 && (now - _lastTapTime >= 140)) {
                 if (dx < 35 && dy < 35) {
                     _lastTapTime = now;
                     *x = _startX;

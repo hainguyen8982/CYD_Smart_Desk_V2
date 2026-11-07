@@ -10,6 +10,7 @@
 #include "Config.h"
 #include "Colors.h"
 #include "Theme.h"
+#include "VnFont.h"
 
 enum ActivePage {
     PAGE_CLOCK = 0,
@@ -36,6 +37,27 @@ public:
     void wakeDock();
     void triggerRender() { _lastRender = 0; }
 
+    // Chỉ bật kéo trượt ngang 25ms khi đang ở đúng thanh Slider Độ sáng của trang Cài đặt
+    bool isBrightnessSliderActive() const {
+        return (_currentPage == PAGE_SETTINGS) && (_activePopup == POPUP_NONE) && !_dockVisible && !_alarmRinging;
+    }
+
+    // Chỉ bật giữ lặp lại (Hold-to-repeat) cho các nút tăng/giảm (Giờ/Phút báo thức, Độ sáng -/+, Tháng lịch)
+    bool isHoldRepeatAllowed(uint16_t startX, uint16_t startY) const {
+        if (_alarmRinging || _dockVisible) return false;
+        if (_activePopup == POPUP_ALARM) {
+            return (startX >= 45 && startX <= 275 && startY >= 48 && startY <= 174);
+        }
+        if (_activePopup != POPUP_NONE) return false;
+        if (_currentPage == PAGE_SETTINGS) {
+            return (startY <= 55 && (startX <= 56 || (startX >= 200 && startX < 244)));
+        }
+        if (_currentPage == PAGE_CALENDAR) {
+            return (startY <= 50 && (startX <= 66 || startX >= 250));
+        }
+        return false;
+    }
+
     // ── Alarm API ─────────────────────────────────────────────
     void setAlarm(uint8_t h, uint8_t m, bool enabled, const char* msg = nullptr);
     uint8_t getAlarmHour() const { return _alarmHour; }
@@ -49,7 +71,7 @@ public:
 
 private:
     TFT_eSPI      _tft;
-    TFT_eSprite   _spr;           // Full-screen double-buffer sprite
+    VnSprite      _spr;           // Full-screen double-buffer sprite with UTF-8 Vietnamese support
     bool          _sprReady;
     unsigned long _lastRender;
 
@@ -99,7 +121,7 @@ private:
     int           _alarmLastTriggerDay;
     int           _alarmLastTriggerMin;
     unsigned long _alarmAutoCloseTime;
-    char          _alarmMessage[48];
+    char          _alarmMessage[80];
 
     void          loadAlarmSettings();
     void          saveAlarmSettings();

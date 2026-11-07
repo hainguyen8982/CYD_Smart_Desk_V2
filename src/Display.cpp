@@ -519,22 +519,27 @@ void Display::renderPage0_WeatherClock() {
 
     _spr.setTextDatum(MC_DATUM);
 
-    // Layer 1: Ambient deep cyan glow halo
-    _spr.setTextColor(RGB565(0, 70, 150));
+    // Đồng bộ màu hào quang và chữ số đồng hồ lớn theo Theme đang chọn
+    uint16_t clockHalo = blendColor(theme.accent, theme.bg, 85);
+    uint16_t clockRim  = blendColor(theme.accent, C_WHITE, 175);
+    uint16_t clockCore = blendColor(theme.accent, C_WHITE, 225);
+
+    // Layer 1: Ambient deep theme glow halo
+    _spr.setTextColor(clockHalo);
     _spr.drawString(timeBuf, clockCx - 2, clockCy, 8);
     _spr.drawString(timeBuf, clockCx + 2, clockCy, 8);
     _spr.drawString(timeBuf, clockCx, clockCy - 2, 8);
     _spr.drawString(timeBuf, clockCx, clockCy + 2, 8);
 
-    // Layer 2: Bright cyan rim
-    _spr.setTextColor(RGB565(0, 190, 255));
+    // Layer 2: Bright theme rim
+    _spr.setTextColor(clockRim);
     _spr.drawString(timeBuf, clockCx - 1, clockCy - 1, 8);
     _spr.drawString(timeBuf, clockCx + 1, clockCy - 1, 8);
     _spr.drawString(timeBuf, clockCx - 1, clockCy + 1, 8);
     _spr.drawString(timeBuf, clockCx + 1, clockCy + 1, 8);
 
-    // Layer 3: Solid Electric Neon Cyan body (matching reference image)
-    _spr.setTextColor(RGB565(0, 245, 255));
+    // Layer 3: Solid Electric Neon body matched to active Theme
+    _spr.setTextColor(clockCore);
     _spr.drawString(timeBuf, clockCx, clockCy, 8);
 
     // ── Alarm Bell Icon (Right next to clock digits, NO text time) ──
@@ -577,10 +582,11 @@ void Display::renderPage0_WeatherClock() {
     _spr.fillTriangle(leftX + 12, cardY + 11, leftX + 16, cardY + 11, leftX + 14, cardY + 15, C_RED);
 
     const char* cityStr = (strlen(w.city) > 0) ? w.city : "TP. HCM";
-    char cityUpper[20];
+    char cityUpper[28];
     size_t cj = 0;
     for (; cityStr[cj] && cj < sizeof(cityUpper) - 1; cj++) {
-        cityUpper[cj] = (char)toupper((unsigned char)cityStr[cj]);
+        unsigned char uch = (unsigned char)cityStr[cj];
+        cityUpper[cj] = (uch < 0x80) ? (char)toupper(uch) : (char)uch;
     }
     cityUpper[cj] = '\0';
     _spr.setTextDatum(ML_DATUM);
@@ -650,11 +656,11 @@ void Display::renderPage0_WeatherClock() {
     _spr.drawString(alDayStr, rightX + 46, cardY + 31, 4);
 
     _spr.setTextColor(RGB565(140, 205, 255));
-    _spr.drawString((getLanguage() == LANG_VI ? "AL" : "LUN"), rightX + 46 + _spr.textWidth(alDayStr, 4) + 3, cardY + 33, 2);
+    _spr.drawString((getLanguage() == LANG_VI ? "ÂL" : "LUN"), rightX + 46 + _spr.textWidth(alDayStr, 4) + 3, cardY + 33, 2);
 
     // Can Chi day placed 6px cleanly below 04/09 AL — NEVER overlaps!
-    char dayCanChiBuf[28];
-    snprintf(dayCanChiBuf, sizeof(dayCanChiBuf), (getLanguage() == LANG_VI ? "Ngay %s" : "Day %s"), lDate.dayCanChi);
+    char dayCanChiBuf[36];
+    snprintf(dayCanChiBuf, sizeof(dayCanChiBuf), (getLanguage() == LANG_VI ? "Ngày %s" : "Day %s"), lDate.dayCanChi);
     _spr.setTextDatum(TL_DATUM);
     _spr.setTextColor(RGB565(255, 215, 0)); // Gold
     _spr.drawString(dayCanChiBuf, rightX + 50, cardY + 60, 1);
@@ -697,11 +703,12 @@ void Display::renderWeatherPopup() {
     // 1. Header (Y = 10..38): GPS Pin + Tên thành phố + Nút đóng tròn [X]
     _spr.fillCircle(18, 23, 3, C_RED);
     _spr.fillTriangle(16, 23, 20, 23, 18, 28, C_RED);
-    const char* cityStr = (strlen(w.city) > 0) ? w.city : "TP. HO CHI MINH";
-    char cityUpper[28];
+    const char* cityStr = (strlen(w.city) > 0) ? w.city : "TP. HỒ CHÍ MINH";
+    char cityUpper[36];
     size_t cj = 0;
     for (; cityStr[cj] && cj < sizeof(cityUpper) - 1; cj++) {
-        cityUpper[cj] = (char)toupper((unsigned char)cityStr[cj]);
+        unsigned char uch = (unsigned char)cityStr[cj];
+        cityUpper[cj] = (uch < 0x80) ? (char)toupper(uch) : (char)uch;
     }
     cityUpper[cj] = '\0';
     _spr.setTextDatum(ML_DATUM);
@@ -872,8 +879,8 @@ void Display::renderLunarPopup() {
     _spr.setTextColor(C_WHITE);
     _spr.drawString(phaseName, 88, 68, 4);
 
-    char illuBuf[32];
-    snprintf(illuBuf, sizeof(illuBuf), (getLanguage() == LANG_VI ? "Do sang mat trang: %.0f%%" : "Moon Illumination: %.0f%%"), moonPct);
+    char illuBuf[40];
+    snprintf(illuBuf, sizeof(illuBuf), (getLanguage() == LANG_VI ? "Độ sáng mặt trăng: %.0f%%" : "Moon Illumination: %.0f%%"), moonPct);
     _spr.setTextColor(RGB565(140, 205, 255));
     _spr.drawString(illuBuf, 88, 96, 2);
 
@@ -885,8 +892,8 @@ void Display::renderLunarPopup() {
     _spr.setTextDatum(ML_DATUM);
     _spr.setTextColor(RGB565(170, 200, 230));
     _spr.drawString(L(TXT_LUNAR_DATE), 18, 138, 2);
-    char lDateBuf[24];
-    snprintf(lDateBuf, sizeof(lDateBuf), (getLanguage() == LANG_VI ? "%02d thang %02d" : "Day %02d, Month %02d"), ld.day, ld.month);
+    char lDateBuf[32];
+    snprintf(lDateBuf, sizeof(lDateBuf), (getLanguage() == LANG_VI ? "%02d tháng %02d" : "Day %02d, Month %02d"), ld.day, ld.month);
     _spr.setTextDatum(MR_DATUM);
     _spr.setTextColor(C_WHITE);
     _spr.drawString(lDateBuf, 302, 138, 2);
@@ -919,7 +926,8 @@ void Display::loadAlarmSettings() {
     _alarmEnabled = prefs.getBool("enabled", false);
     _alarmHour    = prefs.getUChar("hour", 7);
     _alarmMinute  = prefs.getUChar("min", 0);
-    String msg    = prefs.getString("msg", "Uong nuoc & Thu gian");
+    String msg    = prefs.getString("msg", "Uống nước & Thư giãn");
+    if (msg == "Uong nuoc & Thu gian") msg = "Uống nước & Thư giãn";
     strlcpy(_alarmMessage, msg.c_str(), sizeof(_alarmMessage));
     prefs.end();
     if (_alarmHour > 23) _alarmHour = 7;
@@ -1061,7 +1069,7 @@ void Display::renderAlarmPopup() {
     drawBellIcon(18, 23, _alarmEnabled);
     _spr.setTextDatum(ML_DATUM);
     _spr.setTextColor(RGB565(255, 215, 0));
-    _spr.drawString((getLanguage() == LANG_VI ? "CAI DAT BAO THUC" : "ALARM SETTINGS"), 36, 23, 2);
+    _spr.drawString((getLanguage() == LANG_VI ? "CÀI ĐẶT BÁO THỨC" : "ALARM SETTINGS"), 36, 23, 2);
 
     // Nút [X] Đóng Popup — Chuẩn phong cách Windows 11 nền xanh bo tròn góc
     drawPopupCloseButton();
@@ -1078,11 +1086,11 @@ void Display::renderAlarmPopup() {
     _spr.fillTriangle(hx + hw / 2 - 12, upY + 4, hx + hw / 2 + 12, upY + 4, hx + hw / 2, upY - 8, RGB565(0, 225, 255));
     _spr.fillTriangle(mx2 + mw2 / 2 - 12, upY + 4, mx2 + mw2 / 2 + 12, upY + 4, mx2 + mw2 / 2, upY - 8, RGB565(0, 225, 255));
 
-    // B. Khung số Giờ & Phút (Bo góc mềm mại R = 12, số Font 4 cao sang trọng)
+    // B. Khung số Giờ & Phút (Bo góc mềm mại đồng tâm R = 12, số Font 4 cao sang trọng)
     int16_t boxY = 80, boxH = 58;
     // Khung Giờ
-    _spr.fillRoundRect(hx, boxY, hw, boxH, 12, RGB565(12, 18, 30));
-    _spr.drawRoundRect(hx, boxY, hw, boxH, 12, RGB565(0, 180, 240));
+    _spr.fillSmoothRoundRect(hx, boxY, hw, boxH, 12, RGB565(0, 180, 240), RGB565(10, 15, 26));
+    _spr.fillSmoothRoundRect(hx + 1, boxY + 1, hw - 2, boxH - 2, 11, RGB565(12, 18, 30), RGB565(0, 180, 240));
     char hBuf[8];
     snprintf(hBuf, sizeof(hBuf), "%02d", _alarmHour);
     _spr.setTextDatum(MC_DATUM);
@@ -1090,12 +1098,12 @@ void Display::renderAlarmPopup() {
     _spr.drawString(hBuf, hx + hw / 2, boxY + boxH / 2, 4);
 
     // Dấu hai chấm ":" phát sáng màu cyan ở giữa
-    _spr.fillCircle(160, 103, 3, RGB565(0, 230, 255));
-    _spr.fillCircle(160, 117, 3, RGB565(0, 230, 255));
+    _spr.fillSmoothCircle(160, 103, 3, RGB565(0, 230, 255), RGB565(10, 15, 26));
+    _spr.fillSmoothCircle(160, 117, 3, RGB565(0, 230, 255), RGB565(10, 15, 26));
 
     // Khung Phút
-    _spr.fillRoundRect(mx2, boxY, mw2, boxH, 12, RGB565(12, 18, 30));
-    _spr.drawRoundRect(mx2, boxY, mw2, boxH, 12, RGB565(0, 180, 240));
+    _spr.fillSmoothRoundRect(mx2, boxY, mw2, boxH, 12, RGB565(0, 180, 240), RGB565(10, 15, 26));
+    _spr.fillSmoothRoundRect(mx2 + 1, boxY + 1, mw2 - 2, boxH - 2, 11, RGB565(12, 18, 30), RGB565(0, 180, 240));
     char mBuf[8];
     snprintf(mBuf, sizeof(mBuf), "%02d", _alarmMinute);
     _spr.setTextDatum(MC_DATUM);
@@ -1113,20 +1121,20 @@ void Display::renderAlarmPopup() {
         _spr.fillSmoothRoundRect(btnX, btnY, btnW, btnH, 18, RGB565(35, 190, 110), RGB565(10, 15, 26));
         _spr.setTextDatum(MC_DATUM);
         _spr.setTextColor(RGB565(10, 30, 18));
-        _spr.drawString((getLanguage() == LANG_VI ? "DANG BAT BAO THUC" : "ALARM ENABLED"), 160, btnY + btnH / 2, 2);
+        _spr.drawString((getLanguage() == LANG_VI ? "ĐANG BẬT BÁO THỨC" : "ALARM ENABLED"), 160, btnY + btnH / 2, 2);
     } else {
-        _spr.fillSmoothRoundRect(btnX, btnY, btnW, btnH, 18, RGB565(25, 32, 45), RGB565(10, 15, 26));
-        _spr.drawRoundRect(btnX, btnY, btnW, btnH, 18, RGB565(55, 70, 95));
+        _spr.fillSmoothRoundRect(btnX, btnY, btnW, btnH, 18, RGB565(55, 70, 95), RGB565(10, 15, 26));
+        _spr.fillSmoothRoundRect(btnX + 1, btnY + 1, btnW - 2, btnH - 2, 17, RGB565(25, 32, 45), RGB565(55, 70, 95));
         _spr.setTextDatum(MC_DATUM);
         _spr.setTextColor(RGB565(150, 165, 185));
-        _spr.drawString((getLanguage() == LANG_VI ? "DANG TAT BAO THUC" : "ALARM DISABLED"), 160, btnY + btnH / 2, 2);
+        _spr.drawString((getLanguage() == LANG_VI ? "ĐANG TẮT BÁO THỨC" : "ALARM DISABLED"), 160, btnY + btnH / 2, 2);
     }
 
     if (strlen(_alarmMessage) > 0) {
         _spr.setTextDatum(MC_DATUM);
         _spr.setTextColor(RGB565(140, 175, 220));
-        char noteBuf[64];
-        snprintf(noteBuf, sizeof(noteBuf), (getLanguage() == LANG_VI ? "Loi nhan: %s" : "Note: %s"), _alarmMessage);
+        char noteBuf[96];
+        snprintf(noteBuf, sizeof(noteBuf), (getLanguage() == LANG_VI ? "Lời nhắn: %s" : "Note: %s"), _alarmMessage);
         _spr.drawString(noteBuf, 160, 226, 1);
     }
 }
@@ -1137,8 +1145,8 @@ void Display::renderAlarmTimeOnly() {
     int16_t boxY = 80, boxH = 58;
 
     // 1. Ô Giờ (X: 60, W: 84)
-    _spr.fillRoundRect(hx, boxY, hw, boxH, 12, RGB565(12, 18, 30));
-    _spr.drawRoundRect(hx, boxY, hw, boxH, 12, RGB565(0, 180, 240));
+    _spr.fillSmoothRoundRect(hx, boxY, hw, boxH, 12, RGB565(0, 180, 240), RGB565(10, 15, 26));
+    _spr.fillSmoothRoundRect(hx + 1, boxY + 1, hw - 2, boxH - 2, 11, RGB565(12, 18, 30), RGB565(0, 180, 240));
     char hBuf[8];
     snprintf(hBuf, sizeof(hBuf), "%02d", _alarmHour);
     _spr.setTextDatum(MC_DATUM);
@@ -1146,12 +1154,12 @@ void Display::renderAlarmTimeOnly() {
     _spr.drawString(hBuf, hx + hw / 2, boxY + boxH / 2, 4);
 
     // 2. Hai chấm phát sáng ở giữa
-    _spr.fillCircle(160, 103, 3, RGB565(0, 230, 255));
-    _spr.fillCircle(160, 117, 3, RGB565(0, 230, 255));
+    _spr.fillSmoothCircle(160, 103, 3, RGB565(0, 230, 255), RGB565(10, 15, 26));
+    _spr.fillSmoothCircle(160, 117, 3, RGB565(0, 230, 255), RGB565(10, 15, 26));
 
     // 3. Ô Phút (X: 176, W: 84)
-    _spr.fillRoundRect(mx2, boxY, mw2, boxH, 12, RGB565(12, 18, 30));
-    _spr.drawRoundRect(mx2, boxY, mw2, boxH, 12, RGB565(0, 180, 240));
+    _spr.fillSmoothRoundRect(mx2, boxY, mw2, boxH, 12, RGB565(0, 180, 240), RGB565(10, 15, 26));
+    _spr.fillSmoothRoundRect(mx2 + 1, boxY + 1, mw2 - 2, boxH - 2, 11, RGB565(12, 18, 30), RGB565(0, 180, 240));
     char mBuf[8];
     snprintf(mBuf, sizeof(mBuf), "%02d", _alarmMinute);
     _spr.setTextDatum(MC_DATUM);
@@ -1167,13 +1175,13 @@ void Display::renderAlarmToggleBtnOnly() {
         _spr.fillSmoothRoundRect(btnX, btnY, btnW, btnH, 18, RGB565(35, 190, 110), RGB565(10, 15, 26));
         _spr.setTextDatum(MC_DATUM);
         _spr.setTextColor(RGB565(10, 30, 18));
-        _spr.drawString((getLanguage() == LANG_VI ? "DANG BAT BAO THUC" : "ALARM ENABLED"), 160, btnY + btnH / 2, 2);
+        _spr.drawString((getLanguage() == LANG_VI ? "ĐANG BẬT BÁO THỨC" : "ALARM ENABLED"), 160, btnY + btnH / 2, 2);
     } else {
-        _spr.fillSmoothRoundRect(btnX, btnY, btnW, btnH, 18, RGB565(25, 32, 45), RGB565(10, 15, 26));
-        _spr.drawRoundRect(btnX, btnY, btnW, btnH, 18, RGB565(55, 70, 95));
+        _spr.fillSmoothRoundRect(btnX, btnY, btnW, btnH, 18, RGB565(55, 70, 95), RGB565(10, 15, 26));
+        _spr.fillSmoothRoundRect(btnX + 1, btnY + 1, btnW - 2, btnH - 2, 17, RGB565(25, 32, 45), RGB565(55, 70, 95));
         _spr.setTextDatum(MC_DATUM);
         _spr.setTextColor(RGB565(150, 165, 185));
-        _spr.drawString((getLanguage() == LANG_VI ? "DANG TAT BAO THUC" : "ALARM DISABLED"), 160, btnY + btnH / 2, 2);
+        _spr.drawString((getLanguage() == LANG_VI ? "ĐANG TẮT BÁO THỨC" : "ALARM DISABLED"), 160, btnY + btnH / 2, 2);
     }
     // Cập nhật cả icon chuông trên header
     drawBellIcon(18, 23, _alarmEnabled);
@@ -1206,7 +1214,7 @@ void Display::renderAlarmRingingScreen() {
     // 2. Dòng thông báo nổi bật
     _spr.setTextDatum(MC_DATUM);
     _spr.setTextColor(flash ? C_WHITE : C_GOLD);
-    _spr.drawString((getLanguage() == LANG_VI ? "BAO THUC!" : "ALARM ALERT!"), 160, 60, 4);
+    _spr.drawString((getLanguage() == LANG_VI ? "BÁO THỨC!" : "ALARM ALERT!"), 160, 60, 4);
 
     // 3. Hiển thị giờ hiện tại to rõ Font 6
     time_t now = time(NULL);
@@ -1220,10 +1228,10 @@ void Display::renderAlarmRingingScreen() {
 
     // Thông điệp nhắc nhở SmartDesk
     if (strlen(_alarmMessage) > 0) {
-        int16_t msgW = _spr.textWidth(_alarmMessage, 2) + 20;
+        int16_t msgW = _spr.textWidth(_alarmMessage, 2) + 24;
         if (msgW > 290) msgW = 290;
-        _spr.fillSmoothRoundRect(160 - msgW / 2, 124, msgW, 24, 12, RGB565(35, 25, 40), bg);
-        _spr.drawRoundRect(160 - msgW / 2, 124, msgW, 24, 12, C_GOLD);
+        _spr.fillSmoothRoundRect(160 - msgW / 2, 124, msgW, 24, 12, C_GOLD, bg);
+        _spr.fillSmoothRoundRect(160 - msgW / 2 + 1, 125, msgW - 2, 22, 11, RGB565(35, 25, 40), C_GOLD);
         _spr.setTextDatum(MC_DATUM);
         _spr.setTextColor(C_GOLD);
         _spr.drawString(_alarmMessage, 160, 136, 2);
@@ -1232,23 +1240,23 @@ void Display::renderAlarmRingingScreen() {
     // 4. Hai Nút Bấm Khổng Lồ Trên Màn Hình (100% On-Screen Touch, Không dùng nút BOOT / LED RGB phía sau)
     // Nút Trái: BÁO LẠI (+5 PHÚT)
     int16_t b1X = 14, b1Y = 160, b1W = 140, b1H = 64;
-    _spr.fillSmoothRoundRect(b1X, b1Y, b1W, b1H, 16, RGB565(245, 155, 20), bg);
-    _spr.drawRoundRect(b1X, b1Y, b1W, b1H, 16, C_WHITE);
+    _spr.fillSmoothRoundRect(b1X, b1Y, b1W, b1H, 16, C_WHITE, bg);
+    _spr.fillSmoothRoundRect(b1X + 1, b1Y + 1, b1W - 2, b1H - 2, 15, RGB565(245, 155, 20), C_WHITE);
     _spr.setTextDatum(MC_DATUM);
     _spr.setTextColor(RGB565(20, 20, 20));
-    _spr.drawString((getLanguage() == LANG_VI ? "BAO LAI" : "SNOOZE"), b1X + b1W / 2, b1Y + 22, 2);
+    _spr.drawString((getLanguage() == LANG_VI ? "BÁO LẠI" : "SNOOZE"), b1X + b1W / 2, b1Y + 22, 2);
     _spr.setTextColor(RGB565(50, 40, 0));
-    _spr.drawString((getLanguage() == LANG_VI ? "+5 PHUT" : "+5 MINS"), b1X + b1W / 2, b1Y + 44, 2);
+    _spr.drawString((getLanguage() == LANG_VI ? "+5 PHÚT" : "+5 MINS"), b1X + b1W / 2, b1Y + 44, 2);
 
     // Nút Phải: TẮT CHUÔNG
     int16_t b2X = 166, b2Y = 160, b2W = 140, b2H = 64;
-    _spr.fillSmoothRoundRect(b2X, b2Y, b2W, b2H, 16, RGB565(225, 40, 55), bg);
-    _spr.drawRoundRect(b2X, b2Y, b2W, b2H, 16, C_WHITE);
+    _spr.fillSmoothRoundRect(b2X, b2Y, b2W, b2H, 16, C_WHITE, bg);
+    _spr.fillSmoothRoundRect(b2X + 1, b2Y + 1, b2W - 2, b2H - 2, 15, RGB565(225, 40, 55), C_WHITE);
     _spr.setTextDatum(MC_DATUM);
     _spr.setTextColor(C_WHITE);
-    _spr.drawString((getLanguage() == LANG_VI ? "TAT CHUONG" : "DISMISS"), b2X + b2W / 2, b2Y + 22, 2);
+    _spr.drawString((getLanguage() == LANG_VI ? "TẮT CHUÔNG" : "DISMISS"), b2X + b2W / 2, b2Y + 22, 2);
     _spr.setTextColor(RGB565(255, 200, 200));
-    _spr.drawString((getLanguage() == LANG_VI ? "DUNG HAN" : "STOP"), b2X + b2W / 2, b2Y + 44, 2);
+    _spr.drawString((getLanguage() == LANG_VI ? "DỪNG HẲN" : "STOP"), b2X + b2W / 2, b2Y + 44, 2);
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -1320,10 +1328,9 @@ void Display::drawWeatherIcon(int16_t cx, int16_t cy, uint8_t wType, bool isNigh
     switch (wType) {
         case WEATHER_CLEAR:
             if (isNight) {
-                // Night sky: artistic golden crescent moon + sparkling stars (diameter 30px)
-                _spr.fillCircle(cx - 3, cy - 2, 13, C_GOLD);
-                _spr.fillCircle(cx + 4, cy - 6, 13, theme.card); // clean crescent
-                drawSparkle(cx - 9, cy + 7, 2, C_WHITE);
+                // Night sky: crisp sub-pixel SDF golden crescent moon + sparkling stars
+                drawMoonIcon(cx, cy, 13, 4);
+                drawSparkle(cx - 10, cy + 7, 2, C_WHITE);
                 drawStarDot(cx + 11, cy - 7, C_CYAN_GLOW);
             } else {
                 drawSunIcon(cx, cy, 10);
@@ -1418,40 +1425,38 @@ void Display::drawForecastIcon(int16_t cx, int16_t cy, uint8_t wType) {
 }
 
 void Display::drawSunIcon(int16_t cx, int16_t cy, int16_t r) {
-    // 8 circular ray points around the sun (diameter ~30px)
+    // 8 anti-aliased glowing sun rays around the sun
     for (int a = 0; a < 360; a += 45) {
         float rad = a * PI / 180.0f;
-        int16_t rx = cx + (int16_t)(cos(rad) * (r + 5));
-        int16_t ry = cy + (int16_t)(sin(rad) * (r + 5));
-        _spr.drawPixel(rx, ry, C_SUN_YELLOW);
-        _spr.drawPixel(rx + (a % 90 == 0 ? 1 : 0), ry, RGB565(255, 245, 180));
+        float x1 = cx + cosf(rad) * (r + 3.0f);
+        float y1 = cy + sinf(rad) * (r + 3.0f);
+        float x2 = cx + cosf(rad) * (r + 5.5f);
+        float y2 = cy + sinf(rad) * (r + 5.5f);
+        _spr.drawWedgeLine(x1, y1, x2, y2, 1.1f, 0.7f, C_SUN_YELLOW);
     }
 
-    // 3D Sun body with warm radial depth
-    _spr.fillCircle(cx, cy, r + 2, C_SUN_ORANGE);
-    _spr.fillCircle(cx, cy, r, C_SUN_YELLOW);
-    _spr.fillCircle(cx - 2, cy - 2, r - 2, RGB565(255, 245, 160));
+    // 3D Sun body with smooth anti-aliased radial depth
+    _spr.fillSmoothCircle(cx, cy, r + 2, C_SUN_ORANGE);
+    _spr.fillSmoothCircle(cx, cy, r, C_SUN_YELLOW, C_SUN_ORANGE);
+    _spr.fillSmoothCircle(cx - 2, cy - 2, r - 2, RGB565(255, 245, 160), C_SUN_YELLOW);
     _spr.drawPixel(cx - 2, cy - 2, C_WHITE);
 }
 
 void Display::drawCloudIcon(int16_t cx, int16_t cy, int16_t w, int16_t h) {
-    // Volumetric 3D Fluffy Cloud with depth shading
+    // Volumetric 3D Fluffy Cloud with smooth anti-aliased shading
     int16_t baseR = h / 3;
 
     // Bottom soft shadow layer
-    _spr.fillRoundRect(cx - w / 2, cy - baseR + 2, w, baseR * 2 + 2, baseR, RGB565(150, 170, 195));
-    _spr.fillCircle(cx - w / 4, cy - baseR, baseR + 2, RGB565(160, 180, 205));
-    _spr.fillCircle(cx + 2, cy - baseR - 2, baseR + 4, RGB565(170, 190, 215));
-    _spr.fillCircle(cx + w / 4, cy - baseR + 1, baseR + 1, RGB565(160, 180, 205));
+    _spr.fillSmoothRoundRect(cx - w / 2, cy - baseR + 2, w, baseR * 2 + 2, baseR, RGB565(150, 170, 195));
+    _spr.fillSmoothCircle(cx - w / 4, cy - baseR, baseR + 2, RGB565(160, 180, 205));
+    _spr.fillSmoothCircle(cx + 2, cy - baseR - 2, baseR + 4, RGB565(170, 190, 215));
+    _spr.fillSmoothCircle(cx + w / 4, cy - baseR + 1, baseR + 1, RGB565(160, 180, 205));
 
     // Pure white cloud body
-    _spr.fillRoundRect(cx - w / 2, cy - baseR, w, baseR * 2, baseR, C_WHITE);
-    _spr.fillCircle(cx - w / 4, cy - baseR - 2, baseR + 2, C_WHITE);
-    _spr.fillCircle(cx + 2, cy - baseR - 4, baseR + 4, C_WHITE);
-    _spr.fillCircle(cx + w / 4, cy - baseR - 1, baseR + 1, C_WHITE);
-
-    // Specular top highlight
-    _spr.fillCircle(cx + 1, cy - baseR - 4, baseR - 1, RGB565(255, 255, 255));
+    _spr.fillSmoothRoundRect(cx - w / 2, cy - baseR, w, baseR * 2, baseR, C_WHITE);
+    _spr.fillSmoothCircle(cx - w / 4, cy - baseR - 2, baseR + 2, C_WHITE);
+    _spr.fillSmoothCircle(cx + 2, cy - baseR - 4, baseR + 4, C_WHITE);
+    _spr.fillSmoothCircle(cx + w / 4, cy - baseR - 1, baseR + 1, C_WHITE);
 }
 
 void Display::drawPartlyCloudyIcon(int16_t cx, int16_t cy) {
@@ -1462,13 +1467,13 @@ void Display::drawPartlyCloudyIcon(int16_t cx, int16_t cy) {
 
     for (int a = 0; a < 360; a += 45) {
         float rad = a * PI / 180.0f;
-        int16_t rx = sx + (int16_t)(cos(rad) * (sr + 4));
-        int16_t ry = sy + (int16_t)(sin(rad) * (sr + 4));
+        int16_t rx = sx + (int16_t)(cosf(rad) * (sr + 4));
+        int16_t ry = sy + (int16_t)(sinf(rad) * (sr + 4));
         _spr.drawPixel(rx, ry, C_SUN_YELLOW);
     }
-    _spr.fillCircle(sx, sy, sr + 1, C_SUN_ORANGE);
-    _spr.fillCircle(sx, sy, sr, C_SUN_YELLOW);
-    _spr.fillCircle(sx - 1, sy - 1, sr - 2, RGB565(255, 245, 170));
+    _spr.fillSmoothCircle(sx, sy, sr + 1, C_SUN_ORANGE);
+    _spr.fillSmoothCircle(sx, sy, sr, C_SUN_YELLOW, C_SUN_ORANGE);
+    _spr.fillSmoothCircle(sx - 1, sy - 1, sr - 2, RGB565(255, 245, 170), C_SUN_YELLOW);
 
     // 2. 3D Fluffy Cloud in foreground (w = 26, h = 14)
     int16_t clx = cx + 3;
@@ -1478,98 +1483,184 @@ void Display::drawPartlyCloudyIcon(int16_t cx, int16_t cy) {
 
 void Display::drawRainIcon(int16_t cx, int16_t cy) {
     drawCloudIcon(cx, cy - 4, 26, 14);
-    // Rain drops
+    // Smooth anti-aliased rain drops
     for (int i = 0; i < 4; i++) {
-        int16_t dx = cx - 7 + i * 5;
-        int16_t dy = cy + 7 + (i & 1) * 2;
-        _spr.drawLine(dx, dy, dx - 1, dy + 5, C_RAIN_BLUE);
+        float dx = cx - 7 + i * 5;
+        float dy = cy + 7 + (i & 1) * 2;
+        _spr.drawWedgeLine(dx, dy, dx - 1.5f, dy + 5.0f, 0.9f, 0.9f, C_RAIN_BLUE);
     }
 }
 
 void Display::drawStormIcon(int16_t cx, int16_t cy) {
     drawCloudIcon(cx, cy - 4, 26, 14);
-    // Lightning bolt
-    _spr.drawLine(cx,     cy + 4, cx - 2, cy + 9, C_GOLD);
-    _spr.drawLine(cx - 2, cy + 9, cx + 1, cy + 9, C_GOLD);
-    _spr.drawLine(cx + 1, cy + 9, cx - 1, cy + 15, C_GOLD);
+    // Smooth anti-aliased lightning bolt
+    _spr.drawWedgeLine(cx,     cy + 4, cx - 2, cy + 9,  1.1f, 1.0f, C_GOLD);
+    _spr.drawWedgeLine(cx - 2, cy + 9, cx + 1, cy + 9,  1.0f, 1.0f, C_GOLD);
+    _spr.drawWedgeLine(cx + 1, cy + 9, cx - 1, cy + 15, 1.0f, 0.7f, C_GOLD);
 }
 
 void Display::drawMoonIcon(int16_t cx, int16_t cy, int16_t r, uint8_t lunarDay, uint16_t bgTint) {
-    if (bgTint == 0) bgTint = theme.card;
+    (void)bgTint;
+    if (r <= 0) return;
 
-    // Palette: Luminous moon gold & pearlescent highlights
-    uint16_t moonGold = RGB565(255, 230, 140);      // Warm celestial gold
-    uint16_t moonHighlight = RGB565(255, 248, 210); // Luminous inner glow
-    uint16_t craterColor = RGB565(225, 200, 120);   // Soft crater shading
+    // Palette: Luminous celestial moon gold, pearlescent rim highlight, and soft mare craters
+    uint16_t moonGold      = RGB565(255, 226, 128);
+    uint16_t moonHighlight = RGB565(255, 248, 212);
+    uint16_t craterColor   = RGB565(222, 194, 108);
+    uint16_t earthshineCol = RGB565(42, 60, 92);
 
-    if (lunarDay <= 1) {
-        // Trăng non (New Moon): Celestial outline with tiny star
-        _spr.drawCircle(cx, cy, r, RGB565(70, 90, 120));
-        _spr.drawCircle(cx, cy, r - 1, RGB565(40, 50, 75));
-        drawSparkle(cx, cy, 2, C_WHITE);
+    // 1. Trăng non (New Moon: Day 1 or Day 30)
+    if (lunarDay <= 1 || lunarDay >= 30) {
+        float R = (float)r;
+        for (int16_t dy = -r - 1; dy <= r + 1; dy++) {
+            int16_t py = cy + dy;
+            if (py < 0 || py >= SCREEN_H) continue;
+            for (int16_t dx = -r - 1; dx <= r + 1; dx++) {
+                int16_t px = cx + dx;
+                if (px < 0 || px >= SCREEN_W) continue;
+                float d = sqrtf((float)(dx * dx + dy * dy));
+                if (d >= R + 0.65f) continue;
+                uint16_t bg = _spr.readPixel(px, py);
+                if (d <= R - 1.15f) {
+                    _spr.drawPixel(px, py, _spr.alphaBlend(55, earthshineCol, bg));
+                } else {
+                    float aRing = (d <= R) ? 1.0f : (R + 0.65f - d) / 0.65f;
+                    uint8_t a = (uint8_t)(aRing * 180.0f);
+                    _spr.drawPixel(px, py, _spr.alphaBlend(a, RGB565(100, 140, 190), bg));
+                }
+            }
+        }
+        drawSparkle(cx + r / 3, cy - r / 3, 2, C_WHITE);
         return;
     }
 
+    // 2. Trăng tròn / Rằm (Full Moon: Day 14..16)
     if (lunarDay >= 14 && lunarDay <= 16) {
-        // Trăng tròn / Rằm (Full Moon): Centered exactly at geometric cy
-        _spr.fillCircle(cx, cy, r, moonGold);
-        _spr.fillCircle(cx - r / 4, cy - r / 4, r * 2 / 3, moonHighlight);
-        _spr.fillCircle(cx - r / 3, cy - r / 5, r / 5, craterColor);
-        _spr.fillCircle(cx + r / 4, cy + r / 3, r / 6, craterColor);
-        _spr.fillCircle(cx + r / 3, cy - r / 3, r / 7, craterColor);
-        _spr.fillCircle(cx - r / 5, cy + r / 3, r / 7, craterColor);
-        _spr.drawCircle(cx, cy, r + 1, RGB565(255, 242, 190));
+        _spr.fillSmoothCircle(cx, cy, r, moonGold);
+        _spr.fillSmoothCircle(cx - r / 5, cy - r / 5, (r * 3) / 4, moonHighlight);
+        _spr.fillSmoothCircle(cx - r / 3, cy - r / 5, fmax(2, r / 5), craterColor);
+        _spr.fillSmoothCircle(cx + r / 4, cy + r / 3, fmax(2, r / 6), craterColor);
+        _spr.fillSmoothCircle(cx + r / 3, cy - r / 4, fmax(1, r / 7), craterColor);
         return;
     }
 
     bool isWaxing = (lunarDay < 15);
+    float R = (float)r;
 
+    // 3. Trăng lưỡi liềm (Crescent Moon: Day 2..6 Waxing, Day 24..29 Waning)
+    //    Single-pass 2-circle SDF subtraction — never paints bgTint over Glass Card!
     if ((isWaxing && lunarDay <= 6) || (!isWaxing && lunarDay >= 24)) {
-        // ── CRESCENT MOON (Trăng lưỡi liềm nghệ thuật: 2 góc nhọn chếch vút lên trên) ──
-        // CÂN CHỈNH QUANG HỌC (Optical Centering):
-        // Nâng trục vẽ lên (r * 2 / 10) để trọng tâm thị giác của phần trăng phát sáng
-        // nằm ngay chính giữa 2 đường kẻ, sừng trên vút ngang số ngày AL, đáy trăng không bị chìm
-        int16_t optCy = cy - (r * 2 / 10);
+        float t = isWaxing ? ((float)(lunarDay - 2) / 4.0f) : ((float)(29 - lunarDay) / 5.0f);
+        float shift = R * (0.42f + t * 0.28f);
+        float sx = isWaxing ? (-shift * 0.88f) : (shift * 0.88f);
+        float sy = -shift * 0.42f;
+        float Rs = R * 0.92f;
 
-        // 1. Draw radiant moon body
-        _spr.fillCircle(cx, optCy, r, moonGold);
-        _spr.fillCircle(cx, optCy, r - 1, moonHighlight);
+        for (int16_t dy = -r - 1; dy <= r + 1; dy++) {
+            int16_t py = cy + dy;
+            if (py < 0 || py >= SCREEN_H) continue;
+            for (int16_t dx = -r - 1; dx <= r + 1; dx++) {
+                int16_t px = cx + dx;
+                if (px < 0 || px >= SCREEN_W) continue;
 
-        // 2. Cutout shadow circle shifted UPWARDS (dy < 0) and slightly sideways
-        int16_t dy = -r * 4 / 10;
-        int16_t dx = 0;
+                float dOut = sqrtf((float)(dx * dx + dy * dy));
+                if (dOut >= R + 0.65f) continue;
 
-        if (isWaxing) {
-            // Waxing (Mùng 2..6): crescent cradled on bottom-right, horns point up
-            dx = map(lunarDay, 2, 6, -r * 2 / 10, -r * 6 / 10);
-        } else {
-            // Waning (24..29): crescent cradled on bottom-left, horns point up
-            dx = map(lunarDay, 24, 29, r * 6 / 10, r * 2 / 10);
+                float aOut = (dOut <= R - 0.35f) ? 1.0f : ((R + 0.65f - dOut));
+                float cdx = (float)dx - sx;
+                float cdy = (float)dy - sy;
+                float dCut = sqrtf(cdx * cdx + cdy * cdy);
+                float aCut = (dCut <= Rs - 0.55f) ? 0.0f : ((dCut >= Rs + 0.45f) ? 1.0f : (dCut - (Rs - 0.55f)));
+
+                float aLit = aOut * aCut;
+                if (aLit <= 0.02f) continue;
+
+                // Subtle 3D rim glow along outer arc
+                uint16_t col = (dOut >= R - 2.2f) ? moonHighlight : moonGold;
+                uint8_t alpha = (uint8_t)(aLit * 255.0f);
+                uint16_t bg = _spr.readPixel(px, py);
+                _spr.drawPixel(px, py, (alpha == 255) ? col : _spr.alphaBlend(alpha, col, bg));
+            }
         }
 
-        _spr.fillCircle(cx + dx, optCy + dy, r, bgTint);
+        // Delicate sparkle star nestled inside the crescent curve
+        int16_t starX = isWaxing ? (cx - r * 3 / 10) : (cx + r * 3 / 10);
+        int16_t starY = cy - r * 3 / 10;
+        drawSparkle(starX, starY, 1, C_WHITE);
+        return;
+    }
 
-        // 3. Delicate celestial sparkle star near the upper horn
-        if (isWaxing) {
-            drawSparkle(cx - r * 4 / 10, optCy - r * 4 / 10, 1, C_WHITE);
+    // 4. Bán nguyệt & Trăng khuyết lồi (Quarter & Gibbous: Day 7..13 Waxing, Day 17..23 Waning)
+    //    True 3D Spherical Elliptical Terminator SDF (Gibbous is convex, never concave/warped!)
+    float k = 0.0f;
+    if (isWaxing) {
+        // Day 7 -> +0.10, Day 8 -> 0.00 (Half Moon), Day 9..13 -> -0.16..-0.76 (Convex Gibbous)
+        if (lunarDay <= 8) {
+            k = (float)(8 - lunarDay) * 0.10f;
         } else {
-            drawSparkle(cx + r * 4 / 10, optCy - r * 4 / 10, 1, C_WHITE);
+            k = -0.16f - (float)(lunarDay - 9) * 0.15f;
         }
     } else {
-        // ── QUARTER / GIBBOUS (Bán nguyệt & Trăng trương dần) ──
-        int16_t optCy = cy - (r * 1 / 10);
-        _spr.fillCircle(cx, optCy, r, moonGold);
-        _spr.fillCircle(cx - r / 3, optCy - r / 4, r / 5, craterColor);
-        _spr.fillCircle(cx + r / 4, optCy + r / 3, r / 6, craterColor);
-
-        int16_t dy = -r * 2 / 10;
-        int16_t offset = 0;
-        if (isWaxing) {
-            offset = map(lunarDay, 7, 13, -r * 7 / 10, -r * 13 / 10);
+        // Day 17..21 -> +0.76..+0.16 (Convex Gibbous), Day 22 -> 0.00 (Half Moon), Day 23 -> -0.10
+        if (lunarDay <= 21) {
+            k = 0.76f - (float)(lunarDay - 17) * 0.15f;
         } else {
-            offset = map(lunarDay, 17, 23, r * 13 / 10, r * 7 / 10);
+            k = -(float)(lunarDay - 22) * 0.10f;
         }
-        _spr.fillCircle(cx + offset, optCy + dy, r, bgTint);
+    }
+
+    // Subtle 14-degree celestial axis tilt
+    const float cosTilt = 0.970f;
+    const float sinTilt = 0.242f;
+
+    // Crater centers for subtle surface texture inside lit region
+    float cr1X = isWaxing ? (R * 0.32f) : (-R * 0.32f);
+    float cr1Y = -R * 0.22f;
+    float cr1R = fmaxf(1.8f, R * 0.20f);
+
+    float cr2X = isWaxing ? (R * 0.24f) : (-R * 0.24f);
+    float cr2Y = R * 0.30f;
+    float cr2R = fmaxf(1.5f, R * 0.16f);
+
+    for (int16_t dy = -r - 1; dy <= r + 1; dy++) {
+        int16_t py = cy + dy;
+        if (py < 0 || py >= SCREEN_H) continue;
+        for (int16_t dx = -r - 1; dx <= r + 1; dx++) {
+            int16_t px = cx + dx;
+            if (px < 0 || px >= SCREEN_W) continue;
+
+            float fdx = (float)dx;
+            float fdy = (float)dy;
+            float dOut = sqrtf(fdx * fdx + fdy * fdy);
+            if (dOut >= R + 0.65f) continue;
+
+            float aOut = (dOut <= R - 0.35f) ? 1.0f : (R + 0.65f - dOut);
+
+            // Rotate into tilted moon coordinates
+            float rx =  fdx * cosTilt + fdy * sinTilt;
+            float ry = -fdx * sinTilt + fdy * cosTilt;
+
+            float chordSq = R * R - ry * ry;
+            float wy = (chordSq > 0.0f) ? sqrtf(chordSq) : 0.0f;
+            float xTerm = k * wy;
+
+            float signedDist = isWaxing ? (rx - xTerm) : (xTerm - rx);
+            float aTerm = (signedDist <= -0.55f) ? 0.0f : ((signedDist >= 0.55f) ? 1.0f : ((signedDist + 0.55f) / 1.10f));
+
+            float aLit = aOut * aTerm;
+            if (aLit <= 0.02f) continue;
+
+            uint16_t col = (dOut >= R - 2.0f) ? moonHighlight : moonGold;
+            float dCr1 = sqrtf((fdx - cr1X) * (fdx - cr1X) + (fdy - cr1Y) * (fdy - cr1Y));
+            float dCr2 = sqrtf((fdx - cr2X) * (fdx - cr2X) + (fdy - cr2Y) * (fdy - cr2Y));
+            if (dCr1 <= cr1R || dCr2 <= cr2R) {
+                col = craterColor;
+            }
+
+            uint8_t alpha = (uint8_t)(aLit * 255.0f);
+            uint16_t bg = _spr.readPixel(px, py);
+            _spr.drawPixel(px, py, (alpha == 255) ? col : _spr.alphaBlend(alpha, col, bg));
+        }
     }
 }
 
@@ -1577,53 +1668,78 @@ void Display::drawMoonIcon(int16_t cx, int16_t cy, int16_t r, uint8_t lunarDay, 
 //  GLASS CARD — frosted translucent panel with 50% alpha blending
 // ═══════════════════════════════════════════════════════════════════════
 void Display::drawGlassCard(int16_t x, int16_t y, int16_t w, int16_t h, int16_t radius) {
-    if (_spr.getColorDepth() == 16) {
-        uint16_t* fb = (uint16_t*)_spr.getPointer();
-        if (fb) {
-            uint16_t tint = theme.card;
-            int16_t x2 = x + w;
-            int16_t y2 = y + h;
-            int32_t r2 = (int32_t)radius * radius;
+    if (w <= 0 || h <= 0) return;
+    int16_t maxR = (w < h ? w : h) / 2;
+    if (radius > maxR) radius = maxR;
+    if (radius < 1) radius = 1;
 
-            for (int16_t j = y; j < y2; j++) {
-                if (j < 0 || j >= SCREEN_H) continue;
-                int32_t rowIdx = (int32_t)j * SCREEN_W;
-                for (int16_t i = x; i < x2; i++) {
-                    if (i < 0 || i >= SCREEN_W) continue;
+    uint16_t tint      = theme.card;
+    uint16_t borderCol = theme.cardBorder;
 
-                    // Rounded corner clipping
-                    if (i < x + radius && j < y + radius) {
-                        int16_t dx = (x + radius) - i;
-                        int16_t dy = (y + radius) - j;
-                        if ((int32_t)dx * dx + (int32_t)dy * dy > r2) continue;
-                    } else if (i >= x2 - radius && j < y + radius) {
-                        int16_t dx = i - (x2 - radius - 1);
-                        int16_t dy = (y + radius) - j;
-                        if ((int32_t)dx * dx + (int32_t)dy * dy > r2) continue;
-                    } else if (i < x + radius && j >= y2 - radius) {
-                        int16_t dx = (x + radius) - i;
-                        int16_t dy = j - (y2 - radius - 1);
-                        if ((int32_t)dx * dx + (int32_t)dy * dy > r2) continue;
-                    } else if (i >= x2 - radius && j >= y2 - radius) {
-                        int16_t dx = i - (x2 - radius - 1);
-                        int16_t dy = j - (y2 - radius - 1);
-                        if ((int32_t)dx * dx + (int32_t)dy * dy > r2) continue;
-                    }
+    int16_t cxL = x + radius;
+    int16_t cxR = x + w - 1 - radius;
+    int16_t cyT = y + radius;
+    int16_t cyB = y + h - 1 - radius;
 
-                    // 50% Alpha Blend: background pixel + glass tint
-                    uint16_t bgP = fb[rowIdx + i];
-                    fb[rowIdx + i] = ((bgP & 0xF7DE) >> 1) + ((tint & 0xF7DE) >> 1);
-                }
+    float rInnerEnd   = (float)radius - 1.15f;
+    float rInnerSolid = (float)radius - 0.25f;
+    float rOuterSolid = (float)radius + 0.25f;
+    float rOuterEnd   = (float)radius + 1.15f;
+
+    int16_t x2 = x + w;
+    int16_t y2 = y + h;
+
+    for (int16_t py = y; py < y2; py++) {
+        if (py < 0 || py >= SCREEN_H) continue;
+        int16_t dy = 0;
+        if (py < cyT) dy = cyT - py;
+        else if (py > cyB) dy = py - cyB;
+
+        for (int16_t px = x; px < x2; px++) {
+            if (px < 0 || px >= SCREEN_W) continue;
+            int16_t dx = 0;
+            if (px < cxL) dx = cxL - px;
+            else if (px > cxR) dx = px - cxR;
+
+            if (dx == 0 && dy == 0) {
+                uint16_t bg = _spr.readPixel(px, py);
+                _spr.drawPixel(px, py, _spr.alphaBlend(128, tint, bg));
+                continue;
             }
-        } else {
-            _spr.fillRoundRect(x, y, w, h, radius, theme.card);
-        }
-    } else {
-        _spr.fillRoundRect(x, y, w, h, radius, theme.card);
-    }
 
-    // Clean, elegant frosted glowing glass border (no harsh top specular line)
-    _spr.drawRoundRect(x, y, w, h, radius, theme.cardBorder);
+            if (dx == 0 || dy == 0) {
+                int16_t dist = (dx > dy) ? dx : dy;
+                if (dist == radius) {
+                    _spr.drawPixel(px, py, borderCol);
+                } else if (dist < radius) {
+                    uint16_t bg = _spr.readPixel(px, py);
+                    _spr.drawPixel(px, py, _spr.alphaBlend(128, tint, bg));
+                }
+                continue;
+            }
+
+            // Corner quadrant: single-pass sub-pixel SDF (interior -> border -> background)
+            float d = sqrtf((float)(dx * dx + dy * dy));
+            if (d >= rOuterEnd) {
+                continue; // Outside corner — preserve background pixel untouched
+            }
+
+            uint16_t bg = _spr.readPixel(px, py);
+            uint16_t glassFill = _spr.alphaBlend(128, tint, bg);
+
+            if (d <= rInnerEnd) {
+                _spr.drawPixel(px, py, glassFill);
+            } else if (d < rInnerSolid) {
+                uint8_t a = (uint8_t)(((d - rInnerEnd) / (rInnerSolid - rInnerEnd)) * 255.0f);
+                _spr.drawPixel(px, py, _spr.alphaBlend(a, borderCol, glassFill));
+            } else if (d <= rOuterSolid) {
+                _spr.drawPixel(px, py, borderCol);
+            } else {
+                uint8_t a = (uint8_t)(((rOuterEnd - d) / (rOuterEnd - rOuterSolid)) * 255.0f);
+                _spr.drawPixel(px, py, _spr.alphaBlend(a, borderCol, bg));
+            }
+        }
+    }
 }
 
 void Display::drawGlassCardAccent(int16_t x, int16_t y, int16_t w, int16_t h,
@@ -1776,6 +1892,17 @@ bool Display::handleTouch(uint16_t x, uint16_t y) {
             return true;
         }
 
+        // A2. Chạm vào biểu tượng Chuông ở góc trên trái của Popup (x <= 65 && y <= 48) -> Bật / Tắt nhanh báo thức
+        if (x <= 65 && y <= 48) {
+            _alarmEnabled = !_alarmEnabled;
+            _alarmLastTriggerDay = -1;
+            _alarmLastTriggerMin = -1;
+            hardware.playClick();
+            renderAlarmToggleBtnOnly();
+            saveAlarmSettings();
+            return true;
+        }
+
         // B. Nút BẬT/TẮT Báo thức ở đáy: (x >= 40 && x <= 280 && y >= 175 && y <= 230)
         if (x >= 40 && x <= 280 && y >= 175 && y <= 230) {
             _alarmEnabled = !_alarmEnabled;
@@ -1910,11 +2037,24 @@ bool Display::handleTouch(uint16_t x, uint16_t y) {
             _dockVisible = false;
             return true;
         } else {
-            // Nhấn ra phía trên thanh Dock (Y < 178) -> CHỈ ẩn thanh Dock (tuyệt đối KHÔNG kích hoạt nút chức năng bên dưới!)
+            // Nhấn ra phía trên thanh Dock (Y < 178):
+            // • Ngoại lệ thông minh cho các thanh điều khiển trên đỉnh màn hình (Chuông/Đồng hồ Y<=92,
+            //   Gáy lịch Y<=50, Tab Pomodoro Y<=40, Nút đổi bộ Meme góc trên phải, Thanh Độ sáng Y<=55):
+            //   vừa tự ẩn Dock vừa thực thi ngay lệnh để không bắt người dùng bấm 2 lần.
+            // • Còn nếu chạm vào thân trang (thẻ Tài chính, giữa hình Meme, lưới Lịch, thẻ Thời tiết):
+            //   chỉ đóng thanh Dock an toàn mà không mở nhầm Popup hay đổi nhầm trạng thái!
             _dockVisible = false;
             _lastRender = 0;
-            hardware.playTouchSound();
-            return true;
+            bool isTopHeaderControl =
+                (_currentPage == PAGE_CLOCK    && y <= 92 && x >= 65) ||
+                (_currentPage == PAGE_CALENDAR && y <= 50) ||
+                (_currentPage == PAGE_POMODORO && y <= 40) ||
+                (_currentPage == PAGE_MOOD     && x >= 265 && y <= 46) ||
+                (_currentPage == PAGE_SETTINGS && y <= 55);
+            if (!isTopHeaderControl) {
+                hardware.playTouchSound();
+                return true;
+            }
         }
     }
 
@@ -1940,32 +2080,35 @@ bool Display::handleTouch(uint16_t x, uint16_t y) {
 
     // 5. If on Clock page (PAGE_CLOCK):
     if (_currentPage == PAGE_CLOCK) {
-        // 5a. Chạm vào BIỂU TƯỢNG CHUÔNG (X: 245..315, Y: 15..70) -> Bật / Tắt nhanh chuông báo
-        if (x >= 245 && x <= 315 && y >= 15 && y <= 70) {
+        // 5a. Chạm vào BIỂU TƯỢNG CHUÔNG (Mở rộng toàn góc trên-phải X: 230..319, Y: 0..92 sát cả mép viền) -> Bật / Tắt nhanh chuông báo
+        if (x >= 230 && y <= 92) {
             hardware.playClick();
             if (!_alarmEnabled) {
                 // Đang TẮT -> BẬT lên và hiện popup báo giờ báo thức trong 3s để user biết
                 _alarmEnabled = true;
-                saveAlarmSettings();
                 _alarmAutoCloseTime = millis() + 3000;
                 _activePopup = POPUP_ALARM;
                 renderPage0_WeatherClock();
                 renderAlarmPopup();
                 _spr.pushSprite(0, 0);
+                saveAlarmSettings();
                 return true;
             } else {
-                // Đang BẬT -> TẮT đi ngay lập tức
+                // Đang BẬT -> TẮT đi ngay lập tức (vẽ lại tức thì trước khi lưu NVS)
                 _alarmEnabled = false;
-                saveAlarmSettings();
                 _alarmAutoCloseTime = 0;
                 _activePopup = POPUP_NONE;
+                renderPage0_WeatherClock();
+                renderDock();
+                _spr.pushSprite(0, 0);
+                saveAlarmSettings();
                 _lastRender = 0;
                 return true;
             }
         }
 
-        // 5b. Chạm vào VÙNG GIỮA ĐỒNG HỒ (Quanh dấu : giữa giờ và phút, X: 115..205, Y: 15..95) -> Mở Cài Đặt Giờ
-        if (x >= 115 && x <= 205 && y >= 15 && y <= 95) {
+        // 5b. Chạm vào VÙNG GIỮA ĐỒNG HỒ (X: 65..229, Y: 5..95) -> Mở Cài Đặt Giờ Báo Thức
+        if (x >= 65 && x < 230 && y >= 5 && y <= 95) {
             hardware.playClick();
             loadAlarmSettings();
             _alarmAutoCloseTime = 0; // Mở thủ công thì không tự đóng sau 3s
@@ -1976,14 +2119,14 @@ bool Display::handleTouch(uint16_t x, uint16_t y) {
             return true;
         }
 
-        // 5b. Chạm vào 2 Thẻ Kính Thời Tiết & Âm Lịch (Y: 126..194)
-        if (y >= 126 && y <= 194) {
-            if (x >= 10 && x <= 156) {
+        // 5c. Chạm vào 2 Thẻ Kính Thời Tiết & Âm Lịch (Thẻ vẽ ở Y: 129..211, nhận cảm ứng Y: 126..207 để cách ly sạch với viên thuốc Dock Y >= 208)
+        if (y >= 126 && y <= 207) {
+            if (x >= 8 && x <= 156) {
                 _activePopup = POPUP_WEATHER;
                 hardware.playClick();
                 _lastRender = 0;
                 return true;
-            } else if (x >= 164 && x <= 310) {
+            } else if (x >= 164 && x <= 312) {
                 _activePopup = POPUP_LUNAR;
                 hardware.playClick();
                 _lastRender = 0;
@@ -1994,19 +2137,19 @@ bool Display::handleTouch(uint16_t x, uint16_t y) {
 
     // 5. If on Pomodoro page (PAGE_POMODORO), interactive controls
     if (_currentPage == PAGE_POMODORO) {
-        // A. Top Mode Capsule Tabs (Y: 6..32)
-        if (y >= 6 && y <= 32) {
-            if (x >= 40 && x <= 120) {
+        // A. Top Mode Capsule Tabs (Mở rộng Y: 0..40 sát mép trên để bấm không bao giờ trượt)
+        if (y <= 40) {
+            if (x >= 35 && x <= 122) {
                 pomoSetMode(POMO_FOCUS);
                 hardware.playClick();
                 _lastRender = 0;
                 return true;
-            } else if (x > 120 && x <= 200) {
+            } else if (x > 122 && x <= 198) {
                 pomoSetMode(POMO_SHORT_BREAK);
                 hardware.playClick();
                 _lastRender = 0;
                 return true;
-            } else if (x > 200 && x <= 280) {
+            } else if (x > 198 && x <= 285) {
                 pomoSetMode(POMO_LONG_BREAK);
                 hardware.playClick();
                 _lastRender = 0;
@@ -2022,8 +2165,8 @@ bool Display::handleTouch(uint16_t x, uint16_t y) {
             return true;
         }
 
-        // B2. Chạm vào Vòng tròn bên ngoài (X: 15..156, Y: 45..194) -> Đổi Chạy / Tạm dừng
-        if (x >= 15 && x <= 156 && y >= 45 && y <= 194) {
+        // B2. Chạm vào Vòng tròn bên ngoài (X: 15..155, Y: 45..204) -> Đổi Chạy / Tạm dừng
+        if (x >= 15 && x <= 155 && y >= 45 && y <= 204) {
             if (_pomoState == POMO_RUNNING) {
                 pomoPause();
             } else {
@@ -2034,9 +2177,9 @@ bool Display::handleTouch(uint16_t x, uint16_t y) {
             return true;
         }
 
-        // C. Cụm nút điều khiển bên phải (X: 156..315, Y: 148..194)
-        // Kết thúc tại Y=194, cách ly 100% với vùng mở Dock (Y >= 196)
-        if (x >= 156 && x <= 315 && y >= 148 && y <= 194) {
+        // C. Cụm nút điều khiển bên phải (X: 156..315, Y: 146..204)
+        // Kết thúc tại Y=204, cách ly hoàn toàn với vùng mở Dock (Y >= 208)
+        if (x >= 156 && x <= 315 && y >= 146 && y <= 204) {
             if (_pomoState == POMO_STOPPED) {
                 pomoStart();
                 hardware.playClick();
@@ -2071,15 +2214,17 @@ bool Display::handleTouch(uint16_t x, uint16_t y) {
     }
 
     // 6. If on Finance page (PAGE_FINANCE):
+    //    Hai thẻ Vàng & Tỷ giá trải dài tới Y=232 (dòng chữ "CHẠM XEM CHI TIẾT >" nằm ở Y=215).
+    //    Dành riêng vùng viên thuốc giữa đáy (X: 105..215, Y >= 208) để mở Dock, còn lại toàn bộ mặt thẻ (kể cả dòng chữ Y=215 ở 2 bên) đều mở Popup nhạy bén!
     if (_currentPage == PAGE_FINANCE) {
-        if (y < 210) {
+        if (!(y >= 208 && x >= 105 && x <= 215)) {
             if (x <= 158) {
                 // Chạm Cột trái -> Mở Popup Vàng SJC & Thế Giới
                 _activePopup = POPUP_FINANCE_GOLD;
                 hardware.playClick();
                 _lastRender = 0;
                 return true;
-            } else {
+            } else if (x >= 162) {
                 // Chạm Cột phải -> Mở Popup Tỷ Giá Ngoại Tệ
                 _activePopup = POPUP_FINANCE_CURRENCY;
                 _currencyTab = 0;
@@ -2123,15 +2268,15 @@ void Display::renderCalibrationScreen() {
     _spr.fillSprite(TFT_BLACK);
     _spr.setTextColor(TFT_WHITE, TFT_BLACK);
     _spr.setTextDatum(TC_DATUM);
-    _spr.drawString((getLanguage() == LANG_VI ? "HIEU CHUAN CAM UNG (TOUCH)" : "TOUCH CALIBRATION"), 160, 10, 2);
+    _spr.drawString((getLanguage() == LANG_VI ? "HIỆU CHUẨN CẢM ỨNG (TOUCH)" : "TOUCH CALIBRATION"), 160, 10, 2);
 
     CalibState state = touch.getCalibState();
     if (state == CALIB_DONE) {
         _spr.setTextColor(TFT_GREEN, TFT_BLACK);
         _spr.setTextDatum(MC_DATUM);
-        _spr.drawString((getLanguage() == LANG_VI ? "HIEU CHUAN THANH CONG!" : "CALIBRATION SUCCESSFUL!"), 160, 100, 4);
+        _spr.drawString((getLanguage() == LANG_VI ? "HIỆU CHUẨN THÀNH CÔNG!" : "CALIBRATION SUCCESSFUL!"), 160, 100, 4);
         _spr.setTextColor(TFT_WHITE, TFT_BLACK);
-        _spr.drawString((getLanguage() == LANG_VI ? "Dang luu vao NVS Flash..." : "Saving to NVS Flash..."), 160, 135, 2);
+        _spr.drawString((getLanguage() == LANG_VI ? "Đang lưu vào bộ nhớ Flash..." : "Saving to NVS Flash..."), 160, 135, 2);
         return;
     }
 
@@ -2142,18 +2287,18 @@ void Display::renderCalibrationScreen() {
     switch (state) {
         case CALIB_WAIT_TL:
             tx = CALIB_TL_X; ty = CALIB_TL_Y;
-            hint = (getLanguage() == LANG_VI ? "Cham tam do GOC TREN - TRAI" : "Tap target TOP - LEFT");
-            step = (getLanguage() == LANG_VI ? "Buoc 1/3" : "Step 1/3");
+            hint = (getLanguage() == LANG_VI ? "Chạm tâm đỏ GÓC TRÊN - TRÁI" : "Tap target TOP - LEFT");
+            step = (getLanguage() == LANG_VI ? "Bước 1/3" : "Step 1/3");
             break;
         case CALIB_WAIT_TR:
             tx = CALIB_TR_X; ty = CALIB_TR_Y;
-            hint = (getLanguage() == LANG_VI ? "Cham tam do GOC TREN - PHAI" : "Tap target TOP - RIGHT");
-            step = (getLanguage() == LANG_VI ? "Buoc 2/3" : "Step 2/3");
+            hint = (getLanguage() == LANG_VI ? "Chạm tâm đỏ GÓC TRÊN - PHẢI" : "Tap target TOP - RIGHT");
+            step = (getLanguage() == LANG_VI ? "Bước 2/3" : "Step 2/3");
             break;
         case CALIB_WAIT_BL:
             tx = CALIB_BL_X; ty = CALIB_BL_Y;
-            hint = (getLanguage() == LANG_VI ? "Cham tam do GOC DUOI - TRAI" : "Tap target BOTTOM - LEFT");
-            step = (getLanguage() == LANG_VI ? "Buoc 3/3" : "Step 3/3");
+            hint = (getLanguage() == LANG_VI ? "Chạm tâm đỏ GÓC DƯỚI - TRÁI" : "Tap target BOTTOM - LEFT");
+            step = (getLanguage() == LANG_VI ? "Bước 3/3" : "Step 3/3");
             break;
         default:
             break;
@@ -2183,7 +2328,7 @@ void Display::renderWiFiSetupScreen(const char* qrText, int remainingSec) {
     _spr.drawFastHLine(0, 34, 320, RGB565(0, 229, 255));
 
     // Glowing Radar status dot on left
-    _spr.fillCircle(18, 17, 5, RGB565(0, 229, 255));
+    _spr.fillSmoothCircle(18, 17, 5, RGB565(0, 229, 255), RGB565(12, 18, 30));
     _spr.drawCircle(18, 17, 8, RGB565(0, 100, 140));
 
     _spr.setTextDatum(ML_DATUM);
@@ -2191,11 +2336,11 @@ void Display::renderWiFiSetupScreen(const char* qrText, int remainingSec) {
     _spr.drawString("CYD SMARTDESK", 34, 17, 2);
 
     // Modern Capsule Badge on top right
-    _spr.fillRoundRect(194, 6, 114, 22, 11, RGB565(18, 30, 48));
-    _spr.drawRoundRect(194, 6, 114, 22, 11, RGB565(0, 229, 255));
+    _spr.fillSmoothRoundRect(194, 6, 114, 22, 11, RGB565(0, 229, 255), RGB565(12, 18, 30));
+    _spr.fillSmoothRoundRect(195, 7, 112, 20, 10, RGB565(18, 30, 48), RGB565(0, 229, 255));
     _spr.setTextDatum(MC_DATUM);
     _spr.setTextColor(RGB565(0, 229, 255), RGB565(18, 30, 48));
-    _spr.drawString((getLanguage() == LANG_EN) ? "WIFI SETUP" : "CAI DAT WIFI", 251, 17, 2);
+    _spr.drawString((getLanguage() == LANG_EN) ? "WIFI SETUP" : "CÀI ĐẶT WIFI", 251, 17, 2);
 
     // 3. Left Hero: Premium Optical QR Showcase Tile (High contrast, 116px enlarged)
     // Card dimensions: X=14, Y=44, W=126, H=126, R=10
@@ -2205,8 +2350,8 @@ void Display::renderWiFiSetupScreen(const char* qrText, int remainingSec) {
     int16_t cardH = 126;
 
     // Outer soft cyan accent border
-    _spr.drawRoundRect(cardX - 1, cardY - 1, cardW + 2, cardH + 2, 11, RGB565(0, 180, 230));
-    _spr.fillRoundRect(cardX, cardY, cardW, cardH, 10, TFT_WHITE);
+    _spr.fillSmoothRoundRect(cardX - 1, cardY - 1, cardW + 2, cardH + 2, 11, RGB565(0, 180, 230), RGB565(7, 11, 20));
+    _spr.fillSmoothRoundRect(cardX, cardY, cardW, cardH, 10, TFT_WHITE, RGB565(0, 180, 230));
 
     // Generate & draw QR code (Version 3: 29x29 modules, 4px per module = 116x116px)
     QRCode qrcode;
@@ -2229,7 +2374,7 @@ void Display::renderWiFiSetupScreen(const char* qrText, int remainingSec) {
     // Camera icon hint under QR — shifted down to Y=181 for clear breathing room
     _spr.setTextDatum(MC_DATUM);
     _spr.setTextColor(RGB565(130, 160, 200), RGB565(7, 11, 20));
-    _spr.drawString((getLanguage() == LANG_EN) ? "Scan with Camera" : "Quet bang Camera", 77, 181, 1);
+    _spr.drawString((getLanguage() == LANG_EN) ? "Scan with Camera" : "Quét bằng Camera", 77, 181, 1);
 
     // 4. Right Side: Card & Quick Pairing Guide (Bordered card containing all text neatly)
     int16_t rightCardX = 150;
@@ -2237,76 +2382,76 @@ void Display::renderWiFiSetupScreen(const char* qrText, int remainingSec) {
     int16_t rightCardW = 158;
     int16_t rightCardH = 136;
 
-    _spr.fillRoundRect(rightCardX, rightCardY, rightCardW, rightCardH, 8, RGB565(14, 20, 32));
-    _spr.drawRoundRect(rightCardX, rightCardY, rightCardW, rightCardH, 8, RGB565(36, 54, 80));
+    _spr.fillSmoothRoundRect(rightCardX, rightCardY, rightCardW, rightCardH, 8, RGB565(36, 54, 80), RGB565(7, 11, 20));
+    _spr.fillSmoothRoundRect(rightCardX + 1, rightCardY + 1, rightCardW - 2, rightCardH - 2, 7, RGB565(14, 20, 32), RGB565(36, 54, 80));
 
     // Card Title
     _spr.setTextDatum(TL_DATUM);
     _spr.setTextColor(RGB565(0, 229, 255), RGB565(14, 20, 32));
-    _spr.drawString((getLanguage() == LANG_EN) ? "QUICK PAIRING" : "KET NOI NHANH", rightCardX + 10, rightCardY + 8, 2);
+    _spr.drawString((getLanguage() == LANG_EN) ? "QUICK PAIRING" : "KẾT NỐI NHANH", rightCardX + 10, rightCardY + 7, 2);
 
     _spr.drawFastHLine(rightCardX + 8, rightCardY + 26, rightCardW - 16, RGB565(25, 38, 56));
 
     // Step 1
-    _spr.fillCircle(rightCardX + 16, rightCardY + 39, 7, RGB565(0, 229, 255));
+    _spr.fillSmoothCircle(rightCardX + 16, rightCardY + 39, 7, RGB565(0, 229, 255), RGB565(14, 20, 32));
     _spr.setTextDatum(MC_DATUM);
     _spr.setTextColor(RGB565(10, 16, 26), RGB565(0, 229, 255));
     _spr.drawString("1", rightCardX + 16, rightCardY + 39, 1);
 
     _spr.setTextDatum(TL_DATUM);
     _spr.setTextColor(TFT_WHITE, RGB565(14, 20, 32));
-    _spr.drawString((getLanguage() == LANG_EN) ? "Open phone camera" : "Mo Camera quet QR", rightCardX + 28, rightCardY + 32, 1);
+    _spr.drawString((getLanguage() == LANG_EN) ? "Open phone camera" : "Mở Camera quét QR", rightCardX + 28, rightCardY + 30, 1);
     _spr.setTextColor(RGB565(120, 145, 175), RGB565(14, 20, 32));
-    _spr.drawString((getLanguage() == LANG_EN) ? "Tap popup to join" : "Cham thong bao vao mang", rightCardX + 28, rightCardY + 43, 1);
+    _spr.drawString((getLanguage() == LANG_EN) ? "Tap popup to join" : "Chạm thông báo vào mạng", rightCardX + 28, rightCardY + 42, 1);
 
     // Step 2
-    _spr.fillCircle(rightCardX + 16, rightCardY + 63, 7, RGB565(0, 229, 255));
+    _spr.fillSmoothCircle(rightCardX + 16, rightCardY + 63, 7, RGB565(0, 229, 255), RGB565(14, 20, 32));
     _spr.setTextDatum(MC_DATUM);
     _spr.setTextColor(RGB565(10, 16, 26), RGB565(0, 229, 255));
     _spr.drawString("2", rightCardX + 16, rightCardY + 63, 1);
 
     _spr.setTextDatum(TL_DATUM);
     _spr.setTextColor(TFT_WHITE, RGB565(14, 20, 32));
-    _spr.drawString((getLanguage() == LANG_EN) ? "Select WiFi & save" : "Chon WiFi phong & luu", rightCardX + 28, rightCardY + 56, 1);
+    _spr.drawString((getLanguage() == LANG_EN) ? "Select WiFi & save" : "Chọn WiFi phòng & lưu", rightCardX + 28, rightCardY + 54, 1);
     _spr.setTextColor(RGB565(120, 145, 175), RGB565(14, 20, 32));
-    _spr.drawString((getLanguage() == LANG_EN) ? "Config page opens auto" : "Trang web tu dong mo", rightCardX + 28, rightCardY + 67, 1);
+    _spr.drawString((getLanguage() == LANG_EN) ? "Config page opens auto" : "Trang web tự động mở", rightCardX + 28, rightCardY + 66, 1);
 
     // Manual Hotspot Info Pill inside card
     int16_t pillX = rightCardX + 8;
     int16_t pillY = rightCardY + 80;
     int16_t pillW = rightCardW - 16;
     int16_t pillH = 48;
-    _spr.fillRoundRect(pillX, pillY, pillW, pillH, 5, RGB565(9, 14, 23));
-    _spr.drawRoundRect(pillX, pillY, pillW, pillH, 5, RGB565(28, 42, 64));
+    _spr.fillSmoothRoundRect(pillX, pillY, pillW, pillH, 5, RGB565(28, 42, 64), RGB565(14, 20, 32));
+    _spr.fillSmoothRoundRect(pillX + 1, pillY + 1, pillW - 2, pillH - 2, 4, RGB565(9, 14, 23), RGB565(28, 42, 64));
 
     _spr.setTextDatum(TL_DATUM);
     _spr.setTextColor(RGB565(0, 229, 255), RGB565(9, 14, 23));
-    _spr.drawString("WiFi: CYD-SmartDesk-V2", pillX + 6, pillY + 5, 1);
+    _spr.drawString("WiFi: CYD-SmartDesk-V2", pillX + 6, pillY + 4, 1);
     _spr.setTextColor(RGB565(160, 185, 215), RGB565(9, 14, 23));
-    _spr.drawString((getLanguage() == LANG_EN) ? "Pass: None (Open)" : "Pass: Trong (Mo)", pillX + 6, pillY + 18, 1);
+    _spr.drawString((getLanguage() == LANG_EN) ? "Pass: None (Open)" : "Mật khẩu: Trống (Mở)", pillX + 6, pillY + 17, 1);
     _spr.setTextColor(RGB565(100, 130, 165), RGB565(9, 14, 23));
-    _spr.drawString("IP: 192.168.4.1", pillX + 6, pillY + 31, 1);
+    _spr.drawString("IP: 192.168.4.1", pillX + 6, pillY + 30, 1);
 
     // 5. Bottom Touch Action Bar
     // Tactile Skip Button on Left (X: 14, Y: 190, W: 126, H: 38, R=8)
-    _spr.fillRoundRect(14, 190, 126, 38, 8, RGB565(22, 30, 46));
-    _spr.drawRoundRect(14, 190, 126, 38, 8, RGB565(52, 74, 108));
+    _spr.fillSmoothRoundRect(14, 190, 126, 38, 8, RGB565(52, 74, 108), RGB565(7, 11, 20));
+    _spr.fillSmoothRoundRect(15, 191, 124, 36, 7, RGB565(22, 30, 46), RGB565(52, 74, 108));
     _spr.setTextDatum(MC_DATUM);
     _spr.setTextColor(RGB565(190, 215, 245), RGB565(22, 30, 46));
-    _spr.drawString((getLanguage() == LANG_EN) ? "X  Skip (Offline)" : "X  Dung Offline", 77, 209, 2);
+    _spr.drawString((getLanguage() == LANG_EN) ? "X  Skip (Offline)" : "X  Dùng Offline", 77, 209, 2);
 
     // Right Side: Live status indicator card (X: 150, Y: 190, W: 158, H: 38, R=8)
-    _spr.fillRoundRect(150, 190, 158, 38, 8, RGB565(14, 20, 32));
-    _spr.drawRoundRect(150, 190, 158, 38, 8, RGB565(36, 54, 80));
+    _spr.fillSmoothRoundRect(150, 190, 158, 38, 8, RGB565(36, 54, 80), RGB565(7, 11, 20));
+    _spr.fillSmoothRoundRect(151, 191, 156, 36, 7, RGB565(14, 20, 32), RGB565(36, 54, 80));
 
-    _spr.fillCircle(162, 209, 3, RGB565(0, 229, 255));
+    _spr.fillSmoothCircle(162, 209, 3, RGB565(0, 229, 255), RGB565(14, 20, 32));
     _spr.setTextDatum(ML_DATUM);
     _spr.setTextColor(RGB565(0, 229, 255), RGB565(14, 20, 32));
-    _spr.drawString((getLanguage() == LANG_EN) ? "Waiting for device..." : "Dang cho ket noi...", 172, 201, 1);
+    _spr.drawString((getLanguage() == LANG_EN) ? "Waiting for device..." : "Đang chờ kết nối...", 172, 201, 1);
 
-    char timeoutStr[32];
+    char timeoutStr[40];
     snprintf(timeoutStr, sizeof(timeoutStr),
-             (getLanguage() == LANG_EN) ? "Auto exit in %ds" : "Tu dong thoat sau %ds",
+             (getLanguage() == LANG_EN) ? "Auto exit in %ds" : "Tự động thoát sau %ds",
              remainingSec);
     _spr.setTextColor(RGB565(120, 145, 175), RGB565(14, 20, 32));
     _spr.drawString(timeoutStr, 172, 217, 1);
@@ -2323,30 +2468,30 @@ void Display::renderWiFiConnectedScreen(const char* ssid, const char* ip) {
     _spr.fillRect(0, 0, 320, 34, RGB565(12, 18, 30));
     _spr.drawFastHLine(0, 34, 320, RGB565(0, 230, 118));
 
-    _spr.fillCircle(18, 17, 5, RGB565(0, 230, 118));
+    _spr.fillSmoothCircle(18, 17, 5, RGB565(0, 230, 118), RGB565(12, 18, 30));
     _spr.setTextDatum(ML_DATUM);
     _spr.setTextColor(TFT_WHITE, RGB565(12, 18, 30));
     _spr.drawString("CYD SMARTDESK", 34, 17, 2);
 
-    _spr.fillRoundRect(194, 6, 114, 22, 11, RGB565(18, 38, 30));
-    _spr.drawRoundRect(194, 6, 114, 22, 11, RGB565(0, 230, 118));
+    _spr.fillSmoothRoundRect(194, 6, 114, 22, 11, RGB565(0, 230, 118), RGB565(12, 18, 30));
+    _spr.fillSmoothRoundRect(195, 7, 112, 20, 10, RGB565(18, 38, 30), RGB565(0, 230, 118));
     _spr.setTextDatum(MC_DATUM);
     _spr.setTextColor(RGB565(0, 230, 118), RGB565(18, 38, 30));
     _spr.drawString("CONNECTED", 251, 17, 2);
 
     // Centered Hero Success Card
-    _spr.fillRoundRect(24, 46, 272, 176, 14, RGB565(14, 22, 34));
-    _spr.drawRoundRect(24, 46, 272, 176, 14, RGB565(0, 230, 118));
+    _spr.fillSmoothRoundRect(24, 46, 272, 176, 14, RGB565(0, 230, 118), theme.bg);
+    _spr.fillSmoothRoundRect(25, 47, 270, 174, 13, RGB565(14, 22, 34), RGB565(0, 230, 118));
 
     // Green Glowing Success Badge
-    _spr.fillCircle(160, 84, 24, RGB565(0, 200, 100));
-    _spr.drawCircle(160, 84, 27, RGB565(100, 255, 180));
+    _spr.fillSmoothCircle(160, 84, 24, RGB565(0, 200, 100), RGB565(14, 22, 34));
+    _spr.drawSmoothCircle(160, 84, 27, RGB565(100, 255, 180), RGB565(14, 22, 34));
     _spr.setTextDatum(MC_DATUM);
     _spr.setTextColor(TFT_WHITE, RGB565(0, 200, 100));
     _spr.drawString("OK", 160, 84, 4);
 
     _spr.setTextColor(RGB565(0, 230, 118), RGB565(14, 22, 34));
-    _spr.drawString((getLanguage() == LANG_EN) ? "WIFI CONNECTED!" : "DA KET NOI WIFI!", 160, 126, 4);
+    _spr.drawString((getLanguage() == LANG_EN) ? "WIFI CONNECTED!" : "ĐÃ KẾT NỐI WIFI!", 160, 126, 4);
 
     char buf[64];
     _spr.setTextColor(TFT_WHITE, RGB565(14, 22, 34));
@@ -2374,16 +2519,12 @@ void Display::renderDock() {
     int16_t dockH = 36;
     int16_t dockR = 18;
 
-    // 1. Soft outer shadow (floating 3D lift)
-    _spr.fillRoundRect(dockX - 1, dockY + 1, dockW + 2, dockH + 2, dockR + 1, RGB565(2, 4, 8));
+    // 1. Soft outer shadow + Crisp anti-aliased outer border + Deep Obsidian Glass Base
+    _spr.fillSmoothRoundRect(dockX - 1, dockY + 1, dockW + 2, dockH + 2, dockR + 1, RGB565(2, 4, 8));
+    _spr.fillSmoothRoundRect(dockX, dockY, dockW, dockH, dockR, RGB565(40, 58, 86));
+    _spr.fillSmoothRoundRect(dockX + 1, dockY + 1, dockW - 2, dockH - 2, dockR - 1, RGB565(12, 16, 26), RGB565(40, 58, 86));
 
-    // 2. Uniform Deep Obsidian Glass Base (100% solid, NO horizontal color split)
-    _spr.fillRoundRect(dockX, dockY, dockW, dockH, dockR, RGB565(12, 16, 26));
-
-    // 3. Crisp outer border
-    _spr.drawRoundRect(dockX, dockY, dockW, dockH, dockR, RGB565(40, 58, 86));
-
-    // 4. Subtle specular highlight on top edge
+    // Subtle specular highlight on top edge
     _spr.drawFastHLine(dockX + dockR, dockY, dockW - dockR * 2, RGB565(140, 190, 245));
 
     // 6 Navigation Icon Slots (spaced 36px apart: 40, 76, 112, 148, 184, 220)
@@ -2393,10 +2534,9 @@ void Display::renderDock() {
         bool isActive = (_currentPage == i);
 
         if (isActive) {
-            // Nền tối nhẹ cho icon đang được chọn (Bo góc tròn thực sự r=9)
-            _spr.fillRoundRect(cx - 15, dockY + 4, 30, 28, 9, RGB565(18, 24, 36));
-            // Đường bao khi chọn icon 1px, màu xanh lá, 4 góc bo tròn thực sự
-            _spr.drawRoundRect(cx - 15, dockY + 4, 30, 28, 9, RGB565(0, 230, 118));
+            // Nền tối nhẹ & đường bao xanh lá khử răng cưa đồng tâm (Bo góc tròn thực sự r=9)
+            _spr.fillSmoothRoundRect(cx - 15, dockY + 4, 30, 28, 9, RGB565(0, 230, 118), RGB565(12, 16, 26));
+            _spr.fillSmoothRoundRect(cx - 14, dockY + 5, 28, 26, 8, RGB565(18, 24, 36), RGB565(0, 230, 118));
         }
 
         switch (i) {
@@ -2457,13 +2597,13 @@ void Display::drawDockIconTheme(int16_t cx, int16_t cy, bool isActive) {
 }
 
 void Display::drawDockIconPower(int16_t cx, int16_t cy) {
-    // 1. Sleek crimson accent pill background
-    _spr.fillRoundRect(cx - 15, cy - 14, 30, 28, 9, RGB565(36, 10, 16));
-    _spr.drawRoundRect(cx - 15, cy - 14, 30, 28, 9, RGB565(140, 28, 42));
+    // 1. Sleek crimson accent pill background (anti-aliased SDF corners)
+    _spr.fillSmoothRoundRect(cx - 15, cy - 14, 30, 28, 9, RGB565(140, 28, 42));
+    _spr.fillSmoothRoundRect(cx - 14, cy - 13, 28, 26, 8, RGB565(36, 10, 16));
 
     // 2. Neon Crimson Power Icon (⏻)
-    _spr.drawCircle(cx, cy + 1, 7, RGB565(255, 65, 80));
-    _spr.drawCircle(cx, cy + 1, 6, RGB565(255, 65, 80));
+    _spr.fillSmoothCircle(cx, cy + 1, 7, RGB565(255, 65, 80));
+    _spr.fillSmoothCircle(cx, cy + 1, 5, RGB565(36, 10, 16));
 
     // Clear top opening of ring
     _spr.fillRect(cx - 3, cy - 7, 7, 5, RGB565(36, 10, 16));
@@ -2501,62 +2641,62 @@ void Display::renderPage1_Calendar() {
 
     // Tờ thứ 3 (Dưới cùng): Nhô ra 4px bên trái, 6px ở đáy, mép phải đồng phẳng
     int16_t x3 = calX - 4, y3 = calY + 6, w3 = calRight - x3;
-    _spr.fillRoundRect(x3, y3, w3, calH, calR, RGB565(8, 12, 20));
-    _spr.drawRoundRect(x3, y3, w3, calH, calR, RGB565(28, 40, 58));
+    _spr.fillSmoothRoundRect(x3, y3, w3, calH, calR, RGB565(28, 40, 58));
+    _spr.fillSmoothRoundRect(x3 + 1, y3 + 1, w3 - 2, calH - 2, calR - 1, RGB565(8, 12, 20));
 
     // Tờ thứ 2 (Ở giữa): Nhô ra 2px bên trái, 3px ở đáy, mép phải đồng phẳng
     int16_t x2 = calX - 2, y2 = calY + 3, w2 = calRight - x2;
-    _spr.fillRoundRect(x2, y2, w2, calH, calR, RGB565(13, 17, 28));
-    _spr.drawRoundRect(x2, y2, w2, calH, calR, RGB565(36, 52, 76));
+    _spr.fillSmoothRoundRect(x2, y2, w2, calH, calR, RGB565(36, 52, 76));
+    _spr.fillSmoothRoundRect(x2 + 1, y2 + 1, w2 - 2, calH - 2, calR - 1, RGB565(13, 17, 28));
 
     // Tờ thứ 1 (Trang trên cùng): Obsidian Paper sâu thẳm
-    _spr.fillRoundRect(calX, calY, calW, calH, calR, RGB565(17, 22, 35));
-    _spr.drawRoundRect(calX, calY, calW, calH, calR, RGB565(48, 68, 102));
+    _spr.fillSmoothRoundRect(calX, calY, calW, calH, calR, RGB565(48, 68, 102));
+    _spr.fillSmoothRoundRect(calX + 1, calY + 1, calW - 2, calH - 2, calR - 1, RGB565(17, 22, 35));
 
-    // Gáy sổ lịch bọc da Đỏ Đô (Kéo dài xuống Y=41, cắt ngang chính giữa các thanh lò xo Y=37..46)
-    _spr.fillRoundRect(calX, calY, calW, 34, calR, RGB565(120, 22, 36));
-    _spr.fillRect(calX, calY + 18, calW, 16, RGB565(120, 22, 36)); // Phẳng mép dưới tại Y=41 (chia đôi gáy lò xo)
+    // Gáy sổ lịch bọc da Đỏ Đô (nằm gọn bên trong viền 1px, kéo dài xuống Y=41)
+    _spr.fillSmoothRoundRect(calX + 1, calY + 1, calW - 2, 33, calR - 1, RGB565(120, 22, 36));
+    _spr.fillRect(calX + 1, calY + 18, calW - 2, 16, RGB565(120, 22, 36)); // Phẳng mép dưới tại Y=41 (chia đôi gáy lò xo)
 
     // 6 Khoen lò xo kim loại (Spiral Rings) — Có khoảng thở trên/dưới rõ ràng
     for (int k = 0; k < 6; k++) {
         int16_t kx = 64 + k * 38;
         // Lỗ đục trên giấy
-        _spr.fillCircle(kx + 2, 42, 3, RGB565(8, 10, 16));
+        _spr.fillSmoothCircle(kx + 2, 42, 3, RGB565(8, 10, 16));
         // Khoen kim loại bạc (H=10px, từ Y=37 đến Y=46)
-        _spr.fillRoundRect(kx, 37, 4, 10, 2, RGB565(180, 195, 215));
+        _spr.fillSmoothRoundRect(kx, 37, 4, 10, 2, RGB565(180, 195, 215));
         // Ánh sáng specular highlight trắng
         _spr.drawFastVLine(kx + 1, 38, 8, C_WHITE);
     }
 
     // ── 3. NÚT ĐIỀU HƯỚNG & TIÊU ĐỀ TRÊN GÁY LỊCH (Y=10..34) ──────────
     // Nút [ < ] Prev Month: Tâm (30, 23), Mũi tên tam giác có trọng tâm chính xác (30.0, 23.0)
-    _spr.fillCircle(30, 23, 11, RGB565(80, 15, 26));
-    _spr.drawCircle(30, 23, 11, RGB565(170, 45, 65));
+    _spr.fillSmoothCircle(30, 23, 11, RGB565(170, 45, 65));
+    _spr.fillSmoothCircle(30, 23, 10, RGB565(80, 15, 26));
     _spr.fillTriangle(26, 23, 32, 18, 32, 28, RGB565(255, 225, 235));
 
     // Nút [ > ] Next Month: Tâm (290, 23), Mũi tên tam giác có trọng tâm chính xác (290.0, 23.0)
-    _spr.fillCircle(290, 23, 11, RGB565(80, 15, 26));
-    _spr.drawCircle(290, 23, 11, RGB565(170, 45, 65));
+    _spr.fillSmoothCircle(290, 23, 11, RGB565(170, 45, 65));
+    _spr.fillSmoothCircle(290, 23, 10, RGB565(80, 15, 26));
     _spr.fillTriangle(294, 23, 288, 18, 288, 28, RGB565(255, 225, 235));
 
     // Tiêu đề Tháng • Năm (Chữ vàng ánh kim dập nổi)
     _spr.setTextDatum(MC_DATUM);
     _spr.setTextColor(RGB565(255, 245, 220));
-    char titleBuf[32];
-    snprintf(titleBuf, sizeof(titleBuf), (getLanguage() == LANG_VI ? "THANG %02d  •  %d" : "MONTH %02d  •  %d"), _calMonth, _calYear);
+    char titleBuf[40];
+    snprintf(titleBuf, sizeof(titleBuf), (getLanguage() == LANG_VI ? "THÁNG %02d  •  %d" : "MONTH %02d  •  %d"), _calMonth, _calYear);
     _spr.drawString(titleBuf, 160, 17, 2);
 
     // Dòng phụ: Thông tin Âm lịch chi tiết hôm nay (cách đỉnh gáy lò xo 4px)
     bool isCurrentMonth = (_calYear == curYear && _calMonth == curMonth);
-    char subBuf[64];
+    char subBuf[80];
     if (isCurrentMonth) {
         LunarDate todayLunar = LunarCalendar::convertSolar2Lunar(curDay, curMonth, curYear);
-        snprintf(subBuf, sizeof(subBuf), (getLanguage() == LANG_VI ? "Hom nay: %02d/%02d AL  -  Nam %s" : "Today: %02d/%02d Lunar  -  Year %s"), 
+        snprintf(subBuf, sizeof(subBuf), (getLanguage() == LANG_VI ? "Hôm nay: %02d/%02d ÂL  -  Năm %s" : "Today: %02d/%02d Lunar  -  Year %s"), 
                  todayLunar.day, todayLunar.month, todayLunar.yearCanChi);
         _spr.setTextColor(RGB565(245, 215, 150)); // Gold dịu
     } else {
         LunarDate midLunar = LunarCalendar::convertSolar2Lunar(15, _calMonth, _calYear);
-        snprintf(subBuf, sizeof(subBuf), (getLanguage() == LANG_VI ? "Nam %s  •  [Cham ve hom nay]" : "Year %s  •  [Tap for today]"), midLunar.yearCanChi);
+        snprintf(subBuf, sizeof(subBuf), (getLanguage() == LANG_VI ? "Năm %s  •  [Chạm về hôm nay]" : "Year %s  •  [Tap for today]"), midLunar.yearCanChi);
         _spr.setTextColor(RGB565(255, 200, 100));
     }
     _spr.drawString(subBuf, 160, 29, 1);
@@ -2680,8 +2820,8 @@ void Display::drawFinanceBadge(int16_t x, int16_t y, int16_t w, int16_t h, const
     int16_t r = h / 2;
     uint16_t bgTint = isPositive ? RGB565(15, 45, 25) : RGB565(50, 15, 20);
     uint16_t fgCol = isPositive ? theme.green : RGB565(255, 110, 110);
-    _spr.fillSmoothRoundRect(x, y, badgeW, h, r, bgTint, theme.bg);
-    _spr.drawRoundRect(x, y, badgeW, h, r, fgCol);
+    _spr.fillSmoothRoundRect(x, y, badgeW, h, r, fgCol, theme.bg);
+    _spr.fillSmoothRoundRect(x + 1, y + 1, badgeW - 2, h - 2, r - 1, bgTint, fgCol);
     _spr.setTextDatum(MC_DATUM);
     _spr.setTextColor(fgCol);
     _spr.drawString(text, x + badgeW / 2, y + h / 2, 1);
@@ -2715,7 +2855,7 @@ void Display::drawFinanceMicroBars(int16_t x, int16_t y, int16_t w, int16_t h, c
     }
 }
 
-// ── Biểu đồ Sparkline Vector cao cấp (Vector Line, không banding 8-bit, không nòng nọc) ──
+// ── Biểu đồ Sparkline Vector cao cấp (Anti-Aliased Wedge Line + Area Gradient Fill) ──
 void Display::drawFinanceSparkline(int16_t x, int16_t y, int16_t w, int16_t h,
                                     const float* pts, uint8_t count, uint16_t color, bool areaFill) {
     if (!pts || count < 2) return;
@@ -2743,18 +2883,41 @@ void Display::drawFinanceSparkline(int16_t x, int16_t y, int16_t w, int16_t h,
     _spr.drawFastHLine(x, y + h / 3, w, RGB565(32, 40, 52));
     _spr.drawFastHLine(x, y + (h * 2) / 3, w, RGB565(32, 40, 52));
 
-    // Vẽ đường biểu đồ vector 2px liền mạch, sắc sảo (100% chuẩn màu 16-bit rực rỡ)
-    for (uint8_t i = 0; i < n - 1; i++) {
-        _spr.drawLine(px[i], py[i], px[i + 1], py[i + 1], color);
-        _spr.drawLine(px[i], py[i] + 1, px[i + 1], py[i + 1] + 1, color);
-        // Chấm tròn nhỏ tại các mốc dữ liệu
-        _spr.fillCircle(px[i], py[i], 1, blendColor(color, C_WHITE, 180));
+    // Đổ bóng vùng mờ (Area Gradient Fill) phía dưới đường biểu đồ theo phong cách Apple Stocks
+    if (areaFill) {
+        int16_t botY = y + h - 3;
+        for (uint8_t i = 0; i < n - 1; i++) {
+            int16_t x0 = px[i], x1 = px[i + 1];
+            int16_t y0 = py[i], y1 = py[i + 1];
+            int16_t dx = x1 - x0;
+            if (dx <= 0) continue;
+            for (int16_t cx = x0; cx <= x1; cx++) {
+                if (cx == x0 && i > 0) continue; // Tránh tô đúp cột giao nhau
+                int16_t cyTop = y0 + (int16_t)((int32_t)(y1 - y0) * (cx - x0) / dx);
+                int16_t span = botY - cyTop;
+                if (span <= 1) continue;
+                for (int16_t cy = cyTop + 1; cy < botY; cy++) {
+                    uint8_t alpha = (uint8_t)((int32_t)(botY - cy) * 72 / h);
+                    if (alpha > 4) {
+                        uint16_t bg = _spr.readPixel(cx, cy);
+                        _spr.drawPixel(cx, cy, _spr.alphaBlend(alpha, color, bg));
+                    }
+                }
+            }
+        }
     }
 
-    // Chốt điểm dữ liệu cuối cùng: chấm tròn nhỏ tinh tế, không bóng nòng nọc
+    // Vẽ đường biểu đồ vector khử răng cưa mượt mà (drawWedgeLine)
+    for (uint8_t i = 0; i < n - 1; i++) {
+        _spr.drawWedgeLine(px[i], py[i], px[i + 1], py[i + 1], 1.15f, 1.15f, color);
+        // Chấm tròn nhỏ tại các mốc dữ liệu
+        _spr.fillSmoothCircle(px[i], py[i], 1, blendColor(color, C_WHITE, 180));
+    }
+
+    // Chốt điểm dữ liệu cuối cùng: chấm tròn phát sáng tinh tế
     int16_t lastX = px[n - 1];
     int16_t lastY = py[n - 1];
-    _spr.fillCircle(lastX, lastY, 2, color);
+    _spr.fillSmoothCircle(lastX, lastY, 2, color);
     _spr.drawPixel(lastX, lastY, C_WHITE);
 }
 
@@ -2773,7 +2936,7 @@ void Display::renderPage2_Finance() {
     // Header Vàng
     _spr.setTextDatum(TL_DATUM);
     _spr.setTextColor(theme.yellow);
-    _spr.drawString((getLanguage() == LANG_VI ? "VANG SJC" : "SJC GOLD"), leftX + 10, 14, 2);
+    _spr.drawString((getLanguage() == LANG_VI ? "VÀNG SJC" : "SJC GOLD"), leftX + 10, 14, 2);
 
     char sjcBadge[16];
     bool sjcPos = (fd.sjcChangePercent >= 0);
@@ -2799,7 +2962,7 @@ void Display::renderPage2_Finance() {
 
     // Hàng 2: BÁN
     _spr.setTextColor(theme.textDim);
-    _spr.drawString((getLanguage() == LANG_VI ? "BAN" : "SELL"), leftX + 10, 58, 1);
+    _spr.drawString((getLanguage() == LANG_VI ? "BÁN" : "SELL"), leftX + 10, 58, 1);
     _spr.setTextColor(theme.yellow);
     _spr.drawString(sellStr, leftX + 42, 54, 4);
     _spr.setTextColor(theme.textVDim);
@@ -2811,7 +2974,7 @@ void Display::renderPage2_Finance() {
     // Giá Vàng Thế Giới (Kitco)
     _spr.setTextDatum(TL_DATUM);
     _spr.setTextColor(theme.textDim);
-    _spr.drawString((getLanguage() == LANG_VI ? "THE GIOI (KITCO)" : "WORLD (KITCO)"), leftX + 10, 92, 1);
+    _spr.drawString((getLanguage() == LANG_VI ? "THẾ GIỚI (KITCO)" : "WORLD (KITCO)"), leftX + 10, 90, 1);
 
     char kitcoStr[24];
     char kNum[16];
@@ -2826,12 +2989,12 @@ void Display::renderPage2_Finance() {
     // Đường phân cách mờ 2 (đồng bộ thẳng hàng với cột tỉ giá tại Y = 140)
     _spr.drawFastHLine(leftX + 8, 140, cardW - 16, blendColor(theme.cardBorder, theme.bg, 110));
 
-    // Biểu đồ 7 ngày Vàng SJC (Vector sắc nét)
+    // Biểu đồ 7 ngày Vàng SJC (Vector sắc nét + Area Gradient)
     _spr.setTextDatum(TL_DATUM);
     _spr.setTextColor(theme.yellow);
-    _spr.drawString((getLanguage() == LANG_VI ? "XU HUONG 7 NGAY" : "7-DAY TREND"), leftX + 10, 146, 1);
+    _spr.drawString((getLanguage() == LANG_VI ? "XU HƯỚNG 7 NGÀY" : "7-DAY TREND"), leftX + 10, 144, 1);
 
-    drawFinanceSparkline(leftX + 10, 156, cardW - 20, 36, fd.sjc7d, 7, C_GOLD, false);
+    drawFinanceSparkline(leftX + 10, 156, cardW - 20, 36, fd.sjc7d, 7, C_GOLD, true);
 
     // Tính toán nhãn 7 ngày gần nhất động (tính lùi từ Hôm nay)
     time_t rawNow = time(NULL);
@@ -2854,7 +3017,7 @@ void Display::renderPage2_Finance() {
     // Call-to-action chân thẻ
     _spr.setTextDatum(MC_DATUM);
     _spr.setTextColor(blendColor(theme.textDim, C_WHITE, 120));
-    _spr.drawString((getLanguage() == LANG_VI ? "CHAM XEM CHI TIET >" : "TAP FOR DETAILS >"), leftX + cardW / 2, 215, 1);
+    _spr.drawString((getLanguage() == LANG_VI ? "CHẠM XEM CHI TIẾT >" : "TAP FOR DETAILS >"), leftX + cardW / 2, 215, 1);
 
     // ═══════════════════════════════════════════════════════════════════
     //  CỘT PHẢI: TỶ GIÁ NGOẠI TỆ & VĨ MÔ (X = 164, W = 148, Y = 8, H = 224)
@@ -2865,7 +3028,7 @@ void Display::renderPage2_Finance() {
     // Header Tỷ giá
     _spr.setTextDatum(TL_DATUM);
     _spr.setTextColor(theme.accent);
-    _spr.drawString((getLanguage() == LANG_VI ? "TI GIA (VND)" : "RATES (VND)"), rightX + 10, 14, 2);
+    _spr.drawString((getLanguage() == LANG_VI ? "TỶ GIÁ (VND)" : "RATES (VND)"), rightX + 10, 14, 2);
     _spr.setTextDatum(TR_DATUM);
     _spr.setTextColor(theme.textDim);
     _spr.drawString("VCB", rightX + cardW - 10, 16, 1);
@@ -2919,7 +3082,7 @@ void Display::renderPage2_Finance() {
     // Mục 3: Macro / BTC
     _spr.setTextDatum(TL_DATUM);
     _spr.setTextColor(theme.textDim);
-    _spr.drawString("BTC / USDT", rightX + 10, 149, 1);
+    _spr.drawString("BTC / USDT", rightX + 10, 147, 1);
 
     char btcBadge[16];
     bool btcPos = (fd.btcChangePercent >= 0);
@@ -2942,7 +3105,7 @@ void Display::renderPage2_Finance() {
     // Call-to-action chân thẻ: THỐNG NHẤT 100% CÂU CHỮ VỚI CỘT VÀNG
     _spr.setTextDatum(MC_DATUM);
     _spr.setTextColor(blendColor(theme.textDim, C_WHITE, 120));
-    _spr.drawString((getLanguage() == LANG_VI ? "CHAM XEM CHI TIET >" : "TAP FOR DETAILS >"), rightX + cardW / 2, 215, 1);
+    _spr.drawString((getLanguage() == LANG_VI ? "CHẠM XEM CHI TIẾT >" : "TAP FOR DETAILS >"), rightX + cardW / 2, 215, 1);
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -2966,8 +3129,8 @@ void Display::renderFinanceCurrencyPopup() {
         _spr.setTextColor(RGB565(10, 20, 30));
         _spr.drawString(tab1Label, 14 + 58, 10 + 13, 2);
     } else {
-        _spr.fillSmoothRoundRect(14, 10, 116, 26, 13, RGB565(18, 26, 38), RGB565(8, 12, 20));
-        _spr.drawRoundRect(14, 10, 116, 26, 13, RGB565(42, 60, 85));
+        _spr.fillSmoothRoundRect(14, 10, 116, 26, 13, RGB565(42, 60, 85), RGB565(8, 12, 20));
+        _spr.fillSmoothRoundRect(15, 11, 114, 24, 12, RGB565(18, 26, 38), RGB565(42, 60, 85));
         _spr.setTextDatum(MC_DATUM);
         _spr.setTextColor(theme.textDim);
         _spr.drawString(tab1Label, 14 + 58, 10 + 13, 2);
@@ -2980,8 +3143,8 @@ void Display::renderFinanceCurrencyPopup() {
         _spr.setTextColor(RGB565(10, 20, 30));
         _spr.drawString(tab2Label, 136 + 58, 10 + 13, 2);
     } else {
-        _spr.fillSmoothRoundRect(136, 10, 116, 26, 13, RGB565(18, 26, 38), RGB565(8, 12, 20));
-        _spr.drawRoundRect(136, 10, 116, 26, 13, RGB565(42, 60, 85));
+        _spr.fillSmoothRoundRect(136, 10, 116, 26, 13, RGB565(42, 60, 85), RGB565(8, 12, 20));
+        _spr.fillSmoothRoundRect(137, 11, 114, 24, 12, RGB565(18, 26, 38), RGB565(42, 60, 85));
         _spr.setTextDatum(MC_DATUM);
         _spr.setTextColor(theme.textDim);
         _spr.drawString(tab2Label, 136 + 58, 10 + 13, 2);
@@ -3022,20 +3185,20 @@ void Display::renderFinanceCurrencyPopup() {
         char min1[16], max1[16];
         FinanceService::formatVND((long)roundf(fd.cur1Min7d), min1, sizeof(min1));
         FinanceService::formatVND((long)roundf(fd.cur1Max7d), max1, sizeof(max1));
-        char range7d[64];
-        snprintf(range7d, sizeof(range7d), (getLanguage() == LANG_VI ? "Bien do 7d:   Cao: %s   •   Thap: %s" : "7d Range:   High: %s   •   Low: %s"), max1, min1);
+        char range7d[80];
+        snprintf(range7d, sizeof(range7d), (getLanguage() == LANG_VI ? "Biên độ 7d:   Cao: %s   •   Thấp: %s" : "7d Range:   High: %s   •   Low: %s"), max1, min1);
 
         _spr.setTextDatum(TL_DATUM);
         _spr.setTextColor(RGB565(170, 200, 235));
-        _spr.drawString(range7d, 16, 80, 1);
+        _spr.drawString(range7d, 16, 78, 1);
 
         // CỤM THẺ THỐNG KÊ ĐÁY & ĐỈNH 7 NGÀY (Rộng 250px — Chống tràn chữ 100%)
-        _spr.fillSmoothRoundRect(midX - 125, 96, 250, 20, 10, RGB565(16, 24, 36), RGB565(8, 12, 20));
-        _spr.drawRoundRect(midX - 125, 96, 250, 20, 10, RGB565(36, 52, 75));
+        _spr.fillSmoothRoundRect(midX - 125, 96, 250, 20, 10, RGB565(36, 52, 75), RGB565(8, 12, 20));
+        _spr.fillSmoothRoundRect(midX - 124, 97, 248, 18, 9, RGB565(16, 24, 36), RGB565(36, 52, 75));
 
-        char dayStr[32], dinhStr[32];
-        snprintf(dayStr, sizeof(dayStr), (getLanguage() == LANG_VI ? "Day: %s" : "Low: %s"), min1);
-        snprintf(dinhStr, sizeof(dinhStr), (getLanguage() == LANG_VI ? "Dinh: %s" : "High: %s"), max1);
+        char dayStr[40], dinhStr[40];
+        snprintf(dayStr, sizeof(dayStr), (getLanguage() == LANG_VI ? "Đáy: %s" : "Low: %s"), min1);
+        snprintf(dinhStr, sizeof(dinhStr), (getLanguage() == LANG_VI ? "Đỉnh: %s" : "High: %s"), max1);
 
         _spr.setTextDatum(MR_DATUM);
         _spr.setTextColor(RGB565(160, 205, 255));
@@ -3049,8 +3212,8 @@ void Display::renderFinanceCurrencyPopup() {
         _spr.setTextColor(C_GREEN);
         _spr.drawString(dinhStr, midX + 10, 106, 1);
 
-        // Biểu đồ vector 7 ngày khổ rộng 292px
-        drawFinanceSparkline(chartX, chartY, chartW, chartH, fd.cur17d, 7, C_GREEN, false);
+        // Biểu đồ vector 7 ngày khổ rộng 292px + Area Gradient
+        drawFinanceSparkline(chartX, chartY, chartW, chartH, fd.cur17d, 7, C_GREEN, true);
     } else {
         // Tab Ngoại tệ 2
         char cur2RateStr[16];
@@ -3071,20 +3234,20 @@ void Display::renderFinanceCurrencyPopup() {
         char min2[16], max2[16];
         FinanceService::formatVND((long)roundf(fd.cur2Min7d), min2, sizeof(min2));
         FinanceService::formatVND((long)roundf(fd.cur2Max7d), max2, sizeof(max2));
-        char range7d[64];
-        snprintf(range7d, sizeof(range7d), (getLanguage() == LANG_VI ? "Bien do 7d:   Cao: %s   •   Thap: %s" : "7d Range:   High: %s   •   Low: %s"), max2, min2);
+        char range7d[80];
+        snprintf(range7d, sizeof(range7d), (getLanguage() == LANG_VI ? "Biên độ 7d:   Cao: %s   •   Thấp: %s" : "7d Range:   High: %s   •   Low: %s"), max2, min2);
 
         _spr.setTextDatum(TL_DATUM);
         _spr.setTextColor(RGB565(170, 200, 235));
-        _spr.drawString(range7d, 16, 80, 1);
+        _spr.drawString(range7d, 16, 78, 1);
 
         // CỤM THẺ THỐNG KÊ ĐÁY & ĐỈNH 7 NGÀY (Rộng 250px — Chống tràn chữ 100%)
-        _spr.fillSmoothRoundRect(midX - 125, 96, 250, 20, 10, RGB565(16, 24, 36), RGB565(8, 12, 20));
-        _spr.drawRoundRect(midX - 125, 96, 250, 20, 10, RGB565(36, 52, 75));
+        _spr.fillSmoothRoundRect(midX - 125, 96, 250, 20, 10, RGB565(36, 52, 75), RGB565(8, 12, 20));
+        _spr.fillSmoothRoundRect(midX - 124, 97, 248, 18, 9, RGB565(16, 24, 36), RGB565(36, 52, 75));
 
-        char dayStr[32], dinhStr[32];
-        snprintf(dayStr, sizeof(dayStr), (getLanguage() == LANG_VI ? "Day: %s" : "Low: %s"), min2);
-        snprintf(dinhStr, sizeof(dinhStr), (getLanguage() == LANG_VI ? "Dinh: %s" : "High: %s"), max2);
+        char dayStr[40], dinhStr[40];
+        snprintf(dayStr, sizeof(dayStr), (getLanguage() == LANG_VI ? "Đáy: %s" : "Low: %s"), min2);
+        snprintf(dinhStr, sizeof(dinhStr), (getLanguage() == LANG_VI ? "Đỉnh: %s" : "High: %s"), max2);
 
         _spr.setTextDatum(MR_DATUM);
         _spr.setTextColor(RGB565(160, 205, 255));
@@ -3098,8 +3261,8 @@ void Display::renderFinanceCurrencyPopup() {
         _spr.setTextColor(RGB565(255, 120, 120));
         _spr.drawString(dinhStr, midX + 10, 106, 1);
 
-        // Biểu đồ vector 7 ngày khổ rộng 292px
-        drawFinanceSparkline(chartX, chartY, chartW, chartH, fd.cur27d, 7, RGB565(255, 95, 95), false);
+        // Biểu đồ vector 7 ngày khổ rộng 292px + Area Gradient
+        drawFinanceSparkline(chartX, chartY, chartW, chartH, fd.cur27d, 7, RGB565(255, 95, 95), true);
     }
 
     // Nhãn 7 ngày gần nhất động (tính lùi từ Hôm nay)
@@ -3123,7 +3286,7 @@ void Display::renderFinanceCurrencyPopup() {
     // Footer nguồn dữ liệu
     _spr.setTextDatum(MC_DATUM);
     _spr.setTextColor(theme.textVDim);
-    _spr.drawString((getLanguage() == LANG_VI ? "Nguon: Vietcombank & ExchangeRate-API" : "Source: Vietcombank & ExchangeRate-API"), 160, 224, 1);
+    _spr.drawString((getLanguage() == LANG_VI ? "Nguồn: Vietcombank & ExchangeRate-API" : "Source: Vietcombank & ExchangeRate-API"), 160, 224, 1);
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -3138,7 +3301,7 @@ void Display::renderFinanceGoldPopup() {
     // Tiêu đề Popup
     _spr.setTextDatum(ML_DATUM);
     _spr.setTextColor(C_GOLD);
-    _spr.drawString((getLanguage() == LANG_VI ? "VANG SJC 9999 & THE GIOI" : "SJC GOLD 9999 & WORLD"), 16, 23, 2);
+    _spr.drawString((getLanguage() == LANG_VI ? "VÀNG SJC 9999 & THẾ GIỚI" : "SJC GOLD 9999 & WORLD"), 16, 23, 2);
 
     // Nút [X] Đóng Popup — Chuẩn phong cách Windows 11 nền xanh bo tròn góc
     drawPopupCloseButton();
@@ -3147,10 +3310,10 @@ void Display::renderFinanceGoldPopup() {
     _spr.drawFastHLine(10, 42, 300, POPUP_DIVIDER_COLOR);
 
     // Bảng giá SJC & Thế Giới (Bố cục thông thoáng, không đè chữ)
-    char sjcBuyStr[32], sjcSellStr[32];
+    char sjcBuyStr[36], sjcSellStr[36];
     snprintf(sjcBuyStr, sizeof(sjcBuyStr), (getLanguage() == LANG_VI ? "SJC MUA: %.1f tr" : "SJC BUY: %.1f M"), fd.sjcBuy);
     toVNFloat(sjcBuyStr);
-    snprintf(sjcSellStr, sizeof(sjcSellStr), (getLanguage() == LANG_VI ? "BAN: %.1f tr" : "SELL: %.1f M"), fd.sjcSell);
+    snprintf(sjcSellStr, sizeof(sjcSellStr), (getLanguage() == LANG_VI ? "BÁN: %.1f tr" : "SELL: %.1f M"), fd.sjcSell);
     toVNFloat(sjcSellStr);
 
     _spr.setTextDatum(TL_DATUM);
@@ -3162,31 +3325,31 @@ void Display::renderFinanceGoldPopup() {
     bool sjcPos = (fd.sjcChangePercent >= 0);
     drawFinanceBadge(252, 47, 52, 18, fd.sjcChangeStr, sjcPos);
 
-    char kitcoStr[48];
+    char kitcoStr[64];
     char kNum[16];
     long kw = (long)fd.worldGoldUsd;
     int kdec = (int)(roundf((fd.worldGoldUsd - kw) * 10.0f)) % 10;
     FinanceService::formatVND(kw, kNum, sizeof(kNum));
-    snprintf(kitcoStr, sizeof(kitcoStr), (getLanguage() == LANG_VI ? "THE GIOI (KITCO):  $%s,%d / oz" : "WORLD (KITCO):  $%s,%d / oz"), kNum, kdec);
+    snprintf(kitcoStr, sizeof(kitcoStr), (getLanguage() == LANG_VI ? "THẾ GIỚI (KITCO):  $%s,%d / oz" : "WORLD (KITCO):  $%s,%d / oz"), kNum, kdec);
     _spr.setTextDatum(TL_DATUM);
     _spr.setTextColor(RGB565(170, 215, 255));
-    _spr.drawString(kitcoStr, 16, 70, 2);
+    _spr.drawString(kitcoStr, 16, 68, 2);
 
-    char diffStr[48];
-    snprintf(diffStr, sizeof(diffStr), (getLanguage() == LANG_VI ? "Chenh lech trong nuoc: ~%.1f tr/luong" : "Domestic spread: ~%.1f M/tael"), fd.domesticDiffTr);
+    char diffStr[64];
+    snprintf(diffStr, sizeof(diffStr), (getLanguage() == LANG_VI ? "Chênh lệch trong nước: ~%.1f tr/lượng" : "Domestic spread: ~%.1f M/tael"), fd.domesticDiffTr);
     toVNFloat(diffStr);
     _spr.setTextColor(RGB565(200, 210, 225));
-    _spr.drawString(diffStr, 16, 90, 1);
+    _spr.drawString(diffStr, 16, 88, 1);
 
     // CỤM THẺ THỐNG KÊ ĐÁY & ĐỈNH 7 NGÀY (Rộng 250px — Chống tràn chữ 100%)
     int16_t midX = 160;
-    _spr.fillSmoothRoundRect(midX - 125, 104, 250, 20, 10, RGB565(24, 22, 18), RGB565(12, 11, 16));
-    _spr.drawRoundRect(midX - 125, 104, 250, 20, 10, RGB565(70, 58, 35));
+    _spr.fillSmoothRoundRect(midX - 125, 104, 250, 20, 10, RGB565(70, 58, 35), RGB565(12, 11, 16));
+    _spr.fillSmoothRoundRect(midX - 124, 105, 248, 18, 9, RGB565(24, 22, 18), RGB565(70, 58, 35));
 
-    char dayGStr[32], dinhGStr[32];
-    snprintf(dayGStr, sizeof(dayGStr), (getLanguage() == LANG_VI ? "Day: %.1f tr" : "Low: %.1f M"), fd.sjcMin7d);
+    char dayGStr[40], dinhGStr[40];
+    snprintf(dayGStr, sizeof(dayGStr), (getLanguage() == LANG_VI ? "Đáy: %.1f tr" : "Low: %.1f M"), fd.sjcMin7d);
     toVNFloat(dayGStr);
-    snprintf(dinhGStr, sizeof(dinhGStr), (getLanguage() == LANG_VI ? "Dinh: %.1f tr" : "High: %.1f M"), fd.sjcMax7d);
+    snprintf(dinhGStr, sizeof(dinhGStr), (getLanguage() == LANG_VI ? "Đỉnh: %.1f tr" : "High: %.1f M"), fd.sjcMax7d);
     toVNFloat(dinhGStr);
 
     _spr.setTextDatum(MR_DATUM);
@@ -3201,13 +3364,13 @@ void Display::renderFinanceGoldPopup() {
     _spr.setTextColor(C_GOLD);
     _spr.drawString(dinhGStr, midX + 10, 114, 1);
 
-    // Biểu đồ vàng 7 ngày khổ rộng 292px
+    // Biểu đồ vàng 7 ngày khổ rộng 292px + Area Gradient
     int16_t chartX = 14;
     int16_t chartY = 130;
     int16_t chartW = 292;
     int16_t chartH = 64;
 
-    drawFinanceSparkline(chartX, chartY, chartW, chartH, fd.sjc7d, 7, C_GOLD, false);
+    drawFinanceSparkline(chartX, chartY, chartW, chartH, fd.sjc7d, 7, C_GOLD, true);
 
     // Trục 7 ngày gần nhất động (tính lùi từ Hôm nay)
     time_t rawGoldTime = time(NULL);
@@ -3230,7 +3393,7 @@ void Display::renderFinanceGoldPopup() {
     // Footer nguồn
     _spr.setTextDatum(MC_DATUM);
     _spr.setTextColor(theme.textVDim);
-    _spr.drawString((getLanguage() == LANG_VI ? "Nguon: SJC & Kitco  •  Don vi: Trieu VND/Luong" : "Source: SJC & Kitco  •  Unit: Million VND/Tael"), 160, 224, 1);
+    _spr.drawString((getLanguage() == LANG_VI ? "Nguồn: SJC & Kitco  •  Đơn vị: Triệu VNĐ/Lượng" : "Source: SJC & Kitco  •  Unit: Million VND/Tael"), 160, 224, 1);
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -3309,12 +3472,12 @@ void Display::renderPage3_Pomodoro() {
     drawBackground();
 
     // ── 1. THANH CHỌN CHẾ ĐỘ DẠNG VIÊN THUỐC HỢP NHẤT (Top Segmented Capsule) ──
-    // Y = 8..28 (H=20px), Capsule nền bo tròn X = 45..275 (W=230px) theo Theme
+    // Y = 8..28 (H=20px), Capsule nền bo tròn đồng tâm X = 45..275 (W=230px) theo Theme
     int16_t capX = 45, capY = 8, capW = 230, capH = 20, capR = 10;
-    _spr.fillSmoothRoundRect(capX, capY, capW, capH, capR, theme.card, theme.bg);
-    _spr.drawRoundRect(capX, capY, capW, capH, capR, theme.cardBorder);
+    _spr.fillSmoothRoundRect(capX, capY, capW, capH, capR, theme.cardBorder, theme.bg);
+    _spr.fillSmoothRoundRect(capX + 1, capY + 1, capW - 2, capH - 2, capR - 1, theme.card, theme.cardBorder);
 
-    const char* tabNamesVI[] = { "TAP TRUNG", "NGHI 5P", "NGHI 15P" };
+    const char* tabNamesVI[] = { "TẬP TRUNG", "NGHỈ 5P", "NGHỈ 15P" };
     const char* tabNamesEN[] = { "FOCUS", "BREAK 5M", "BREAK 15M" };
     const char* const* tabNames = (getLanguage() == LANG_VI) ? tabNamesVI : tabNamesEN;
     int16_t segX[] = { 47, 123, 199 };
@@ -3382,16 +3545,16 @@ void Display::renderPage3_Pomodoro() {
     int16_t cx2 = 236;
 
     // Dòng trạng thái nhỏ trang nhã (Status tag)
-    const char* statusDesc = (getLanguage() == LANG_VI) ? "DANG TAP TRUNG" : "FOCUSING...";
+    const char* statusDesc = (getLanguage() == LANG_VI) ? "ĐANG TẬP TRUNG" : "FOCUSING...";
     if (_pomoState == POMO_STOPPED) {
         statusDesc = (_pomoMode == POMO_FOCUS)
-                     ? ((getLanguage() == LANG_VI) ? "SAN SANG TAP TRUNG" : "READY TO FOCUS")
-                     : ((getLanguage() == LANG_VI) ? "SAN SANG NGHI" : "READY FOR BREAK");
+                     ? ((getLanguage() == LANG_VI) ? "SẴN SÀNG TẬP TRUNG" : "READY TO FOCUS")
+                     : ((getLanguage() == LANG_VI) ? "SẴN SÀNG NGHỈ" : "READY FOR BREAK");
     } else if (_pomoState == POMO_PAUSED) {
-        statusDesc = (getLanguage() == LANG_VI) ? "DANG TAM DUNG" : "PAUSED";
+        statusDesc = (getLanguage() == LANG_VI) ? "ĐANG TẠM DỪNG" : "PAUSED";
     } else {
-        if (_pomoMode == POMO_SHORT_BREAK) statusDesc = (getLanguage() == LANG_VI) ? "NGHI NGAN 5 PHUT" : "SHORT BREAK 5M";
-        else if (_pomoMode == POMO_LONG_BREAK) statusDesc = (getLanguage() == LANG_VI) ? "NGHI DAI 15 PHUT" : "LONG BREAK 15M";
+        if (_pomoMode == POMO_SHORT_BREAK) statusDesc = (getLanguage() == LANG_VI) ? "NGHỈ NGẮN 5 PHÚT" : "SHORT BREAK 5M";
+        else if (_pomoMode == POMO_LONG_BREAK) statusDesc = (getLanguage() == LANG_VI) ? "NGHỈ DÀI 15 PHÚT" : "LONG BREAK 15M";
     }
     _spr.setTextDatum(MC_DATUM);
     _spr.setTextColor(activeColor);
@@ -3404,7 +3567,7 @@ void Display::renderPage3_Pomodoro() {
     _spr.setTextColor(theme.textMain);
     _spr.drawString(timeBuf, cx2, 104, 6);
 
-    // ── 4. CỤM NÚT ĐIỀU KHIỂN CÔNG THÁI HỌC (Y = 152..194, H = 42px — Rộng rãi, kết thúc tại Y=194) ──
+    // ── 4. CỤM NÚT ĐIỆU KHIỂN CÔNG THÁI HỌC (Y = 152..194, H = 42px — Rộng rãi, kết thúc tại Y=194) ──
     int16_t btnY = 152, btnH = 42;
 
     if (_pomoState == POMO_STOPPED) {
@@ -3415,32 +3578,32 @@ void Display::renderPage3_Pomodoro() {
         _spr.setTextColor(C_WHITE);
         _spr.drawString(L(TXT_POMO_START), bX + bW / 2, btnY + btnH / 2, 2);
     } else if (_pomoState == POMO_RUNNING) {
-        // Nút Trái: TAM DUNG / PAUSE
+        // Nút Trái: TẠM DỪNG / PAUSE
         int16_t b1X = 158, b1W = 74;
         _spr.fillSmoothRoundRect(b1X, btnY, b1W, btnH, 16, RGB565(245, 180, 45), theme.bg);
         _spr.setTextDatum(MC_DATUM);
         _spr.setTextColor(RGB565(20, 20, 25));
         _spr.drawString(L(TXT_POMO_PAUSE), b1X + b1W / 2, btnY + btnH / 2, 2);
 
-        // Nút Phải: DAT LAI / RESET (Hòa nhập tông Card & Border của Theme)
+        // Nút Phải: ĐẶT LẠI / RESET (Bo tròn đồng tâm mượt mà)
         int16_t b2X = 236, b2W = 74;
-        _spr.fillSmoothRoundRect(b2X, btnY, b2W, btnH, 16, theme.card, theme.bg);
-        _spr.drawRoundRect(b2X, btnY, b2W, btnH, 16, theme.cardBorder);
+        _spr.fillSmoothRoundRect(b2X, btnY, b2W, btnH, 16, theme.cardBorder, theme.bg);
+        _spr.fillSmoothRoundRect(b2X + 1, btnY + 1, b2W - 2, btnH - 2, 15, theme.card, theme.cardBorder);
         _spr.setTextDatum(MC_DATUM);
         _spr.setTextColor(theme.textMain);
         _spr.drawString(L(TXT_POMO_RESET), b2X + b2W / 2, btnY + btnH / 2, 2);
     } else if (_pomoState == POMO_PAUSED) {
-        // Nút Trái: TIEP TUC / RESUME
+        // Nút Trái: TIẾP TỤC / RESUME
         int16_t b1X = 158, b1W = 74;
         _spr.fillSmoothRoundRect(b1X, btnY, b1W, btnH, 16, theme.green, theme.bg);
         _spr.setTextDatum(MC_DATUM);
         _spr.setTextColor(RGB565(15, 25, 20));
-        _spr.drawString((getLanguage() == LANG_VI) ? "TIEP TUC" : "RESUME", b1X + b1W / 2, btnY + btnH / 2, 2);
+        _spr.drawString((getLanguage() == LANG_VI) ? "TIẾP TỤC" : "RESUME", b1X + b1W / 2, btnY + btnH / 2, 2);
 
-        // Nút Phải: DAT LAI / RESET (Hòa nhập tông Card & Border của Theme)
+        // Nút Phải: ĐẶT LẠI / RESET (Bo tròn đồng tâm mượt mà)
         int16_t b2X = 236, b2W = 74;
-        _spr.fillSmoothRoundRect(b2X, btnY, b2W, btnH, 16, theme.card, theme.bg);
-        _spr.drawRoundRect(b2X, btnY, b2W, btnH, 16, theme.cardBorder);
+        _spr.fillSmoothRoundRect(b2X, btnY, b2W, btnH, 16, theme.cardBorder, theme.bg);
+        _spr.fillSmoothRoundRect(b2X + 1, btnY + 1, b2W - 2, btnH - 2, 15, theme.card, theme.cardBorder);
         _spr.setTextDatum(MC_DATUM);
         _spr.setTextColor(theme.textMain);
         _spr.drawString(L(TXT_POMO_RESET), b2X + b2W / 2, btnY + btnH / 2, 2);
@@ -3477,8 +3640,8 @@ void Display::renderPage5_Settings() {
     //     (X: 10..310, Y: 6..52, H=46px — Vừa bấm nút [-] [+], vừa chạm/kéo thanh)
     // ═══════════════════════════════════════════════════════════════════
     int16_t brY = 6, brH = 46;
-    _spr.fillSmoothRoundRect(10, brY, 300, brH, 10, cardBg, theme.bg);
-    _spr.drawRoundRect(10, brY, 300, brH, 10, borderCol);
+    _spr.fillSmoothRoundRect(10, brY, 300, brH, 10, borderCol, theme.bg);
+    _spr.fillSmoothRoundRect(11, brY + 1, 298, brH - 2, 9, cardBg, borderCol);
 
     int16_t brCy = brY + brH / 2; // Y = 29
     bool isAuto = hardware.isAutoBrightness();
@@ -3510,8 +3673,8 @@ void Display::renderPage5_Settings() {
     }
 
     // Icon Mặt trời nhỏ + Số % độ sáng nằm gọn bên trong lòng thanh trượt
-    _spr.fillCircle(slX + 16, brCy, 5, RGB565(250, 185, 30));
-    _spr.fillCircle(slX + 16, brCy, 2, C_BLACK);
+    _spr.fillSmoothCircle(slX + 16, brCy, 5, RGB565(250, 185, 30));
+    _spr.fillSmoothCircle(slX + 16, brCy, 2, C_BLACK, RGB565(250, 185, 30));
 
     char bStr[12];
     snprintf(bStr, sizeof(bStr), "%d%%", curBri);
@@ -3546,17 +3709,17 @@ void Display::renderPage5_Settings() {
     int16_t row1Y = 59, row2Y = 130;
 
     // ── Ô 1 (Trái - Trên): NGÔN NGỮ / LANGUAGE ─────────────────────────
-    _spr.fillSmoothRoundRect(leftX, row1Y, tW, tH, 10, cardBg, theme.bg);
-    _spr.drawRoundRect(leftX, row1Y, tW, tH, 10, borderCol);
+    _spr.fillSmoothRoundRect(leftX, row1Y, tW, tH, 10, borderCol, theme.bg);
+    _spr.fillSmoothRoundRect(leftX + 1, row1Y + 1, tW - 2, tH - 2, 9, cardBg, borderCol);
 
-    _spr.fillCircle(leftX + 18, row1Y + 19, 8, RGB565(30, 180, 90));
+    _spr.fillSmoothCircle(leftX + 18, row1Y + 19, 8, RGB565(30, 180, 90), cardBg);
     _spr.setTextDatum(MC_DATUM);
     _spr.setTextColor(C_WHITE);
     _spr.drawString("L", leftX + 18, row1Y + 19, 1);
 
     _spr.setTextDatum(ML_DATUM);
     _spr.setTextColor(theme.textDim);
-    _spr.drawString(isVI ? "NGON NGU" : "LANGUAGE", leftX + 32, row1Y + 19, 1);
+    _spr.drawString(isVI ? "NGÔN NGỮ" : "LANGUAGE", leftX + 32, row1Y + 19, 1);
 
     _spr.setTextDatum(ML_DATUM);
     _spr.setTextColor(theme.textMain);
@@ -3567,17 +3730,17 @@ void Display::renderPage5_Settings() {
     _spr.drawString(">", leftX + tW - 10, row1Y + 45, 2);
 
     // ── Ô 2 (Phải - Trên): GIAO DIỆN / THEME ───────────────────────────
-    _spr.fillSmoothRoundRect(rightX, row1Y, tW, tH, 10, cardBg, theme.bg);
-    _spr.drawRoundRect(rightX, row1Y, tW, tH, 10, borderCol);
+    _spr.fillSmoothRoundRect(rightX, row1Y, tW, tH, 10, borderCol, theme.bg);
+    _spr.fillSmoothRoundRect(rightX + 1, row1Y + 1, tW - 2, tH - 2, 9, cardBg, borderCol);
 
-    _spr.fillCircle(rightX + 18, row1Y + 19, 8, RGB565(130, 65, 210));
+    _spr.fillSmoothCircle(rightX + 18, row1Y + 19, 8, RGB565(130, 65, 210), cardBg);
     _spr.setTextDatum(MC_DATUM);
     _spr.setTextColor(C_WHITE);
     _spr.drawString("T", rightX + 18, row1Y + 19, 1);
 
     _spr.setTextDatum(ML_DATUM);
     _spr.setTextColor(theme.textDim);
-    _spr.drawString(isVI ? "GIAO DIEN" : "THEME STYLE", rightX + 32, row1Y + 19, 1);
+    _spr.drawString(isVI ? "GIAO DIỆN" : "THEME STYLE", rightX + 32, row1Y + 19, 1);
 
     _spr.setTextDatum(ML_DATUM);
     _spr.setTextColor(theme.accent);
@@ -3588,17 +3751,17 @@ void Display::renderPage5_Settings() {
     _spr.drawString(">", rightX + tW - 10, row1Y + 45, 2);
 
     // ── Ô 3 (Trái - Dưới): ÂM CHẠM CẢM ỨNG / TOUCH SOUND ───────────────
-    _spr.fillSmoothRoundRect(leftX, row2Y, tW, tH, 10, cardBg, theme.bg);
-    _spr.drawRoundRect(leftX, row2Y, tW, tH, 10, borderCol);
+    _spr.fillSmoothRoundRect(leftX, row2Y, tW, tH, 10, borderCol, theme.bg);
+    _spr.fillSmoothRoundRect(leftX + 1, row2Y + 1, tW - 2, tH - 2, 9, cardBg, borderCol);
 
-    _spr.fillCircle(leftX + 18, row2Y + 19, 8, RGB565(0, 170, 220));
+    _spr.fillSmoothCircle(leftX + 18, row2Y + 19, 8, RGB565(0, 170, 220), cardBg);
     _spr.setTextDatum(MC_DATUM);
     _spr.setTextColor(C_WHITE);
     _spr.drawString("S", leftX + 18, row2Y + 19, 1);
 
     _spr.setTextDatum(ML_DATUM);
     _spr.setTextColor(theme.textDim);
-    _spr.drawString(isVI ? "AM CHAM" : "TOUCH SOUND", leftX + 32, row2Y + 19, 1);
+    _spr.drawString(isVI ? "ÂM CHẠM" : "TOUCH SOUND", leftX + 32, row2Y + 19, 1);
 
     _spr.setTextDatum(ML_DATUM);
     _spr.setTextColor(theme.textMain);
@@ -3609,18 +3772,18 @@ void Display::renderPage5_Settings() {
     _spr.drawString(">", leftX + tW - 10, row2Y + 45, 2);
 
     // ── Ô 4 (Phải - Dưới): ÂM KHỞI ĐỘNG ↔ CHUÔNG BÁO (Cách 1: Nút lật chế độ bên phải) ──
-    _spr.fillSmoothRoundRect(rightX, row2Y, tW, tH, 10, cardBg, theme.bg);
-    _spr.drawRoundRect(rightX, row2Y, tW, tH, 10, borderCol);
+    _spr.fillSmoothRoundRect(rightX, row2Y, tW, tH, 10, borderCol, theme.bg);
+    _spr.fillSmoothRoundRect(rightX + 1, row2Y + 1, tW - 2, tH - 2, 9, cardBg, borderCol);
 
     if (_settingsSoundIsStartup) {
-        _spr.fillCircle(rightX + 18, row2Y + 19, 8, RGB565(0, 200, 240));
+        _spr.fillSmoothCircle(rightX + 18, row2Y + 19, 8, RGB565(0, 200, 240), cardBg);
         _spr.setTextDatum(MC_DATUM);
         _spr.setTextColor(C_BLACK);
         _spr.drawString("K", rightX + 18, row2Y + 19, 1);
 
         _spr.setTextDatum(ML_DATUM);
         _spr.setTextColor(theme.textDim);
-        _spr.drawString(isVI ? "KHOI DONG" : "BOOT SND", rightX + 30, row2Y + 19, 1);
+        _spr.drawString(isVI ? "KHỞI ĐỘNG" : "BOOT SND", rightX + 30, row2Y + 19, 1);
 
         _spr.setTextDatum(ML_DATUM);
         _spr.setTextColor(theme.textMain);
@@ -3633,16 +3796,16 @@ void Display::renderPage5_Settings() {
         _spr.fillSmoothRoundRect(rightX + 88, row2Y + 18, 48, 22, 11, swFill, swBorder);
         _spr.setTextDatum(MC_DATUM);
         _spr.setTextColor(RGB565(255, 165, 110));
-        _spr.drawString(isVI ? "CHUONG" : "ALARM", rightX + 112, row2Y + 29, 1);
+        _spr.drawString(isVI ? "CHUÔNG" : "ALARM", rightX + 112, row2Y + 29, 1);
     } else {
-        _spr.fillCircle(rightX + 18, row2Y + 19, 8, RGB565(240, 95, 45));
+        _spr.fillSmoothCircle(rightX + 18, row2Y + 19, 8, RGB565(240, 95, 45), cardBg);
         _spr.setTextDatum(MC_DATUM);
         _spr.setTextColor(C_WHITE);
         _spr.drawString("A", rightX + 18, row2Y + 19, 1);
 
         _spr.setTextDatum(ML_DATUM);
         _spr.setTextColor(theme.textDim);
-        _spr.drawString(isVI ? "BAO THUC" : "ALARM", rightX + 30, row2Y + 19, 1);
+        _spr.drawString(isVI ? "BÁO THỨC" : "ALARM", rightX + 30, row2Y + 19, 1);
 
         _spr.setTextDatum(ML_DATUM);
         _spr.setTextColor(theme.textMain);
@@ -3655,7 +3818,7 @@ void Display::renderPage5_Settings() {
         _spr.fillSmoothRoundRect(rightX + 88, row2Y + 18, 48, 22, 11, swFill, swBorder);
         _spr.setTextDatum(MC_DATUM);
         _spr.setTextColor(RGB565(110, 230, 255));
-        _spr.drawString(isVI ? "K.DONG" : "BOOT", rightX + 112, row2Y + 29, 1);
+        _spr.drawString(isVI ? "K.ĐỘNG" : "BOOT", rightX + 112, row2Y + 29, 1);
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -3663,16 +3826,16 @@ void Display::renderPage5_Settings() {
     //     Phủ kín cân đối toàn màn hình (không còn khoảng đen trống thừa phía dưới!)
     // ═══════════════════════════════════════════════════════════════════
     int16_t botY = 201, botH = 30;
-    _spr.fillSmoothRoundRect(10, botY, 300, botH, 9, cardBg, theme.bg);
-    _spr.drawRoundRect(10, botY, 300, botH, 9, borderCol);
+    _spr.fillSmoothRoundRect(10, botY, 300, botH, 9, borderCol, theme.bg);
+    _spr.fillSmoothRoundRect(11, botY + 1, 298, botH - 2, 8, cardBg, borderCol);
 
     int16_t botCy = botY + botH / 2; // Y = 216
 
     // Chấm tròn trạng thái mạng (Xanh lá khi Online, Đỏ khi Offline)
     bool wifiOk = WiFi.isConnected();
-    _spr.fillCircle(24, botCy, 4, wifiOk ? theme.green : theme.red);
+    _spr.fillSmoothCircle(24, botCy, 4, wifiOk ? theme.green : theme.red, cardBg);
 
-    String ipStr = wifiOk ? ("IP: " + WiFi.localIP().toString()) : (isVI ? "WiFi: Chua ket noi" : "WiFi: Offline");
+    String ipStr = wifiOk ? ("IP: " + WiFi.localIP().toString()) : (isVI ? "WiFi: Chưa kết nối" : "WiFi: Offline");
     _spr.setTextDatum(ML_DATUM);
     _spr.setTextColor(theme.textMain);
     _spr.drawString(ipStr.c_str(), 36, botCy, 2);
@@ -3682,7 +3845,7 @@ void Display::renderPage5_Settings() {
     _spr.fillSmoothRoundRect(226, botCy - 9, 76, 18, 9, RGB565(20, 38, 66), theme.accent);
     _spr.setTextDatum(MC_DATUM);
     _spr.setTextColor(theme.accent);
-    _spr.drawString(isVI ? "DOI WIFI" : "WIFI QR", 264, botCy, 1);
+    _spr.drawString(isVI ? "ĐỔI WIFI" : "WIFI QR", 264, botCy, 1);
 }
 
 // ─── Touch Handler for Page 5 Settings (Bento Grid 2x2 + Wide Slider) ──
@@ -3787,20 +3950,20 @@ bool Display::handleTouchSettings(int16_t x, int16_t y) {
     }
 
     // ── 4. Thanh Đáy Hệ thống & WiFi (Y: 201..239) ────────────────────────
-    // • Góc phải (x >= 216): Nút [DOI WIFI] / [WIFI QR] -> Mở trang mã QR cài đặt WiFi
-    // • Chính giữa đáy (x: 105..215, y >= 208): Vùng viên thuốc chỉ báo Dock -> Trả về false để đánh thức Dock!
-    // • Góc trái dưới (x < 105): Chặn cảm ứng tại chỗ để bấm lệch dưới card trái không bao giờ làm bật Dock
+    // • Góc phải (x >= 210): Nút [DOI WIFI] / [WIFI QR] (Vẽ ở X: 224..304) -> Mở trang mã QR cài đặt WiFi
+    // • Chính giữa đáy (x: 115..205, y >= 212): Vùng viên thuốc chỉ báo Dock (X: 134..186, Y: 236) -> Trả về false để đánh thức Dock!
+    // • Góc trái dưới (x < 115): Chặn cảm ứng tại chỗ để bấm lệch dưới card trái không bao giờ làm bật Dock
     if (y >= 201) {
-        if (x >= 216) {
+        if (x >= 210) {
             hardware.playTouchSound();
             webDashboard.requestWiFiPortal();
             _lastRender = 0;
             return true;
         }
-        if (x >= 105 && x <= 215 && y >= 208) {
+        if (x >= 115 && x <= 205 && y >= 212) {
             return false; // Cho phép đi xuống bước đánh thức thanh Dock
         }
-        return true; // Chặn mọi điểm chạm lệch bên dưới card trái
+        return true; // Chặn mọi điểm chạm lệch bên dưới card trái hoặc vùng đệm
     }
 
     return false;

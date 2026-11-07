@@ -6,9 +6,9 @@ struct LunarDate {
     uint8_t month;        // 1..12
     uint16_t year;        // e.g. 2026
     bool isLeap;          // true if leap month
-    char yearCanChi[16];  // e.g. "Binh Ngo"
-    char dayCanChi[16];   // e.g. "Canh Than"
-    char monthCanChi[16]; // e.g. "Mau Tuat"
+    char yearCanChi[24];  // e.g. "Bính Ngọ"
+    char dayCanChi[24];   // e.g. "Canh Thân"
+    char monthCanChi[24]; // e.g. "Mậu Tuất"
 };
 
 class LunarCalendar {

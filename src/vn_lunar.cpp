@@ -2,11 +2,11 @@
 #include <math.h>
 
 static const char* const CAN_NAMES[10] = {
-    "Giap", "At", "Binh", "Dinh", "Mau", "Ky", "Canh", "Tan", "Nham", "Quy"
+    "Giáp", "Ất", "Bính", "Đinh", "Mậu", "Kỷ", "Canh", "Tân", "Nhâm", "Quý"
 };
 
 static const char* const CHI_NAMES[12] = {
-    "Ty", "Suu", "Dan", "Mao", "Thin", "Ty", "Ngo", "Mui", "Than", "Dau", "Tuat", "Hoi"
+    "Tý", "Sửu", "Dần", "Mão", "Thìn", "Tỵ", "Ngọ", "Mùi", "Thân", "Dậu", "Tuất", "Hợi"
 };
 
 const char* LunarCalendar::getCanName(uint8_t index) {
@@ -168,12 +168,12 @@ LunarDate LunarCalendar::convertSolar2Lunar(uint8_t dd, uint8_t mm, uint16_t yy)
 }
 
 static const char* const SOLAR_TERMS[24] = {
-    "Xuan Phan", "Thanh Minh", "Coc Vu",     "Lap Ha",
-    "Tieu Man",  "Mang Chung", "Ha Chi",     "Tieu Thu",
-    "Dai Thu",   "Lap Thu",    "Xu Thu",     "Bach Lo",
-    "Thu Phan",  "Han Lo",     "Suong Giang", "Lap Dong",
-    "Tieu Tuyet", "Dai Tuyet",  "Dong Chi",   "Tieu Han",
-    "Dai Han",   "Lap Xuan",   "Vu Thuy",    "Kinh Trap"
+    "Xuân Phân", "Thanh Minh", "Cốc Vũ",      "Lập Hạ",
+    "Tiểu Mãn",  "Mang Chủng", "Hạ Chí",      "Tiểu Thử",
+    "Đại Thử",   "Lập Thu",    "Xử Thử",      "Bạch Lộ",
+    "Thu Phân",  "Hàn Lộ",     "Sương Giáng", "Lập Đông",
+    "Tiểu Tuyết","Đại Tuyết",  "Đông Chí",    "Tiểu Hàn",
+    "Đại Hàn",   "Lập Xuân",   "Vũ Thủy",     "Kinh Trập"
 };
 
 const char* LunarCalendar::getSolarTermName(uint8_t dd, uint8_t mm, uint16_t yy) {

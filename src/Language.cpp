@@ -8,89 +8,89 @@ static Language _currentLang = LANG_VI;
 
 static const char* const STRINGS_VI[TXT_KEY_COUNT] = {
     // TXT_SETTINGS
-    "CAI DAT",
+    "CÀI ĐẶT",
     // TXT_SYSTEM_IP
     "smartdesk.local",
     // TXT_TEST
-    "THU",
+    "THỬ",
     // TXT_AUTO
     "AUTO",
     // TXT_BACK
-    "QUAY LAI",
+    "QUAY LẠI",
     // TXT_CLOSE
-    "DONG",
+    "ĐÓNG",
 
     // Page 4 Settings Rows
     // TXT_ROW_LANGUAGE
-    "Ngon ngu (Language)",
+    "Ngôn ngữ (Language)",
     // TXT_ROW_THEME
-    "Giao dien (Theme)",
+    "Giao diện (Theme)",
     // TXT_ROW_TOUCH_SND
-    "Am cham cam ung",
+    "Âm chạm cảm ứng",
     // TXT_ROW_ALARM_MEL
-    "Dieu chuong bao",
+    "Điệu chuông báo",
     // TXT_ROW_STARTUP_SND
-    "Am khoi dong",
+    "Âm khởi động",
     // TXT_ROW_BRIGHTNESS
-    "Do sang",
+    "Độ sáng",
 
     // Page 2 Pomodoro
     // TXT_POMO_FOCUS
-    "TAP TRUNG",
+    "TẬP TRUNG",
     // TXT_POMO_SHORT_BREAK
-    "NGHI NGAN",
+    "NGHỈ NGẮN",
     // TXT_POMO_LONG_BREAK
-    "NGHI DAI",
+    "NGHỈ DÀI",
     // TXT_POMO_START
-    "BAT DAU",
+    "BẮT ĐẦU",
     // TXT_POMO_PAUSE
-    "TAM DUNG",
+    "TẠM DỪNG",
     // TXT_POMO_RESET
-    "DAT LAI",
+    "ĐẶT LẠI",
     // TXT_POMO_COMPLETED
-    "HOAN THANH!",
+    "HOÀN THÀNH!",
 
     // Page 3 Alarm
     // TXT_ALARM_TITLE
-    "BAO THUC",
+    "BÁO THỨC",
     // TXT_ALARM_SAVE_ON
-    "Luu & Bat",
+    "Lưu & Bật",
     // TXT_ALARM_DISMISS
-    "Tat bao thuc",
+    "Tắt báo thức",
     // TXT_ALARM_MSG_DEFAULT
-    "Bao thuc!",
+    "Báo thức!",
 
     // Page 1 Finance
     // TXT_FINANCE_SJC
-    "VANG SJC 9999",
+    "VÀNG SJC 9999",
     // TXT_FINANCE_WORLD
-    "VANG THE GIOI",
+    "VÀNG THẾ GIỚI",
     // TXT_FINANCE_FOREX
-    "TI GIA NGOAI TE",
+    "TỶ GIÁ NGOẠI TỆ",
     // TXT_FINANCE_7D
-    "Lich su 7 ngay",
+    "Lịch sử 7 ngày",
     // TXT_FINANCE_BUY
     "Mua:",
     // TXT_FINANCE_SELL
-    "Ban:",
+    "Bán:",
 
     // Page 0 Modals & Weather
     // TXT_ASTRONOMY_LUNAR
-    "THIEN VAN & AM LICH",
+    "THIÊN VĂN & ÂM LỊCH",
     // TXT_LUNAR_DATE
-    "Ngay am lich:",
+    "Ngày âm lịch:",
     // TXT_DAY_CANCHI
-    "Ngay can chi:",
+    "Ngày can chi:",
     // TXT_YEAR_CANCHI
-    "Nam can chi:",
+    "Năm can chi:",
     // TXT_TEMP
-    "Nhiet do",
+    "Nhiệt độ",
     // TXT_HUMIDITY
-    "Do am",
+    "Độ ẩm",
     // TXT_WIND
-    "Gio",
+    "Gió",
     // TXT_UV
-    "Chi so UV"
+    "Chỉ số UV"
 };
 
 static const char* const STRINGS_EN[TXT_KEY_COUNT] = {
@@ -182,8 +182,8 @@ static const char* const STRINGS_EN[TXT_KEY_COUNT] = {
 
 // Days of week
 static const char* const DAYS_VI[] = {
-    "CHU NHAT", "THU HAI", "THU BA", "THU TU",
-    "THU NAM", "THU SAU", "THU BAY"
+    "CHỦ NHẬT", "THỨ HAI", "THỨ BA", "THỨ TƯ",
+    "THỨ NĂM", "THỨ SÁU", "THỨ BẢY"
 };
 
 static const char* const DAYS_EN[] = {
@@ -193,7 +193,7 @@ static const char* const DAYS_EN[] = {
 
 // Touch sound names
 static const char* const TOUCH_SND_NAMES_VI[] = {
-    "Tat am", "Phim co", "Giot nuoc", "Bip nhe", "Chip chip"
+    "Tắt âm", "Phím cơ", "Giọt nước", "Bíp nhẹ", "Chíp chíp"
 };
 static const char* const TOUCH_SND_NAMES_EN[] = {
     "Mute", "Mechanical", "Water Drop", "Soft Beep", "Dual Chirp"
@@ -201,7 +201,7 @@ static const char* const TOUCH_SND_NAMES_EN[] = {
 
 // Alarm melody names
 static const char* const ALARM_NAMES_VI[] = {
-    "Co dien", "Nhe nhang", "Cyber", "Em diu"
+    "Cổ điển", "Nhẹ nhàng", "Cyber", "Êm dịu"
 };
 static const char* const ALARM_NAMES_EN[] = {
     "Classic", "Melodic", "Cyber", "Gentle"
@@ -234,7 +234,7 @@ void toggleLanguage() {
 }
 
 const char* getLanguageName() {
-    return (_currentLang == LANG_VI) ? "Tieng Viet" : "English";
+    return (_currentLang == LANG_VI) ? "Tiếng Việt" : "English";
 }
 
 const char* L(TextKey key) {
@@ -254,10 +254,10 @@ const char* getAlarmMelodyNameI18n(uint8_t id) {
 
 static const char* const STARTUP_NAMES_VI[] = {
     "Marimba",
-    "Pha le",
+    "Pha lê",
     "Cyber",
     "Retro",
-    "Tat am"
+    "Tắt âm"
 };
 
 static const char* const STARTUP_NAMES_EN[] = {
@@ -287,14 +287,14 @@ const char* getShortDayNameI18n(uint8_t wday) {
 
 const char* getMoonPhaseNameI18n(uint8_t lunarDay) {
     bool vi = (_currentLang == LANG_VI);
-    if (lunarDay <= 1)       return vi ? "Trang Non" : "New Moon";
-    else if (lunarDay <= 6)  return vi ? "Trang Luoi Liem" : "Waxing Crescent";
-    else if (lunarDay <= 8)  return vi ? "Ban Nguyet Dau" : "First Quarter";
-    else if (lunarDay <= 13) return vi ? "Trang Truong Dan" : "Waxing Gibbous";
-    else if (lunarDay <= 16) return vi ? "Trang Tron (Ram)" : "Full Moon";
-    else if (lunarDay <= 21) return vi ? "Trang Khuyet Dan" : "Waning Gibbous";
-    else if (lunarDay <= 23) return vi ? "Ban Nguyet Cuoi" : "Last Quarter";
-    else                     return vi ? "Trang Tan Cuoi" : "Waning Crescent";
+    if (lunarDay <= 1)       return vi ? "Trăng Non" : "New Moon";
+    else if (lunarDay <= 6)  return vi ? "Trăng Lưỡi Liềm" : "Waxing Crescent";
+    else if (lunarDay <= 8)  return vi ? "Bán Nguyệt Đầu" : "First Quarter";
+    else if (lunarDay <= 13) return vi ? "Trăng Trương Dần" : "Waxing Gibbous";
+    else if (lunarDay <= 16) return vi ? "Trăng Tròn (Rằm)" : "Full Moon";
+    else if (lunarDay <= 21) return vi ? "Trăng Khuyết Dần" : "Waning Gibbous";
+    else if (lunarDay <= 23) return vi ? "Bán Nguyệt Cuối" : "Last Quarter";
+    else                     return vi ? "Trăng Tàn Cuối" : "Waning Crescent";
 }
 
 const char* getWeatherConditionI18n(uint8_t type, bool isNight, bool isPopup) {
@@ -302,25 +302,24 @@ const char* getWeatherConditionI18n(uint8_t type, bool isNight, bool isPopup) {
     if (!isPopup) {
         // Short version for Page 0 card
         switch (type) {
-            case 0: return isNight ? (vi ? "Dem quang" : "Clear Night") : (vi ? "Troi nang" : "Sunny");
-            case 1: return vi ? "Co may" : "Partly Cloudy";
-            case 2: return vi ? "Co mua" : "Rain";
-            case 3: return vi ? "Mua dong" : "Thunderstorm";
-            case 4: return vi ? "Tuyet" : "Snow";
-            case 5: return vi ? "Suong mu" : "Misty / Fog";
-            default: return vi ? "Troi dep" : "Clear Sky";
+            case 0: return isNight ? (vi ? "Đêm quang" : "Clear Night") : (vi ? "Trời nắng" : "Sunny");
+            case 1: return vi ? "Có mây" : "Partly Cloudy";
+            case 2: return vi ? "Có mưa" : "Rain";
+            case 3: return vi ? "Mưa dông" : "Thunderstorm";
+            case 4: return vi ? "Tuyết" : "Snow";
+            case 5: return vi ? "Sương mù" : "Misty / Fog";
+            default: return vi ? "Trời đẹp" : "Clear Sky";
         }
     } else {
         // Longer descriptive version for popup modal
         switch (type) {
-            case 0: return isNight ? (vi ? "Dem quang" : "Clear Night") : (vi ? "Troi nang dep" : "Sunny & Clear");
-            case 1: return vi ? "Nhieu may" : "Cloudy";
-            case 2: return vi ? "Troi mua rao" : "Showers";
-            case 3: return vi ? "Mua dong set" : "Thunderstorm";
-            case 4: return vi ? "Tuyet roi" : "Snowfall";
-            case 5: return vi ? "Suong mu" : "Heavy Fog";
-            default: return vi ? "Troi mat me" : "Pleasant";
+            case 0: return isNight ? (vi ? "Đêm quang" : "Clear Night") : (vi ? "Trời nắng đẹp" : "Sunny & Clear");
+            case 1: return vi ? "Nhiều mây" : "Cloudy";
+            case 2: return vi ? "Trời mưa rào" : "Showers";
+            case 3: return vi ? "Mưa dông sét" : "Thunderstorm";
+            case 4: return vi ? "Tuyết rơi" : "Snowfall";
+            case 5: return vi ? "Sương mù" : "Heavy Fog";
+            default: return vi ? "Trời mát mẻ" : "Pleasant";
         }
     }
 }
-

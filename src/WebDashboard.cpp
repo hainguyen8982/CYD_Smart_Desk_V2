@@ -216,7 +216,7 @@ input[type=range] { width: 100%; accent-color: var(--accent); height: 6px; borde
             <span data-i18n="mood_tag_label">Tiêu đề bảng Neon (Tối đa 20 ký tự, in HOA):</span>
             <span id="customTagCount" style="color: var(--accent); font-weight: 600;">0/20</span>
           </div>
-          <input type="text" id="customTagInput" class="select-control" maxlength="20" placeholder="VD: DANG DI HOP, THEM CA PHE..." oninput="updateMoodCounters()" style="width: 100%; text-transform: uppercase;">
+          <input type="text" id="customTagInput" class="select-control" maxlength="20" placeholder="VD: ĐANG ĐI HỌP, THÈM CÀ PHÊ..." oninput="updateMoodCounters()" style="width: 100%; text-transform: uppercase;">
         </div>
 
         <div style="margin-bottom: 12px;">
@@ -224,7 +224,7 @@ input[type=range] { width: 100%; accent-color: var(--accent); height: 6px; borde
             <span data-i18n="mood_msg_label">Câu nhắn phía dưới (Tối đa 36 ký tự):</span>
             <span id="customMsgCount" style="color: var(--accent); font-weight: 600;">0/36</span>
           </div>
-          <input type="text" id="customMsgInput" class="select-control" maxlength="36" placeholder="VD: Ve sau 30p * Gap thi goi dien nhe!" oninput="updateMoodCounters()" style="width: 100%;">
+          <input type="text" id="customMsgInput" class="select-control" maxlength="36" placeholder="VD: Về sau 30p • Gấp thì gọi điện nhé!" oninput="updateMoodCounters()" style="width: 100%;">
         </div>
 
         <!-- Quick suggestions container -->
@@ -865,11 +865,15 @@ function applyLanguage(l) {
   const petBtns = document.querySelectorAll('#petButtons .btn-chip');
   petBtns.forEach((b, idx) => { if (petNames[idx]) b.textContent = petNames[idx]; });
 
-  // Cập nhật tùy chọn Âm khởi động theo ngôn ngữ
+  // Cập nhật tùy chọn Âm khởi động theo ngôn ngữ (5 chế độ âm thanh)
   const startupSel = document.getElementById('startupSndSelect');
-  if (startupSel && startupSel.options.length >= 2) {
-    startupSel.options[0].textContent = (l === 1) ? '🔔 Enabled' : '🔔 Bật âm khởi động (Enabled)';
-    startupSel.options[1].textContent = (l === 1) ? '🔇 Mute' : '🔇 Tắt âm (Mute)';
+  if (startupSel) {
+    const bootNames = (l === 1)
+      ? ['🎶 Marimba Acoustic', '💎 Crystal Chime', '⚡ Cyber Synth', '🕹️ Retro 8-Bit', '🔇 Mute']
+      : ['🎶 Marimba Acoustic', '💎 Pha lê (Crystal Chime)', '⚡ Điện tử (Cyber Synth)', '🕹️ Cổ điển (Retro 8-Bit)', '🔇 Tắt âm (Mute)'];
+    Array.from(startupSel.options).forEach((opt, idx) => {
+      if (bootNames[idx]) opt.textContent = bootNames[idx];
+    });
   }
 
   // Cập nhật tiêu đề và trạng thái tùy chỉnh của Mood Editor
@@ -1142,17 +1146,17 @@ let customMoods = [
 
 const QUICK_SUGGESTIONS = [
   // 0: Happy
-  [ { t: 'DANG CHILL', m: 'Ca phe sang khong? * Minh bao!' }, { t: 'GOOD VIBES', m: 'Ngay moi tran day nang luong!' } ],
+  [ { t: 'ĐANG CHILL', m: 'Cà phê sáng không? • Mình bao!' }, { t: 'GOOD VIBES', m: 'Ngày mới tràn đầy năng lượng!' } ],
   // 1: Focus
-  [ { t: 'DANG SPRINT', m: '100% Focus * Khong tiep khach!' }, { t: 'DEEP WORK', m: 'Dang chay deadline den trua!' } ],
+  [ { t: 'ĐANG SPRINT', m: '100% Focus • Không tiếp khách!' }, { t: 'DEEP WORK', m: 'Đang chạy deadline đến trưa!' } ],
   // 2: Bug
-  [ { t: 'DANG FIX BUG', m: 'Xin dung lam phien * Dang rat quau!' }, { t: 'DND - CAY CU', m: 'Bug chua fix xong * Cho mot chut!' } ],
+  [ { t: 'ĐANG FIX BUG', m: 'Xin đừng làm phiền • Đang rất quạu!' }, { t: 'DND - CAY CÚ', m: 'Bug chưa fix xong • Chờ một chút!' } ],
   // 3: Low bat
-  [ { t: 'SAP NGUON 0%', m: 'Can nap tra sua gap!' }, { t: 'HET PIN ROI', m: 'Di sac pin mot lat se quay lai!' } ],
+  [ { t: 'SẬP NGUỒN 0%', m: 'Cần nạp trà sữa gấp!' }, { t: 'HẾT PIN RỒI', m: 'Đi sạc pin một lát sẽ quay lại!' } ],
   // 4: Chill
-  [ { t: 'BO PHO / CHAN', m: 'Chung nao moi duoc tan ca day?' }, { t: 'BUON NGU QUA', m: 'Nghi ngoi mat 5 phut nap nang luong!' } ],
+  [ { t: 'BƠ PHỜ / CHÁN', m: 'Chừng nào mới được tan ca đây?' }, { t: 'BUỒN NGỦ QUÁ', m: 'Nghỉ ngơi mắt 5 phút nạp năng lượng!' } ],
   // 5: TGIF
-  [ { t: 'QUAY THOI!', m: 'Toi nay xoa het deadline!' }, { t: 'TGIF - CHILL', m: 'Cuoi tuan roi * Di quau ngay thoi!' } ]
+  [ { t: 'QUẨY THÔI!', m: 'Tối nay xóa hết deadline!' }, { t: 'TGIF - CHILL', m: 'Cuối tuần rồi • Đi quẩy ngay thôi!' } ]
 ];
 
 const QUICK_SUGGESTIONS_EN = [
@@ -1254,8 +1258,8 @@ async function saveCustomMood() {
   let tag = document.getElementById('customTagInput').value.trim();
   let msg = document.getElementById('customMsgInput').value.trim();
 
-  tag = tag.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toUpperCase();
-  msg = msg.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D');
+  tag = tag.normalize('NFC').toUpperCase();
+  msg = msg.normalize('NFC');
 
   document.getElementById('customTagInput').value = tag;
   document.getElementById('customMsgInput').value = msg;
@@ -1304,10 +1308,10 @@ async function saveCurrencies() {
 
 function setQuickMsg(type) {
   const msgs = {
-    drink: (currentLang === 1) ? 'Drink water & Relax' : 'Uong nuoc & Thu gian',
-    sport: (currentLang === 1) ? 'Stretch & Move' : 'Dung day & Vuon vai',
-    rest:  (currentLang === 1) ? 'Take a 5-min break' : 'Nghi ngoi mat 5 phut',
-    work:  (currentLang === 1) ? 'Time to leave work!' : 'Het gio lam viec!'
+    drink: (currentLang === 1) ? 'Drink water & Relax' : 'Uống nước & Thư giãn',
+    sport: (currentLang === 1) ? 'Stretch & Move' : 'Đứng dậy & Vươn vai',
+    rest:  (currentLang === 1) ? 'Take a 5-min break' : 'Nghỉ ngơi mắt 5 phút',
+    work:  (currentLang === 1) ? 'Time to leave work!' : 'Hết giờ làm việc!'
   };
   document.getElementById('alarmMsgInput').value = msgs[type] || type;
 }
