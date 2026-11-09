@@ -20,6 +20,7 @@
 #include "DeskPet.h"
 #include "DeskMood.h"
 #include "WebDashboard.h"
+#include "EcosystemService.h"
 #include <WiFi.h>
 #include <LittleFS.h>
 #include <Preferences.h>
@@ -606,17 +607,17 @@ void Display::renderPage0_WeatherClock() {
     int16_t iconCy = cardY + 49;
     drawWeatherIcon(iconCx, iconCy, wType, night);
 
-    char tempStr[8];
-    snprintf(tempStr, sizeof(tempStr), "%.0f", w.valid ? w.temp : 29.0f);
+    char tempStr[12];
+    snprintf(tempStr, sizeof(tempStr), "%.1f", w.valid ? w.temp : 29.0f);
     _spr.setTextDatum(TL_DATUM);
     _spr.setTextColor(C_WHITE);
     _spr.drawString(tempStr, leftX + 48, cardY + 31, 4);
 
     int16_t tNumW = _spr.textWidth(tempStr, 4);
     int16_t degX = leftX + 48 + tNumW + 2;
-    _spr.drawCircle(degX + 2, cardY + 34, 2, C_GOLD);
+    _spr.drawCircle(degX + 1, cardY + 35, 2, C_GOLD);
     _spr.setTextColor(C_GOLD);
-    _spr.drawString("C", degX + 7, cardY + 33, 2);
+    _spr.drawString("C", degX + 6, cardY + 31, 4);
 
     // Condition text: spaced 6px cleanly below 29°C for relaxed readability
     const char* condStr = getWeatherConditionI18n(wType, night, false);
@@ -731,25 +732,28 @@ void Display::renderWeatherPopup() {
     int16_t infoX = 74;
 
     // Dòng 1 (Y = 56): Nhiệt độ to + Trạng thái
-    char tempNum[8];
-    snprintf(tempNum, sizeof(tempNum), "%.0f", w.valid ? w.temp : 29.0f);
+    char tempNum[12];
+    snprintf(tempNum, sizeof(tempNum), "%.1f", w.valid ? w.temp : 29.0f);
     _spr.setTextDatum(TL_DATUM);
     _spr.setTextColor(C_WHITE);
     _spr.drawString(tempNum, infoX, 56, 4);
 
     int16_t numW = _spr.textWidth(tempNum, 4);
     int16_t degX = infoX + numW + 2;
-    _spr.drawCircle(degX + 2, 59, 2, C_GOLD);
+    _spr.drawCircle(degX + 1, 60, 2, C_GOLD);
     _spr.setTextColor(C_GOLD);
-    _spr.drawString("C", degX + 7, 58, 2);
+    _spr.drawString("C", degX + 6, 56, 4);
+
+    int16_t cW = _spr.textWidth("C", 4);
+    int16_t afterCX = degX + 6 + cW + 5;
 
     // Dấu chấm phân cách •
     _spr.setTextColor(RGB565(90, 130, 180));
-    _spr.drawString("•", degX + 23, 58, 2);
+    _spr.drawString("•", afterCX, 60, 2);
 
     const char* condStr = getWeatherConditionI18n(wType, night, true);
     _spr.setTextColor(RGB565(255, 215, 0)); // Gold
-    _spr.drawString(condStr, degX + 33, 58, 2);
+    _spr.drawString(condStr, afterCX + 10, 60, 2);
 
     // Dòng 2 (Y = 88): 3 thông số Độ ẩm • Gió • UV rộng rãi
     _spr.setTextDatum(ML_DATUM);
@@ -1023,6 +1027,7 @@ void Display::triggerAlarm() {
     _activePopup = POPUP_NONE;
     wakeDock();
     _lastRender = 0;
+    ecosystem.sendEvent(EVT_ALARM_RING, (uint16_t)(_alarmHour * 60 + _alarmMinute));
     Serial.println("[Alarm] >>> TRIGGERED! Ringing started <<<");
 }
 
@@ -1031,6 +1036,7 @@ void Display::dismissAlarm() {
     _alarmSnoozed = false;
     hardware.playBeep(1800, 150);
     _lastRender = 0;
+    ecosystem.sendEvent(EVT_ALARM_DISMISS, 0);
     Serial.println("[Alarm] Dismissed by user touch");
 }
 
@@ -1040,6 +1046,7 @@ void Display::snoozeAlarm() {
     _alarmSnoozeUntil = time(NULL) + 300; // Snooze 5 phút
     hardware.playBeep(2200, 120);
     _lastRender = 0;
+    ecosystem.sendEvent(EVT_ALARM_DISMISS, 0);
     Serial.println("[Alarm] Snoozed for 5 minutes");
 }
 
@@ -1510,27 +1517,49 @@ void Display::drawMoonIcon(int16_t cx, int16_t cy, int16_t r, uint8_t lunarDay, 
     uint16_t earthshineCol = RGB565(42, 60, 92);
 
     // 1. Trăng non (New Moon: Day 1 or Day 30)
+    //    Delicate waxing sliver crescent on the right limb + mysterious earthshine dark body (No cross / sparkle)
     if (lunarDay <= 1 || lunarDay >= 30) {
         float R = (float)r;
+        float shiftX = fmaxf(1.8f, R * 0.16f); // 2.2px for r=14, 3.8px for r=24
+        float sx = -shiftX;
+        float Rs = R;
+
         for (int16_t dy = -r - 1; dy <= r + 1; dy++) {
             int16_t py = cy + dy;
             if (py < 0 || py >= SCREEN_H) continue;
             for (int16_t dx = -r - 1; dx <= r + 1; dx++) {
                 int16_t px = cx + dx;
                 if (px < 0 || px >= SCREEN_W) continue;
-                float d = sqrtf((float)(dx * dx + dy * dy));
-                if (d >= R + 0.65f) continue;
+
+                float dOut = sqrtf((float)(dx * dx + dy * dy));
+                if (dOut >= R + 0.65f) continue;
+
+                float aOut = (dOut <= R - 0.35f) ? 1.0f : (R + 0.65f - dOut);
                 uint16_t bg = _spr.readPixel(px, py);
-                if (d <= R - 1.15f) {
-                    _spr.drawPixel(px, py, _spr.alphaBlend(55, earthshineCol, bg));
+
+                // Right sliver crescent calculation (tapers to sharp tips at top & bottom)
+                float cdx = (float)dx - sx;
+                float dCut = sqrtf(cdx * cdx + (float)(dy * dy));
+                float aSliver = (dCut <= Rs - 0.50f) ? 0.0f : ((dCut >= Rs + 0.50f) ? 1.0f : (dCut - (Rs - 0.50f)));
+                float lit = aOut * aSliver;
+
+                if (lit > 0.04f && dx > -1) {
+                    // Golden-cream luminous sliver of new moon
+                    uint16_t col = (dOut >= R - 1.8f) ? moonHighlight : moonGold;
+                    uint8_t a = (uint8_t)(lit * 255.0f);
+                    _spr.drawPixel(px, py, (a == 255) ? col : _spr.alphaBlend(a, col, bg));
                 } else {
-                    float aRing = (d <= R) ? 1.0f : (R + 0.65f - d) / 0.65f;
-                    uint8_t a = (uint8_t)(aRing * 180.0f);
-                    _spr.drawPixel(px, py, _spr.alphaBlend(a, RGB565(100, 140, 190), bg));
+                    // Earthshine dark celestial disc with soft celestial rim
+                    if (dOut <= R - 1.15f) {
+                        _spr.drawPixel(px, py, _spr.alphaBlend(60, earthshineCol, bg));
+                    } else {
+                        float aRing = (dOut <= R) ? 1.0f : (R + 0.65f - dOut) / 0.65f;
+                        uint8_t a = (uint8_t)(aRing * 110.0f);
+                        _spr.drawPixel(px, py, _spr.alphaBlend(a, RGB565(90, 130, 180), bg));
+                    }
                 }
             }
         }
-        drawSparkle(cx + r / 3, cy - r / 3, 2, C_WHITE);
         return;
     }
 
@@ -1805,6 +1834,7 @@ void Display::resetCalMonth() {
 
 // ─── Pomodoro Focus Engine ───────────────────────────────────────────
 void Display::pomoSetMode(PomoMode mode) {
+    bool wasRunning = (_pomoState != POMO_STOPPED);
     _pomoMode = mode;
     _pomoState = POMO_STOPPED;
     if (_pomoMode == POMO_FOCUS) {
@@ -1815,20 +1845,76 @@ void Display::pomoSetMode(PomoMode mode) {
         _pomoTotalSec = 15 * 60;
     }
     _pomoRemainingSec = _pomoTotalSec;
+    if (wasRunning) {
+        ecosystem.sendEvent(EVT_POMODORO_STOP, 0);
+    }
 }
 
 void Display::pomoStart() {
     _pomoState = POMO_RUNNING;
     _pomoLastSecTick = millis();
+    if (_pomoMode == POMO_FOCUS) {
+        if (_pomoRemainingSec == _pomoTotalSec) {
+            uint16_t mins = (_pomoTotalSec + 59) / 60;
+            ecosystem.sendEvent(EVT_POMODORO_START, mins);
+        } else {
+            ecosystem.sendEvent(EVT_POMODORO_TICK, _pomoRemainingSec);
+        }
+    } else {
+        ecosystem.sendEvent(EVT_POMODORO_BREAK, _pomoRemainingSec);
+    }
 }
 
 void Display::pomoPause() {
     _pomoState = POMO_PAUSED;
+    ecosystem.sendEvent(EVT_POMODORO_STOP, _pomoRemainingSec);
 }
 
 void Display::pomoReset() {
     _pomoState = POMO_STOPPED;
     _pomoRemainingSec = _pomoTotalSec;
+    ecosystem.sendEvent(EVT_POMODORO_STOP, 0);
+}
+
+void Display::webPomodoroStart() {
+    if (_currentPage != PAGE_POMODORO) {
+        setPage(PAGE_POMODORO);
+    }
+    pomoStart();
+    _lastRender = 0;
+}
+
+void Display::webPomodoroPause() {
+    pomoPause();
+    _lastRender = 0;
+}
+
+void Display::webPomodoroReset() {
+    pomoReset();
+    _lastRender = 0;
+}
+
+void Display::webPomodoroSetMode(uint8_t mode) {
+    if (mode <= 2) {
+        pomoSetMode((PomoMode)mode);
+        _lastRender = 0;
+    }
+}
+
+void Display::syncRemotePomodoroStart(uint16_t minutes) {
+    if (minutes == 0) minutes = 25;
+    _pomoMode = POMO_FOCUS;
+    _pomoTotalSec = minutes * 60;
+    _pomoRemainingSec = _pomoTotalSec;
+    _pomoState = POMO_RUNNING;
+    _pomoLastSecTick = millis();
+    _lastRender = 0;
+}
+
+void Display::syncRemotePomodoroStop() {
+    _pomoState = POMO_STOPPED;
+    _pomoRemainingSec = _pomoTotalSec;
+    _lastRender = 0;
 }
 
 void Display::pomoTick() {
@@ -1839,6 +1925,10 @@ void Display::pomoTick() {
         _pomoLastSecTick = now;
         if (_pomoRemainingSec > 0) {
             _pomoRemainingSec--;
+            // Đồng bộ số giây còn lại sang EMO Companion mỗi 5 giây
+            if (_pomoMode == POMO_FOCUS && (_pomoRemainingSec > 0) && (_pomoRemainingSec % 5 == 0)) {
+                ecosystem.sendEvent(EVT_POMODORO_TICK, _pomoRemainingSec);
+            }
         }
         if (_pomoRemainingSec == 0) {
             _pomoState = POMO_STOPPED;
@@ -1848,15 +1938,24 @@ void Display::pomoTick() {
             hardware.playBeep(3300, 300);
 
             if (_pomoMode == POMO_FOCUS) {
+                // Phát sự kiện hết giờ Pomodoro để EMO Companion vươn vai ăn mừng!
+                ecosystem.sendEvent(EVT_POMODORO_BREAK, 0);
                 if (_pomoSession < 4) {
                     _pomoSession++;
-                    pomoSetMode(POMO_SHORT_BREAK);
+                    _pomoMode = POMO_SHORT_BREAK;
+                    _pomoTotalSec = 5 * 60;
+                    _pomoRemainingSec = _pomoTotalSec;
                 } else {
                     _pomoSession = 1;
-                    pomoSetMode(POMO_LONG_BREAK);
+                    _pomoMode = POMO_LONG_BREAK;
+                    _pomoTotalSec = 15 * 60;
+                    _pomoRemainingSec = _pomoTotalSec;
                 }
             } else {
-                pomoSetMode(POMO_FOCUS);
+                ecosystem.sendEvent(EVT_POMODORO_STOP, 0);
+                _pomoMode = POMO_FOCUS;
+                _pomoTotalSec = 25 * 60;
+                _pomoRemainingSec = _pomoTotalSec;
             }
         }
     }

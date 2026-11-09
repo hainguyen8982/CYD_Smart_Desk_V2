@@ -35,6 +35,7 @@ struct DailyForecast {
 struct WeatherData {
     float temp;             // Current temperature (°C)
     uint8_t humidity;       // Relative humidity (%)
+    uint8_t wmoCode;        // Raw Open-Meteo WMO weather code (0..99)
     float windSpeed;        // Wind speed (km/h)
     uint16_t weatherId;     // OWM condition code (200–804)
     char main[24];          // "Clear", "Clouds", "Rain", etc.

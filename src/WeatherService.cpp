@@ -8,6 +8,7 @@
 #include "WiFiProfileManager.h"
 #include "HardwareManager.h"
 #include "TouchManager.h"
+#include "EcosystemService.h"
 #include "vn_lunar.h"
 #include <WiFiManager.h>
 #include <esp_wifi.h>
@@ -378,6 +379,7 @@ void WeatherService::_fetchWeather() {
             _data.windSpeed  = doc["current"]["wind_speed_10m"] | 10.0f;
             _data.uvIndex    = doc["current"]["uv_index"] | 0.0f;
             int wCode        = doc["current"]["weather_code"] | 0;
+            _data.wmoCode    = (uint8_t)constrain(wCode, 0, 99);
 
             // Daily astronomical sunrise & sunset
             const char* sRise = doc["daily"]["sunrise"][0];
@@ -467,6 +469,9 @@ void WeatherService::_fetchWeather() {
 
             _data.valid = true;
             if (_mutex) xSemaphoreGive(_mutex);
+
+            // Đồng bộ ngay nhiệt độ & độ ẩm vừa lấy được sang EMO Companion qua ESP-NOW
+            ecosystem.broadcastWeatherSync();
 
             Serial.printf("[Weather] ✓ Open-Meteo OK: %.1f°C, %s, %d%%RH, Wind: %.1f km/h, UV: %.1f | Next 3 days forecast loaded\n",
                 _data.temp, _data.main, _data.humidity, _data.windSpeed, _data.uvIndex);

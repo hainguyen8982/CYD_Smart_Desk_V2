@@ -10,6 +10,7 @@
 #include "WeatherService.h"
 #include "DeskPet.h"
 #include "DeskMood.h"
+#include "EcosystemService.h"
 #include "AppIcon.h"
 #include "WiFiProfileManager.h"
 #include <ArduinoJson.h>
@@ -151,8 +152,9 @@ input[type=range] { width: 100%; accent-color: var(--accent); height: 6px; borde
         <div class="brand-sub" data-i18n="brand_sub">Màn hình để bàn thông minh</div>
       </div>
     </div>
-    <div style="display: flex; gap: 8px; align-items: center;">
+    <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: flex-end;">
       <button id="langBtn" class="btn-chip" style="font-size: 11px; padding: 4px 10px; font-weight: 700; color: var(--accent); border-color: var(--accent);" onclick="toggleWebLang()">🇻🇳 Tiếng Việt</button>
+      <div class="badge-online" id="ecoBadge" style="background: rgba(255,255,255,0.06); color: var(--text-dim); border-color: rgba(255,255,255,0.12);" title="Trạng thái kết nối ESP-NOW với EMO Companion">🤖 Độc lập</div>
       <div class="badge-online" id="statusBadge" data-i18n="status_online">Trực tuyến</div>
     </div>
   </div>
@@ -341,14 +343,33 @@ input[type=range] { width: 100%; accent-color: var(--accent); height: 6px; borde
     </div>
   </div>
 
-  <!-- 3. Desk Pet Mascot Companion Section -->
+  <!-- 3. Desk Pet & Pomodoro Station Section -->
   <div class="card">
-    <div class="card-title">
-      <span style="font-size: 18px;">🐾</span>
-      <span data-i18n="sec_pet_title">Thú cưng Pomodoro (Desk Pet)</span>
+    <div class="card-title" style="justify-content: space-between;">
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span style="font-size: 18px;">🍅</span>
+        <span data-i18n="sec_pet_title">Trạm Tập Trung Pomodoro & Desk Pet</span>
+      </div>
+      <span id="webPomoTimer" style="font-size: 15px; font-weight: 800; color: var(--accent); font-family: monospace;">25:00</span>
     </div>
-    <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 12px;" data-i18n="sec_pet_sub">
-      Chọn bạn đồng hành hiển thị ở tâm vòng tròn Pomodoro (gõ phím cùng bạn khi cày deadline):
+
+    <div class="grid-3" id="pomoModeButtons" style="margin-bottom: 10px;">
+      <button type="button" class="btn-chip active" onclick="setWebPomoMode(0)">🔥 Focus 25p</button>
+      <button type="button" class="btn-chip" onclick="setWebPomoMode(1)">☕ Nghỉ 5p</button>
+      <button type="button" class="btn-chip" onclick="setWebPomoMode(2)">🛋️ Nghỉ 15p</button>
+    </div>
+
+    <div style="display: flex; gap: 8px; margin-bottom: 14px;">
+      <button type="button" id="btnWebPomoStart" class="btn btn-accent" style="flex: 2;" onclick="toggleWebPomodoro()">
+        ▶️ Bắt đầu Pomodoro (Đồng bộ EMO)
+      </button>
+      <button type="button" class="btn btn-outline" style="flex: 1;" onclick="resetWebPomodoro()">
+        🔄 Đặt lại
+      </button>
+    </div>
+
+    <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 8px;" data-i18n="sec_pet_sub">
+      Chọn bạn đồng hành hiển thị ở tâm vòng tròn Pomodoro:
     </div>
     <div class="grid-4" id="petButtons">
       <button class="btn-chip" onclick="switchPet(0)">🍅 Cà chua</button>
@@ -1109,6 +1130,64 @@ function switchPet(petId) {
   fetch(`/api/pet?set=${petId}`).catch(() => {});
 }
 
+let currentPomoState = 0; // 0=STOPPED, 1=RUNNING, 2=PAUSED
+let currentPomoMode = 0;
+
+function updateWebPomoUI(state, mode, remSec) {
+  currentPomoState = state;
+  currentPomoMode = mode;
+  const modeBtns = document.querySelectorAll('#pomoModeButtons .btn-chip');
+  modeBtns.forEach((b, idx) => b.classList.toggle('active', idx === mode));
+
+  const timerEl = document.getElementById('webPomoTimer');
+  if (timerEl && remSec !== undefined) {
+    const mm = String(Math.floor(remSec / 60)).padStart(2, '0');
+    const ss = String(remSec % 60).padStart(2, '0');
+    timerEl.textContent = `${mm}:${ss}`;
+  }
+
+  const startBtn = document.getElementById('btnWebPomoStart');
+  if (startBtn) {
+    if (state === 1) {
+      startBtn.textContent = (currentLang === 1) ? '⏸️ Pause Pomodoro' : '⏸️ Tạm dừng Pomodoro';
+      startBtn.style.background = 'linear-gradient(135deg, #ff5e00, #ff2a55)';
+    } else if (state === 2) {
+      startBtn.textContent = (currentLang === 1) ? '▶️ Resume Pomodoro' : '▶️ Tiếp tục Pomodoro';
+      startBtn.style.background = '';
+    } else {
+      startBtn.textContent = (currentLang === 1) ? '▶️ Start Pomodoro (Sync EMO)' : '▶️ Bắt đầu Pomodoro (Đồng bộ EMO)';
+      startBtn.style.background = '';
+    }
+  }
+}
+
+function toggleWebPomodoro() {
+  const act = (currentPomoState === 1) ? 'pause' : 'start';
+  fetch(`/api/pomodoro?action=${act}`)
+    .then(() => {
+      showToast(act === 'start'
+        ? ((currentLang === 1) ? 'Pomodoro Started!' : 'Đã kích hoạt Pomodoro & đồng bộ EMO!')
+        : ((currentLang === 1) ? 'Pomodoro Paused!' : 'Đã tạm dừng Pomodoro!'));
+      setTimeout(fetchStatus, 150);
+    })
+    .catch(() => {});
+}
+
+function resetWebPomodoro() {
+  fetch('/api/pomodoro?action=reset')
+    .then(() => {
+      showToast((currentLang === 1) ? 'Pomodoro Reset!' : 'Đã đặt lại Pomodoro!');
+      setTimeout(fetchStatus, 150);
+    })
+    .catch(() => {});
+}
+
+function setWebPomoMode(m) {
+  fetch(`/api/pomodoro?action=mode&m=${m}`)
+    .then(() => setTimeout(fetchStatus, 150))
+    .catch(() => {});
+}
+
 function getPackName(packId) {
   const arr = (currentLang === 1)
     ? ['Mochi Guy', 'Golden Star', 'White Rabbit']
@@ -1359,6 +1438,21 @@ async function fetchStatus() {
       badge.style.borderColor = 'rgba(0, 230, 118, 0.3)';
     }
 
+    const ecoBadge = document.getElementById('ecoBadge');
+    if (ecoBadge && data.ecoPaired !== undefined) {
+      if (data.ecoPaired) {
+        ecoBadge.textContent = (currentLang === 1) ? '🤖 EMO Linked' : '🤖 Đã nối EMO';
+        ecoBadge.style.background = 'rgba(0, 229, 255, 0.15)';
+        ecoBadge.style.color = 'var(--accent)';
+        ecoBadge.style.borderColor = 'rgba(0, 229, 255, 0.35)';
+      } else {
+        ecoBadge.textContent = (currentLang === 1) ? '🤖 Standalone' : '🤖 Độc lập';
+        ecoBadge.style.background = 'rgba(255, 255, 255, 0.06)';
+        ecoBadge.style.color = 'var(--text-dim)';
+        ecoBadge.style.borderColor = 'rgba(255, 255, 255, 0.12)';
+      }
+    }
+
     highlightPage(data.page);
     highlightTheme(data.theme);
 
@@ -1404,6 +1498,9 @@ async function fetchStatus() {
     }
     if (data.pet !== undefined) {
       highlightPet(data.pet);
+    }
+    if (data.pomoState !== undefined) {
+      updateWebPomoUI(data.pomoState, data.pomoMode || 0, data.pomoRemSec);
     }
     if (data.mood !== undefined) {
       highlightMood(data.mood);
@@ -1750,6 +1847,8 @@ void WebDashboard::_setupRoutes() {
     doc["ip"] = WiFi.localIP().toString();
     doc["rssi"] = WiFi.RSSI();
     doc["freeHeap"] = ESP.getFreeHeap();
+    doc["ecoPaired"] = ecosystem.isCompanionPaired();
+    doc["ecoStatus"] = ecosystem.getStatusText(getLanguage() == LANG_EN);
     doc["page"] = display.getPage();
     doc["theme"] = getThemeIndex();
     doc["themeName"] = getThemeName();
@@ -1770,6 +1869,9 @@ void WebDashboard::_setupRoutes() {
     doc["langName"] = getLanguageName();
     doc["pet"] = (int)deskPet.getType();
     doc["petName"] = deskPet.getNameCurrent();
+    doc["pomoState"] = display.getPomoState();
+    doc["pomoMode"] = display.getPomoMode();
+    doc["pomoRemSec"] = display.getPomoRemainingSec();
     doc["mood"] = (int)deskMood.getMood();
     doc["moodName"] = deskMood.getName(deskMood.getMood());
     doc["pack"] = (int)deskMood.getPack();
@@ -1841,6 +1943,26 @@ void WebDashboard::_setupRoutes() {
     } else {
       request->send(400, "application/json", "{\"error\":\"Missing set param\"}");
     }
+  });
+
+  // ── GET /api/pomodoro?action=start|pause|reset|mode&m=0|1|2 ────
+  _server.on("/api/pomodoro", HTTP_GET, [](AsyncWebServerRequest *request) {
+    if (!request->hasParam("action")) {
+      request->send(400, "application/json", "{\"error\":\"Missing action\"}");
+      return;
+    }
+    String act = request->getParam("action")->value();
+    if (act == "start") {
+      display.webPomodoroStart();
+    } else if (act == "pause") {
+      display.webPomodoroPause();
+    } else if (act == "reset") {
+      display.webPomodoroReset();
+    } else if (act == "mode" && request->hasParam("m")) {
+      uint8_t m = (uint8_t)request->getParam("m")->value().toInt();
+      display.webPomodoroSetMode(m);
+    }
+    request->send(200, "application/json", "{\"success\":true}");
   });
 
   // ── GET /api/mood?set=X&pack=Y&m=I&custom=Z&tag=...&msg=... ──────────

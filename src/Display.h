@@ -63,7 +63,21 @@ public:
     uint8_t getAlarmHour() const { return _alarmHour; }
     uint8_t getAlarmMinute() const { return _alarmMinute; }
     bool isAlarmEnabled() const { return _alarmEnabled; }
+    bool isAlarmRinging() const { return _alarmRinging; }
     const char* getAlarmMessage() const { return _alarmMessage; }
+    void dismissAlarm();
+
+    // ── Ecosystem & Web Pomodoro API ──────────────────────────
+    void syncRemotePomodoroStart(uint16_t minutes = 25);
+    void syncRemotePomodoroStop();
+    void webPomodoroStart();
+    void webPomodoroPause();
+    void webPomodoroReset();
+    void webPomodoroSetMode(uint8_t mode);
+    uint8_t getPomoState() const { return (uint8_t)_pomoState; }
+    uint8_t getPomoMode() const { return (uint8_t)_pomoMode; }
+    uint16_t getPomoRemainingSec() const { return _pomoRemainingSec; }
+    uint16_t getPomoTotalSec() const { return _pomoTotalSec; }
 
     // ── WiFi Setup Portal Screen ──────────────────────────────
     void renderWiFiSetupScreen(const char* qrText = nullptr, int remainingSec = 120);
@@ -127,7 +141,6 @@ private:
     void          saveAlarmSettings();
     void          checkAlarmTick();
     void          triggerAlarm();
-    void          dismissAlarm();
     void          snoozeAlarm();
     void          drawBellIcon(int16_t cx, int16_t cy, bool isEnabled, uint16_t customColor = 0);
 

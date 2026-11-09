@@ -1,6 +1,7 @@
 #include "HardwareManager.h"
 #include "Language.h"
 #include "boot_sound.h"
+#include "EcosystemService.h"
 #include <esp_task_wdt.h>
 #include <Preferences.h>
 #include <time.h>
@@ -90,6 +91,7 @@ void HardwareManager::turnScreenOff() {
     // Hạ xung nhịp CPU từ 240MHz xuống 80MHz khi màn hình tắt để tiết kiệm điện & máy mát lạnh
     setCpuFrequencyMhz(80);
     savePowerSettings();
+    ecosystem.sendEvent(EVT_NIGHT_SLEEP, 0);
     Serial.printf("[HardwareManager] Screen turned OFF (0W Standby, CPU @ %d MHz)\n", getCpuFrequencyMhz());
 }
 
@@ -102,6 +104,7 @@ void HardwareManager::turnScreenOn() {
     uint8_t restoreB = (_savedBrightness >= 15) ? _savedBrightness : 85;
     setBacklight(restoreB);
     savePowerSettings();
+    ecosystem.sendEvent(EVT_MORNING_WAKE, restoreB);
     Serial.printf("[HardwareManager] Screen woke UP (Restored to %d%%, CPU @ %d MHz)\n", restoreB, getCpuFrequencyMhz());
 }
 

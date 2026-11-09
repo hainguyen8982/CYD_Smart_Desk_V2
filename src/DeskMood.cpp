@@ -7,6 +7,7 @@
 #include "Theme.h"
 #include "HardwareManager.h"
 #include "MemeBitmaps.h"
+#include "EcosystemService.h"
 #include <Preferences.h>
 
 DeskMood deskMood;
@@ -24,11 +25,14 @@ void DeskMood::begin() {
     _syncHardwareLed();
 }
 
-void DeskMood::setMood(MoodType m) {
+void DeskMood::setMood(MoodType m, bool broadcastEco) {
     if (m >= MOOD_COUNT) m = MOOD_HAPPY;
     _mood = m;
     _saveSettings();
     _syncHardwareLed();
+    if (broadcastEco) {
+        ecosystem.sendEvent(EVT_MOOD_SYNC, (uint16_t)_mood);
+    }
 }
 
 void DeskMood::nextMood() {
@@ -346,7 +350,7 @@ void DeskMood::renderPage(VnSprite& spr, uint8_t lang, uint16_t themeBg) {
     if (tagW < 140) tagW = 140;
     if (tagW > 308) tagW = 308;
     int16_t tagH = 26;
-    int16_t tagY = 166;
+    int16_t tagY = 164; // Y = 164..190
     int16_t tagR = tagH / 2;
 
     // Đổ bóng & Nền viên thuốc Neon khử răng cưa đồng tâm mượt mà
@@ -359,22 +363,22 @@ void DeskMood::renderPage(VnSprite& spr, uint8_t lang, uint16_t themeBg) {
     spr.setTextColor(C_BLACK);
     spr.drawString(tagStr, cx, tagY + tagH / 2, fontToUse);
 
-    // 4. CÂU QUOTE VĂN PHÒNG HÀI HƯỚC HOẶC CUSTOM RIÊNG CỦA MOOD (Y = 199)
+    // 4. CÂU QUOTE VĂN PHÒNG HÀI HƯỚC HOẶC CUSTOM RIÊNG CỦA MOOD (Y = 207 — Cách đáy nút viên thuốc 10px, cách hàng chấm 10px cân đối hoàn hảo)
     const char* msgStr = (_customEnabled[_mood] && _customMsgs[_mood][0] != '\0')
                          ? _customMsgs[_mood]
                          : getMessage(_mood, lang);
     spr.setTextDatum(MC_DATUM);
     spr.setTextColor(theme.textMain);
-    spr.drawString(msgStr, cx, 200, 2);
+    spr.drawString(msgStr, cx, 207, 2);
 
-    // 5. CHẤM CHỈ THỊ 6 TRẠNG THÁI (Y = 222)
+    // 5. CHẤM CHỈ THỊ 6 TRẠNG THÁI (Y = 226)
     int16_t dotStartX = cx - (MOOD_COUNT * 14) / 2 + 7;
     for (int i = 0; i < MOOD_COUNT; i++) {
         int16_t dx = dotStartX + i * 14;
         if (i == (int)_mood) {
-            spr.fillSmoothRoundRect(dx - 6, 220, 13, 5, 2, accent, themeBg);
+            spr.fillSmoothRoundRect(dx - 6, 224, 13, 5, 2, accent, themeBg);
         } else {
-            spr.fillSmoothCircle(dx, 222, 2, theme.track, themeBg);
+            spr.fillSmoothCircle(dx, 226, 2, theme.track, themeBg);
         }
     }
 }

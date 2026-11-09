@@ -32,7 +32,7 @@ public:
 
     void begin();
     MoodType getMood() const { return _mood; }
-    void setMood(MoodType m);
+    void setMood(MoodType m, bool broadcastEco = true);
     void nextMood();
     void prevMood();
 

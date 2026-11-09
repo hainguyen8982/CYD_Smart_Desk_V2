@@ -17,6 +17,7 @@
 #include "FinanceService.h"
 #include "WebDashboard.h"
 #include "NetworkTask.h"
+#include "EcosystemService.h"
 
 void setup() {
     Serial.begin(115200);
@@ -56,6 +57,9 @@ void setup() {
         display.showBootStatus("Starting Dashboard...", 98);
         webDashboard.begin();
     }
+
+    // 7b. Initialize ESP-NOW Ecosystem Synchronization (CYD <-> EMO Companion)
+    ecosystem.begin();
 
     // 8. Start non-blocking FreeRTOS background task pinned to Core 0
     networkTask.begin();
@@ -119,6 +123,7 @@ void loop() {
         if (WiFi.status() == WL_CONNECTED) {
             webDashboard.begin();
         }
+        ecosystem.begin();
     }
 
     // Maintain Web Dashboard server
@@ -126,6 +131,9 @@ void loop() {
         webDashboard.begin();
     }
     webDashboard.update();
+
+    // Maintain ESP-NOW Ecosystem Sync (Heartbeat & Event Dispatch)
+    ecosystem.update();
 
     // 7. Render display & dock (internally rate-limited to ~30 FPS)
     display.update();
