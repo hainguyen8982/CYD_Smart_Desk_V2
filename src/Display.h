@@ -177,6 +177,13 @@ private:
     void          pomoTick();
     void          drawTomatoMascot(int16_t cx, int16_t cy, bool isFocus);
 
+    // ── Anniversary & Perpetual Calendar Ticker ──────────────
+    int16_t       _tickerOffset;
+    unsigned long _lastTickerTick;
+    uint8_t       _tickerCachedDay;
+    String        _cachedTickerMsg;
+    void          renderPage0Ticker();
+
     // ── Page renderers ───────────────────────────────────────
     void renderPage0_WeatherClock();
     void renderPage1_Calendar();

@@ -19,6 +19,7 @@
 #include "FabXLogo.h"
 #include "DeskPet.h"
 #include "DeskMood.h"
+#include "AnniversaryManager.h"
 #include "WebDashboard.h"
 #include "EcosystemService.h"
 #include <WiFi.h>
@@ -45,7 +46,8 @@ Display::Display()
       _calYear(0), _calMonth(0),
       _pomoMode(POMO_FOCUS), _pomoState(POMO_STOPPED),
       _pomoTotalSec(25 * 60), _pomoRemainingSec(25 * 60),
-      _pomoSession(1), _pomoLastSecTick(0) {}
+      _pomoSession(1), _pomoLastSecTick(0),
+      _tickerOffset(0), _lastTickerTick(0), _tickerCachedDay(0) {}
 
 // ─── Begin ───────────────────────────────────────────────────────────
 void Display::begin() {
@@ -665,6 +667,84 @@ void Display::renderPage0_WeatherClock() {
     _spr.setTextDatum(TL_DATUM);
     _spr.setTextColor(RGB565(255, 215, 0)); // Gold
     _spr.drawString(dayCanChiBuf, rightX + 50, cardY + 60, 1);
+
+    // ── BOTTOM TICKER: ANNIVERSARY & PERPETUAL CALENDAR ─────────────
+    renderPage0Ticker();
+}
+
+void Display::renderPage0Ticker() {
+    if (_dockVisible) return;
+
+    time_t now = time(NULL);
+    struct tm t;
+    localtime_r(&now, &t);
+
+    // Refresh ticker message if day changed or language switched or not yet cached
+    static Language lastLang = LANG_VI;
+    if (_tickerCachedDay != t.tm_mday || _cachedTickerMsg.length() == 0 || lastLang != getLanguage()) {
+        _cachedTickerMsg = anniversaryMgr.getTodayTickerMessage(getLanguage() == LANG_EN);
+        _tickerCachedDay = t.tm_mday;
+        lastLang = getLanguage();
+        _tickerOffset = 0;
+    }
+
+    if (_cachedTickerMsg.length() == 0) return;
+
+    // Capsule coordinates (matching the cards width X: 10..310, H: 19px at Y: 215)
+    const int16_t barX = 10;
+    const int16_t barY = 215;
+    const int16_t barW = 300;
+    const int16_t barH = 19;
+    const int16_t barR = 5;
+
+    // Dark glass background + subtle border
+    _spr.fillSmoothRoundRect(barX, barY, barW, barH, barR, RGB565(12, 18, 30), theme.bg);
+    _spr.drawRoundRect(barX, barY, barW, barH, barR, RGB565(36, 50, 72));
+
+    // Choose text color based on event type
+    uint16_t textColor;
+    if (_cachedTickerMsg.startsWith("[★")) {
+        textColor = RGB565(255, 215, 64);  // Warm Gold for Personal Anniversary
+    } else if (_cachedTickerMsg.startsWith("[✿")) {
+        textColor = RGB565(255, 160, 190); // Soft Rose for National Holidays / Festivals
+    } else {
+        textColor = RGB565(180, 225, 255); // Ice Cyan for Perpetual Calendar & Daily Quotes
+    }
+
+    _spr.setTextColor(textColor, RGB565(12, 18, 30));
+
+    int16_t strW = _spr.textWidth(_cachedTickerMsg, 1);
+    const int16_t maxW = barW - 16; // 284px
+
+    if (strW <= maxW) {
+        // Fits comfortably -> Center statically
+        _spr.setTextDatum(MC_DATUM);
+        _spr.drawString(_cachedTickerMsg, barX + barW / 2, barY + barH / 2, 1);
+    } else {
+        // Marquee scrolling
+        unsigned long currentMillis = millis();
+        if (currentMillis - _lastTickerTick >= 35) {
+            _lastTickerTick = currentMillis;
+            _tickerOffset++;
+            if (_tickerOffset >= strW + 45) {
+                _tickerOffset = 0;
+            }
+        }
+
+        // Set clipping viewport strictly inside capsule
+        _spr.setVnClip(barX + 6, barY + 1, barW - 12, barH - 2);
+        _spr.setTextDatum(ML_DATUM);
+
+        int16_t drawX1 = (barX + 8) - _tickerOffset;
+        _spr.drawString(_cachedTickerMsg, drawX1, barY + barH / 2, 1);
+
+        int16_t drawX2 = drawX1 + strW + 45;
+        if (drawX2 < barX + barW) {
+            _spr.drawString(_cachedTickerMsg, drawX2, barY + barH / 2, 1);
+        }
+
+        _spr.resetVnClip();
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════

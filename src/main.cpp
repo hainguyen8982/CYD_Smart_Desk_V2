@@ -18,6 +18,7 @@
 #include "WebDashboard.h"
 #include "NetworkTask.h"
 #include "EcosystemService.h"
+#include "AnniversaryManager.h"
 
 void setup() {
     Serial.begin(115200);
@@ -33,6 +34,7 @@ void setup() {
     hardware.begin();
 
     // 2. Initialize display & show boot splash with particle convergence
+    anniversaryMgr.begin();
     display.begin();
 
     // 3. Initialize touch input

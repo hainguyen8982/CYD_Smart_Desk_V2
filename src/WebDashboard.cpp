@@ -10,6 +10,7 @@
 #include "WeatherService.h"
 #include "DeskPet.h"
 #include "DeskMood.h"
+#include "AnniversaryManager.h"
 #include "EcosystemService.h"
 #include "AppIcon.h"
 #include "WiFiProfileManager.h"
@@ -414,6 +415,68 @@ input[type=range] { width: 100%; accent-color: var(--accent); height: 6px; borde
     </button>
   </div>
 
+  <!-- 5. Personal Anniversaries & Perpetual Calendar Section -->
+  <div class="card">
+    <div class="card-title">
+      <span style="font-size: 18px;">🎉</span>
+      <span data-i18n="sec_anniv_title">Ngày Kỷ Niệm & Lịch Vạn Niên (Desk Ticker)</span>
+    </div>
+    <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 12px;" data-i18n="sec_anniv_sub">
+      Nhắc nhở ngày sinh nhật, ngày cưới, ngày giỗ (Dương lịch & Âm lịch) chạy dưới chân màn hình chính:
+    </div>
+
+    <!-- Live Preview Banner -->
+    <div style="margin-bottom: 14px;">
+      <div style="font-size: 11px; color: var(--text-dim); margin-bottom: 5px;" data-i18n="anniv_preview_label">Dòng chữ hiển thị trên màn hình hôm nay:</div>
+      <div id="annivTodayBanner" style="background: rgba(8, 14, 24, 0.95); border: 1px solid var(--accent); border-radius: 8px; padding: 10px 14px; font-size: 12px; font-weight: 600; color: #00E5FF; text-align: center; word-break: break-word; box-shadow: 0 0 12px rgba(0,229,255,0.15);">
+        Đang đồng bộ...
+      </div>
+    </div>
+
+    <!-- Add Anniversary Form -->
+    <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--card-border); border-radius: 10px; padding: 12px; margin-bottom: 14px;">
+      <div style="display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap;">
+        <div style="flex: 1; min-width: 110px;">
+          <label style="font-size: 11px; color: var(--text-dim); display: block; margin-bottom: 4px;">Loại lịch:</label>
+          <select id="annivTypeSelect" class="select-control" style="width: 100%; font-size: 13px;">
+            <option value="0" data-i18n="anniv_type_solar">☀️ Dương lịch</option>
+            <option value="1" data-i18n="anniv_type_lunar">🌙 Âm lịch</option>
+          </select>
+        </div>
+        <div style="width: 75px;">
+          <label style="font-size: 11px; color: var(--text-dim); display: block; margin-bottom: 4px;" data-i18n="anniv_day_label">Ngày:</label>
+          <input type="number" id="annivDayInput" class="select-control" min="1" max="31" value="1" style="width: 100%; text-align: center; font-weight: 600;">
+        </div>
+        <div style="width: 75px;">
+          <label style="font-size: 11px; color: var(--text-dim); display: block; margin-bottom: 4px;" data-i18n="anniv_month_label">Tháng:</label>
+          <input type="number" id="annivMonthInput" class="select-control" min="1" max="12" value="1" style="width: 100%; text-align: center; font-weight: 600;">
+        </div>
+      </div>
+
+      <div style="margin-bottom: 10px;">
+        <label style="font-size: 11px; color: var(--text-dim); display: block; margin-bottom: 4px;" data-i18n="anniv_title_label">Tên ngày kỷ niệm / Lời nhắc:</label>
+        <input type="text" id="annivTitleInput" class="select-control" placeholder="VD: Sinh nhật Vợ yêu, Kỷ niệm ngày cưới..." data-i18n-ph="anniv_title_ph" maxlength="40" style="width: 100%;">
+      </div>
+
+      <button type="button" class="btn btn-accent" style="width: 100%;" onclick="addAnniversary()" data-i18n="btn_add_anniv">
+        ➕ Thêm Kỷ Niệm
+      </button>
+    </div>
+
+    <!-- List of Saved Anniversaries -->
+    <div style="font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 8px;" data-i18n="anniv_list_title">
+      Danh sách ngày kỷ niệm đã lưu:
+    </div>
+    <div id="annivListContainer" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px;">
+      <!-- Populated dynamically via JS -->
+    </div>
+
+    <!-- Fallback Explanation -->
+    <div style="font-size: 11px; color: var(--text-dim); line-height: 1.5; background: rgba(0,229,255,0.04); border-left: 3px solid var(--accent); padding: 8px 10px; border-radius: 4px;" data-i18n="anniv_fallback_hint">
+      💡 Khi ngày hôm nay không có kỷ niệm nào, SmartDesk sẽ tự động hiển thị dữ liệu <b>Lịch Vạn Niên</b> (Can Chi ngày, Tiết Khí, Lễ Tết truyền thống và danh ngôn tích cực) để chạy chữ.
+    </div>
+  </div>
+
   <!-- Sound & Audio Settings Section -->
   <div class="card">
     <div class="card-title">
@@ -583,6 +646,23 @@ const I18N = {
     quick_rest: "☕ Nghỉ ngơi",
     quick_work: "💼 Tan ca",
     btn_save_alarm: "Lưu cài đặt báo thức",
+    sec_anniv_title: "Ngày Kỷ Niệm & Lịch Vạn Niên (Desk Ticker)",
+    sec_anniv_sub: "Nhắc nhở ngày sinh nhật, ngày cưới, ngày giỗ (Dương lịch & Âm lịch) chạy dưới chân màn hình chính:",
+    anniv_preview_label: "Dòng chữ hiển thị trên màn hình hôm nay:",
+    anniv_type_solar: "☀️ Dương lịch",
+    anniv_type_lunar: "🌙 Âm lịch",
+    anniv_day_label: "Ngày:",
+    anniv_month_label: "Tháng:",
+    anniv_title_label: "Tên ngày kỷ niệm / Lời nhắc:",
+    anniv_title_ph: "VD: Sinh nhật Vợ yêu, Kỷ niệm ngày cưới...",
+    btn_add_anniv: "➕ Thêm Kỷ Niệm",
+    anniv_list_title: "Danh sách ngày kỷ niệm đã lưu:",
+    anniv_empty: "Chưa có ngày kỷ niệm nào. Hãy thêm ngày quan trọng của bạn ở trên!",
+    anniv_fallback_hint: "💡 Khi ngày hôm nay không có kỷ niệm nào, SmartDesk sẽ tự động hiển thị dữ liệu <b>Lịch Vạn Niên</b> (Can Chi ngày, Tiết Khí, Lễ Tết truyền thống và danh ngôn tích cực) để chạy chữ.",
+    t_anniv_added: "Đã thêm ngày kỷ niệm thành công!",
+    t_anniv_del: "Đã xóa ngày kỷ niệm!",
+    t_anniv_err: "Lỗi lưu ngày kỷ niệm!",
+    t_anniv_fill: "Vui lòng nhập đầy đủ ngày, tháng và tên sự kiện!",
     sec_ctrl_title: "Điều khiển màn hình từ xa",
     page_sub: "Chuyển trang hiển thị:",
     theme_sub: "Bộ sưu tập Giao diện (Theme):",
@@ -703,6 +783,23 @@ const I18N = {
     quick_rest: "☕ Short break",
     quick_work: "💼 Off work",
     btn_save_alarm: "Save Alarm Settings",
+    sec_anniv_title: "Anniversaries & Perpetual Calendar Ticker",
+    sec_anniv_sub: "Remind birthdays, weddings, special events (Solar & Lunar) on desktop ticker:",
+    anniv_preview_label: "Live ticker text displayed on screen today:",
+    anniv_type_solar: "☀️ Solar (Gregorian)",
+    anniv_type_lunar: "🌙 Lunar Calendar",
+    anniv_day_label: "Day:",
+    anniv_month_label: "Month:",
+    anniv_title_label: "Event Name / Reminder:",
+    anniv_title_ph: "e.g., Wife's Birthday, Wedding Anniversary...",
+    btn_add_anniv: "➕ Add Anniversary",
+    anniv_list_title: "Saved Personal Anniversaries:",
+    anniv_empty: "No anniversaries saved yet. Add your important dates above!",
+    anniv_fallback_hint: "💡 When today has no saved personal anniversary, SmartDesk automatically falls back to <b>Perpetual Calendar data</b> (Daily Can Chi, Solar Terms, traditional holidays and inspiring motivational quotes).",
+    t_anniv_added: "Anniversary added successfully!",
+    t_anniv_del: "Anniversary deleted!",
+    t_anniv_err: "Error saving anniversary!",
+    t_anniv_fill: "Please enter day, month and event title!",
     sec_ctrl_title: "Remote Screen Control",
     page_sub: "Switch Display Page:",
     theme_sub: "Theme Presets:",
@@ -1746,6 +1843,90 @@ window.addEventListener('DOMContentLoaded', () => {
 applyLanguage(0);
 fetchStatus();
 startAutoSync();
+fetchAnniversaries();
+
+// ── Anniversary Manager Functions ────────────────────────────────────
+let anniversaryList = [];
+
+async function fetchAnniversaries() {
+  try {
+    const res = await fetch('/api/anniversaries');
+    if (!res.ok) return;
+    const data = await res.json();
+    anniversaryList = data.items || [];
+    renderAnniversaryList();
+    // Update today ticker preview
+    if (data.today) {
+      const banner = document.getElementById('annivTodayBanner');
+      if (banner) banner.textContent = data.today;
+    }
+  } catch (e) { /* silent */ }
+}
+
+function renderAnniversaryList() {
+  const dict = getDict();
+  const container = document.getElementById('annivListContainer');
+  if (!container) return;
+  if (!anniversaryList || anniversaryList.length === 0) {
+    container.innerHTML = `<div style="text-align:center;color:var(--text-dim);font-size:12px;padding:12px;">${dict.anniv_empty || 'Chưa có ngày kỷ niệm nào.'}</div>`;
+    return;
+  }
+  container.innerHTML = anniversaryList.map((item, idx) => `
+    <div style="display:flex;align-items:center;gap:10px;background:rgba(255,255,255,0.03);border:1px solid var(--card-border);border-radius:8px;padding:9px 12px;">
+      <span style="font-size:16px;">${item.isLunar ? '🌙' : '☀️'}</span>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(item.title)}</div>
+        <div style="font-size:11px;color:var(--text-dim);">${String(item.day).padStart(2,'0')}/${String(item.month).padStart(2,'0')} ${item.isLunar ? '(ÂL)' : ''}</div>
+      </div>
+      <button onclick="deleteAnniversary(${idx})" style="background:rgba(255,80,80,0.15);border:1px solid rgba(255,80,80,0.3);color:#ff6060;border-radius:6px;padding:4px 8px;font-size:12px;cursor:pointer;">✕</button>
+    </div>
+  `).join('');
+}
+
+function escapeHtml(str) {
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+async function addAnniversary() {
+  const dict = getDict();
+  const day = parseInt(document.getElementById('annivDayInput').value, 10);
+  const month = parseInt(document.getElementById('annivMonthInput').value, 10);
+  const isLunar = document.getElementById('annivTypeSelect').value === '1' ? 1 : 0;
+  const title = encodeURIComponent(document.getElementById('annivTitleInput').value.trim());
+
+  if (!day || !month || !title) {
+    showToast(dict.t_anniv_fill || 'Vui lòng nhập đầy đủ thông tin!', false);
+    return;
+  }
+
+  try {
+    const res = await fetch(`/api/anniversaries/add?d=${day}&m=${month}&l=${isLunar}&t=${title}`);
+    if (res.ok) {
+      showToast(dict.t_anniv_added || 'Đã thêm ngày kỷ niệm!');
+      document.getElementById('annivTitleInput').value = '';
+      await fetchAnniversaries();
+    } else {
+      showToast(dict.t_anniv_err || 'Lỗi lưu ngày kỷ niệm!', false);
+    }
+  } catch (e) {
+    showToast(dict.t_conn_err, false);
+  }
+}
+
+async function deleteAnniversary(idx) {
+  const dict = getDict();
+  try {
+    const res = await fetch(`/api/anniversaries/delete?i=${idx}`);
+    if (res.ok) {
+      showToast(dict.t_anniv_del || 'Đã xóa!');
+      await fetchAnniversaries();
+    } else {
+      showToast(dict.t_anniv_err || 'Lỗi xóa!', false);
+    }
+  } catch (e) {
+    showToast(dict.t_conn_err, false);
+  }
+}
 </script>
 </body>
 </html>
@@ -2181,5 +2362,71 @@ void WebDashboard::_setupRoutes() {
     Serial.println("[WebDashboard] User requested WiFi Reset -> Scheduling NVS erase & restart...");
     _wifiResetTime = millis();
     _wifiResetRequested = true;
+  });
+
+  // ── GET /api/anniversaries: List all saved anniversaries + today's ticker ──
+  _server.on("/api/anniversaries", HTTP_GET, [](AsyncWebServerRequest *request) {
+    bool isEn = (getLanguage() == LANG_EN);
+    JsonDocument doc;
+    JsonArray arr = doc["items"].to<JsonArray>();
+    for (uint8_t i = 0; i < anniversaryMgr.getCount(); i++) {
+      const AnniversaryItem* it = anniversaryMgr.getItem(i);
+      if (!it) continue;
+      JsonObject obj = arr.add<JsonObject>();
+      obj["day"] = it->day;
+      obj["month"] = it->month;
+      obj["isLunar"] = it->isLunar;
+      obj["title"] = it->title;
+      // also include short keys for JS
+      obj["d"] = it->day;
+      obj["m"] = it->month;
+      obj["l"] = it->isLunar;
+      obj["t"] = it->title;
+    }
+    doc["count"] = anniversaryMgr.getCount();
+    doc["today"] = anniversaryMgr.getTodayTickerMessage(isEn);
+
+    String res;
+    serializeJson(doc, res);
+    request->send(200, "application/json", res);
+  });
+
+  // ── GET /api/anniversaries/add?d=1&m=6&l=0&t=... ──────────────────
+  _server.on("/api/anniversaries/add", HTTP_GET, [](AsyncWebServerRequest *request) {
+    if (!request->hasParam("d") || !request->hasParam("m") || !request->hasParam("t")) {
+      request->send(400, "application/json", "{\"error\":\"Missing d/m/t params\"}");
+      return;
+    }
+    uint8_t day   = (uint8_t)request->getParam("d")->value().toInt();
+    uint8_t month = (uint8_t)request->getParam("m")->value().toInt();
+    bool    isLunar = request->hasParam("l") ? (request->getParam("l")->value() == "1") : false;
+    String  title = request->getParam("t")->value();
+
+    if (day < 1 || day > 31 || month < 1 || month > 12 || title.length() == 0) {
+      request->send(400, "application/json", "{\"error\":\"Invalid day/month or empty title\"}");
+      return;
+    }
+
+    bool ok = anniversaryMgr.addItem(day, month, isLunar, title.c_str());
+    if (ok) {
+      request->send(200, "application/json", "{\"success\":true}");
+    } else {
+      request->send(500, "application/json", "{\"error\":\"Full or invalid input\"}");
+    }
+  });
+
+  // ── GET /api/anniversaries/delete?i=X ─────────────────────────────
+  _server.on("/api/anniversaries/delete", HTTP_GET, [](AsyncWebServerRequest *request) {
+    if (!request->hasParam("i")) {
+      request->send(400, "application/json", "{\"error\":\"Missing i param\"}");
+      return;
+    }
+    uint8_t idx = (uint8_t)request->getParam("i")->value().toInt();
+    bool ok = anniversaryMgr.deleteItem(idx);
+    if (ok) {
+      request->send(200, "application/json", "{\"success\":true}");
+    } else {
+      request->send(400, "application/json", "{\"error\":\"Index out of range\"}");
+    }
   });
 }

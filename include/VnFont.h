@@ -264,7 +264,24 @@ public:
         return drawString(string.c_str(), poX, poY, textfont);
     }
 
+    void setVnClip(int32_t x, int32_t y, int32_t w, int32_t h) {
+        _vnClipX0 = x;
+        _vnClipY0 = y;
+        _vnClipX1 = x + w;
+        _vnClipY1 = y + h;
+        _hasVnClip = true;
+    }
+
+    void resetVnClip() {
+        _hasVnClip = false;
+    }
+
 private:
+    bool    _hasVnClip = false;
+    int32_t _vnClipX0 = 0;
+    int32_t _vnClipY0 = 0;
+    int32_t _vnClipX1 = 320;
+    int32_t _vnClipY1 = 240;
     int32_t _lastRRX = -9999;
     int32_t _lastRRY = -9999;
     int32_t _lastRRW = -9999;
@@ -406,6 +423,7 @@ private:
                         if (nibble == 0) continue;
                         int32_t px = gx0 + rx;
                         if (px < 0 || px >= width() || py < 0 || py >= height()) continue;
+                        if (_hasVnClip && (px < _vnClipX0 || px >= _vnClipX1 || py < _vnClipY0 || py >= _vnClipY1)) continue;
 
                         if (nibble == 15) {
                             drawPixel(px, py, fg);
