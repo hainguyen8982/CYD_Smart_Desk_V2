@@ -80,6 +80,7 @@ const char* getAlarmMelodyNameI18n(uint8_t id);
 const char* getStartupSoundNameI18n(uint8_t id);
 const char* getDayNameI18n(uint8_t wday);
 const char* getShortDayNameI18n(uint8_t wday);
+const char* getMiniDayNameI18n(uint8_t wday);
 const char* getMoonPhaseNameI18n(uint8_t lunarDay);
 const char* getWeatherConditionI18n(uint8_t type, bool isNight, bool isPopup);
 

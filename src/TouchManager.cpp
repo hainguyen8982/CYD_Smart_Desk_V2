@@ -178,11 +178,11 @@ bool TouchManager::getTouch(uint16_t *x, uint16_t *y) {
     uint16_t raw_x = ((packet[1] & 0x0F) << 8) | packet[2];
     uint16_t raw_y = ((packet[3] & 0x0F) << 8) | packet[4];
 
-    // Ánh xạ sang Landscape 320x240 (ST7789 Rotation 1):
-    // raw_y [0..319] tương ứng trục ngang 0..319
-    // raw_x [0..239] tương ứng trục dọc 0..239 (nghịch đảo)
-    uint16_t mappedX = raw_y;
-    uint16_t mappedY = (raw_x <= 239) ? (239 - raw_x) : 0;
+    // Ánh xạ sang Landscape 320x240 (ST7789 Rotation 3 - Xoay 180° theo chiều lắp case):
+    // raw_y [0..319] tương ứng trục ngang 0..319 (nghịch đảo: 319 - raw_y)
+    // raw_x [0..239] tương ứng trục dọc 0..239 (thuận: raw_x)
+    uint16_t mappedX = (raw_y <= 319) ? (319 - raw_y) : 0;
+    uint16_t mappedY = (raw_x <= 239) ? raw_x : 239;
 
     mappedX = constrain(mappedX, (uint16_t)0, (uint16_t)319);
     mappedY = constrain(mappedY, (uint16_t)0, (uint16_t)239);
@@ -205,8 +205,11 @@ bool TouchManager::getTouch(uint16_t *x, uint16_t *y) {
     long calX = map((long)rawX, _calXmin, _calXmax, CALIB_TL_X, CALIB_TR_X);
     long calY = map((long)rawY, _calYmin, _calYmax, CALIB_TL_Y, CALIB_BL_Y);
 
-    *x = constrain(calX, 0, 319);
-    *y = constrain(calY, 0, 239);
+    calX = constrain(calX, 0, 319);
+    calY = constrain(calY, 0, 239);
+
+    *x = 319 - calX;
+    *y = 239 - calY;
     return true;
 #endif
 }

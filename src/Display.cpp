@@ -74,7 +74,7 @@ void Display::begin() {
 
     _tft.init();
     delay(100);
-    _tft.setRotation(1);           // Landscape 320×240
+    _tft.setRotation(3);           // Landscape 320×240 (Xoay 180° theo chiều lắp case)
     _tft.invertDisplay(true);      // CYD panel requires color inversion
     _tft.fillScreen(C_BLACK);
 
@@ -3110,7 +3110,7 @@ void Display::renderPage2_Finance() {
         } else {
             _spr.setTextColor(theme.textVDim);
         }
-        _spr.drawString(getShortDayNameI18n(w), dx, 196, 1);
+        _spr.drawString(getMiniDayNameI18n(w), dx, 196, 1);
     }
 
     // Call-to-action chân thẻ

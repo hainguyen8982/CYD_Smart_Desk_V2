@@ -285,6 +285,13 @@ const char* getShortDayNameI18n(uint8_t wday) {
     return (_currentLang == LANG_VI) ? SHORT_VI[wday] : SHORT_EN[wday];
 }
 
+const char* getMiniDayNameI18n(uint8_t wday) {
+    if (wday >= 7) wday = 0;
+    static const char* const MINI_VI[] = { "CN", "T2", "T3", "T4", "T5", "T6", "T7" };
+    static const char* const MINI_EN[] = { "SU", "MO", "TU", "WE", "TH", "FR", "SA" };
+    return (_currentLang == LANG_VI) ? MINI_VI[wday] : MINI_EN[wday];
+}
+
 const char* getMoonPhaseNameI18n(uint8_t lunarDay) {
     bool vi = (_currentLang == LANG_VI);
     if (lunarDay <= 1)       return vi ? "Trăng Non" : "New Moon";
