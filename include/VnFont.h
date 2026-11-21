@@ -14,6 +14,323 @@ class VnSprite : public TFT_eSprite {
 public:
     explicit VnSprite(TFT_eSPI* tft) : TFT_eSprite(tft) {}
 
+    // Direct 4-bit anti-aliased custom VnFontFace rendering (used by Minimal Zen smooth light fonts)
+    int16_t drawSmoothFace(const VnFontFace* face, const char* s, int32_t x, int32_t y) {
+        if (!face || !s) return 0;
+        return renderVnString(face, s, x, y);
+    }
+    int16_t measureSmoothFace(const VnFontFace* face, const char* s) const {
+        if (!face || !s) return 0;
+        return measureWidth(face, s);
+    }
+
+    // ───────────────────────────────────────────────────────────────────
+    //  TRUE 16-BIT RGB565 DIRECT SCANLINE RENDERER (Zero Heap, Zero Flicker!)
+    //  Bypasses 8-bit RGB332 sprite quantization completely -> 65,536 colors,
+    //  silky-smooth 16-level anti-aliasing identical to Apple StandBy OLED!
+    // ───────────────────────────────────────────────────────────────────
+    static uint16_t blend565(uint8_t alpha, uint16_t fg, uint16_t bg) {
+        if (alpha == 0) return bg;
+        if (alpha == 255) return fg;
+        uint32_t f_r = (fg >> 11) & 0x1F;
+        uint32_t f_g = (fg >> 5)  & 0x3F;
+        uint32_t f_b =  fg        & 0x1F;
+        uint32_t b_r = (bg >> 11) & 0x1F;
+        uint32_t b_g = (bg >> 5)  & 0x3F;
+        uint32_t b_b =  bg        & 0x1F;
+        uint32_t a = alpha + 1;
+        uint32_t r = b_r + (((int32_t)(f_r - b_r) * (int32_t)a) >> 8);
+        uint32_t g = b_g + (((int32_t)(f_g - b_g) * (int32_t)a) >> 8);
+        uint32_t b = b_b + (((int32_t)(f_b - b_b) * (int32_t)a) >> 8);
+        return (uint16_t)((r << 11) | (g << 5) | b);
+    }
+
+    static void drawSmoothFace16(TFT_eSPI& tft, const VnFontFace* face, const char* s,
+                                 int32_t poX, int32_t poY, uint8_t datum,
+                                 uint16_t fg, uint16_t bg,
+                                 int16_t boxX, int16_t boxY, int16_t boxW, int16_t boxH,
+                                 int16_t clipX0 = -1, int16_t clipX1 = 320) {
+        if (!face || !s || boxW <= 0 || boxH <= 0 || boxW > 320) return;
+
+        int16_t cwidth = measureWidth(face, s);
+        int16_t cheight = face->lineHeight;
+        int16_t baseline = face->baseline;
+
+        switch (datum) {
+            case TC_DATUM:   poX -= cwidth / 2; break;
+            case TR_DATUM:   poX -= cwidth; break;
+            case ML_DATUM:   poY -= cheight / 2; break;
+            case MC_DATUM:   poX -= cwidth / 2; poY -= cheight / 2; break;
+            case MR_DATUM:   poX -= cwidth; poY -= cheight / 2; break;
+            case BL_DATUM:   poY -= cheight; break;
+            case BC_DATUM:   poX -= cwidth / 2; poY -= cheight; break;
+            case BR_DATUM:   poX -= cwidth; poY -= cheight; break;
+            case L_BASELINE: poY -= baseline; break;
+            case C_BASELINE: poX -= cwidth / 2; poY -= baseline; break;
+            case R_BASELINE: poX -= cwidth; poY -= baseline; break;
+            default: break;
+        }
+
+        // Pre-decode up to 64 visible glyphs and 8 vector symbols for fast scanline rendering
+        struct RunGlyph { VnGlyph g; int16_t gx0, gy0; };
+        struct RunSym   { uint8_t type; int16_t sx0, sy0, sz; };
+        RunGlyph runs[64];
+        RunSym   symRuns[8];
+        uint8_t runCount = 0;
+        uint8_t symCount = 0;
+
+        int32_t curX = poX;
+        const char* p = s;
+        VnGlyph g;
+        while (*p) {
+            uint32_t code = decodeNextUTF8(p);
+            uint8_t sym = (code > 0xFFFF || code >= 0x2600 || code == 0x200D) ? symbolType(code) : SYM_NONE;
+            if (sym != SYM_NONE) {
+                if (sym != SYM_ZERO && symCount < 8) {
+                    int16_t sz = symbolSize(face);
+                    int16_t sx0 = (int16_t)(curX + 1);
+                    int16_t sy0 = (int16_t)(poY + baseline - sz);
+                    if (sx0 + sz > boxX && sx0 < boxX + boxW &&
+                        sy0 + sz > boxY && sy0 < boxY + boxH) {
+                        symRuns[symCount++] = { sym, sx0, sy0, sz };
+                    }
+                }
+                curX += symbolAdvance(face, sym);
+                continue;
+            }
+            if (code <= 0xFFFF && findGlyph(face, (uint16_t)code, g)) {
+                if (g.width > 0 && g.height > 0 && runCount < 64) {
+                    int16_t gx0 = (int16_t)(curX + g.xOffset);
+                    int16_t gy0 = (int16_t)(poY + g.yOffset);
+                    if (gx0 + g.width > boxX && gx0 < boxX + boxW &&
+                        gy0 + g.height > boxY && gy0 < boxY + boxH) {
+                        runs[runCount++] = { g, gx0, gy0 };
+                    }
+                }
+                curX += g.xAdvance;
+            } else {
+                curX += face->spaceWidth;
+            }
+        }
+
+        // Build 16-level alpha LUT for this fg/bg pair once (16 entries = 32 bytes!)
+        uint16_t lut[16];
+        lut[0] = bg;
+        for (uint8_t n = 1; n < 15; n++) {
+            lut[n] = blend565((n << 4) | n, fg, bg);
+        }
+        lut[15] = fg;
+
+        // Symbol color palette (only used when symCount > 0)
+        uint16_t symPal[6];
+        if (symCount > 0) {
+            symPal[0] = 0;
+            symPal[1] = fg;
+            symPal[2] = (uint16_t)(((255 & 0xF8) << 8) | ((80 & 0xFC) << 3) | (120 >> 3));
+            symPal[3] = blend565(90, fg, bg);
+            symPal[4] = (uint16_t)(((255 & 0xF8) << 8) | ((165 & 0xFC) << 3) | (40 >> 3));
+            symPal[5] = (uint16_t)(((205 & 0xF8) << 8) | ((240 & 0xFC) << 3) | (255 >> 3));
+        }
+
+        uint16_t rowBuf[320];
+        tft.startWrite();
+        tft.setAddrWindow(boxX, boxY, boxW, boxH);
+
+        int16_t cMin = (clipX0 >= 0) ? clipX0 : boxX;
+        int16_t cMax = (clipX1 < boxX + boxW) ? clipX1 : (boxX + boxW);
+
+        for (int16_t py = boxY; py < boxY + boxH; py++) {
+            for (int16_t i = 0; i < boxW; i++) rowBuf[i] = bg;
+            for (uint8_t r = 0; r < runCount; r++) {
+                const RunGlyph& rg = runs[r];
+                if (py < rg.gy0 || py >= rg.gy0 + rg.g.height) continue;
+                uint32_t bitIdx = (uint32_t)(py - rg.gy0) * rg.g.width;
+                const uint8_t* bmpBase = face->bitmaps + rg.g.bitmapOffset;
+                for (uint8_t rx = 0; rx < rg.g.width; rx++) {
+                    uint8_t byteVal = pgm_read_byte(bmpBase + (bitIdx >> 1));
+                    uint8_t nibble = (bitIdx & 1) ? (byteVal & 0x0F) : (byteVal >> 4);
+                    bitIdx++;
+                    if (nibble == 0) continue;
+                    int16_t px = rg.gx0 + rx;
+                    if (px < cMin || px >= cMax) continue;
+                    rowBuf[px - boxX] = lut[nibble];
+                }
+            }
+            for (uint8_t sIdx = 0; sIdx < symCount; sIdx++) {
+                const RunSym& rs = symRuns[sIdx];
+                if (py < rs.sy0 || py >= rs.sy0 + rs.sz) continue;
+                int16_t ry = py - rs.sy0;
+                float inv = 2.0f / (float)rs.sz;
+                for (int16_t rx = 0; rx < rs.sz; rx++) {
+                    int16_t px = rs.sx0 + rx;
+                    if (px < cMin || px >= cMax) continue;
+                    uint8_t cnt[6] = {0, 0, 0, 0, 0, 0};
+                    for (int sy = 0; sy < 2; sy++) {
+                        for (int sx = 0; sx < 2; sx++) {
+                            float u = (rx + 0.25f + 0.5f * sx) * inv - 1.0f;
+                            float v = (ry + 0.25f + 0.5f * sy) * inv - 1.0f;
+                            cnt[shapeColor(rs.type, u, v)]++;
+                        }
+                    }
+                    uint8_t best = 0, hits = 0;
+                    for (uint8_t k = 1; k < 6; k++) {
+                        hits += cnt[k];
+                        if (cnt[k] > cnt[best] || best == 0) { if (cnt[k]) best = k; }
+                    }
+                    if (hits == 0 || best == 0) continue;
+                    if (hits == 4) {
+                        rowBuf[px - boxX] = symPal[best];
+                    } else {
+                        rowBuf[px - boxX] = blend565(hits * 64 - 1, symPal[best], rowBuf[px - boxX]);
+                    }
+                }
+            }
+            for (int16_t i = 0; i < boxW; i++) {
+                tft.pushColor(rowBuf[i]);
+            }
+        }
+
+        tft.endWrite();
+    }
+
+    // True 16-bit RGB565 anti-aliased rounded pill directly on TFT (exact SDF, zero 8-bit RGB332 mismatch!)
+    static void fillSmoothRoundRect16(TFT_eSPI& tft, int16_t x, int16_t y, int16_t w, int16_t h,
+                                      int16_t r, uint16_t fg, uint16_t bg) {
+        if (w <= 0 || h <= 0 || w > 320) return;
+        float halfW = (w - 1) * 0.5f;
+        float halfH = (h - 1) * 0.5f;
+        float rf = (float)r;
+        if (rf > halfW) rf = halfW;
+        if (rf > halfH) rf = halfH;
+        float innerW = halfW - rf;
+        float innerH = halfH - rf;
+
+        uint16_t rowBuf[320];
+        tft.startWrite();
+        tft.setAddrWindow(x, y, w, h);
+        for (int16_t py = 0; py < h; py++) {
+            float qy = fabsf((float)py - halfH) - innerH;
+            float ay = qy > 0.0f ? qy : 0.0f;
+            for (int16_t px = 0; px < w; px++) {
+                float qx = fabsf((float)px - halfW) - innerW;
+                float ax = qx > 0.0f ? qx : 0.0f;
+                float inside = (qx < 0.0f && qy < 0.0f) ? (qx > qy ? qx : qy) : 0.0f;
+                float sd = sqrtf(ax * ax + ay * ay) + inside - rf;
+
+                if (sd <= -0.5f) {
+                    rowBuf[px] = fg;
+                } else if (sd >= 0.5f) {
+                    rowBuf[px] = bg;
+                } else {
+                    uint8_t a = (uint8_t)((0.5f - sd) * 255.0f);
+                    rowBuf[px] = blend565(a, fg, bg);
+                }
+            }
+            for (int16_t i = 0; i < w; i++) {
+                tft.pushColor(rowBuf[i]);
+            }
+        }
+        tft.endWrite();
+    }
+
+    // True 16-bit RGB565 anti-aliased 1px outlined pill in a single pass (zero outer-corner box!)
+    static void drawOutlineRoundRect16(TFT_eSPI& tft, int16_t x, int16_t y, int16_t w, int16_t h,
+                                       int16_t r, uint16_t fillCol, uint16_t borderCol, uint16_t bgCol) {
+        if (w <= 0 || h <= 0 || w > 320) return;
+        float halfW = (w - 1) * 0.5f;
+        float halfH = (h - 1) * 0.5f;
+        float rf = (float)r;
+        if (rf > halfW) rf = halfW;
+        if (rf > halfH) rf = halfH;
+        float innerW = halfW - rf;
+        float innerH = halfH - rf;
+
+        uint16_t rowBuf[320];
+        tft.startWrite();
+        tft.setAddrWindow(x, y, w, h);
+        for (int16_t py = 0; py < h; py++) {
+            float qy = fabsf((float)py - halfH) - innerH;
+            float ay = qy > 0.0f ? qy : 0.0f;
+            for (int16_t px = 0; px < w; px++) {
+                float qx = fabsf((float)px - halfW) - innerW;
+                float ax = qx > 0.0f ? qx : 0.0f;
+                float inside = (qx < 0.0f && qy < 0.0f) ? (qx > qy ? qx : qy) : 0.0f;
+                float sd = sqrtf(ax * ax + ay * ay) + inside - rf;
+
+                if (sd <= -1.5f) {
+                    rowBuf[px] = fillCol;
+                } else if (sd < -0.5f) {
+                    uint8_t a = (uint8_t)((sd + 1.5f) * 255.0f);
+                    rowBuf[px] = blend565(a, borderCol, fillCol);
+                } else if (sd <= 0.15f) {
+                    rowBuf[px] = borderCol;
+                } else if (sd < 1.0f) {
+                    uint8_t a = (uint8_t)(((1.0f - sd) / 0.85f) * 255.0f);
+                    rowBuf[px] = blend565(a, borderCol, bgCol);
+                } else {
+                    rowBuf[px] = bgCol;
+                }
+            }
+            for (int16_t i = 0; i < w; i++) {
+                tft.pushColor(rowBuf[i]);
+            }
+        }
+        tft.endWrite();
+    }
+
+    // Ring-only variant: paints just the 1px AA border (inner/outer fringe) and
+    // NEVER touches the pill interior, so it can be drawn AFTER the label text.
+    static void drawOutlineRing16(TFT_eSPI& tft, int16_t x, int16_t y, int16_t w, int16_t h,
+                                  int16_t r, uint16_t fillCol, uint16_t borderCol, uint16_t bgCol) {
+        if (w <= 0 || h <= 0) return;
+        float halfW = (w - 1) * 0.5f;
+        float halfH = (h - 1) * 0.5f;
+        float rf = (float)r;
+        if (rf > halfW) rf = halfW;
+        if (rf > halfH) rf = halfH;
+        float innerW = halfW - rf;
+        float innerH = halfH - rf;
+        tft.startWrite();
+        for (int16_t py = 0; py < h; py++) {
+            float qy = fabsf((float)py - halfH) - innerH;
+            float ay = qy > 0.0f ? qy : 0.0f;
+            for (int16_t px = 0; px < w; px++) {
+                float qx = fabsf((float)px - halfW) - innerW;
+                float ax = qx > 0.0f ? qx : 0.0f;
+                float inside = (qx < 0.0f && qy < 0.0f) ? (qx > qy ? qx : qy) : 0.0f;
+                float sd = sqrtf(ax * ax + ay * ay) + inside - rf;
+                if (sd <= -1.5f || sd >= 1.0f) continue;
+                uint16_t c;
+                if (sd < -0.5f) {
+                    c = blend565((uint8_t)((sd + 1.5f) * 255.0f), borderCol, fillCol);
+                } else if (sd <= 0.15f) {
+                    c = borderCol;
+                } else {
+                    c = blend565((uint8_t)(((1.0f - sd) / 0.85f) * 255.0f), borderCol, bgCol);
+                }
+                tft.drawPixel(x + px, y + py, c);
+            }
+        }
+        tft.endWrite();
+    }
+
+    // Truncate UTF-8 text with ".." so it never exceeds maxW pixels.
+    static void fitText(const VnFontFace* face, const char* s, int16_t maxW, char* out, size_t n) {
+        if (!out || n < 4) return;
+        strlcpy(out, s ? s : "", n);
+        if (measureWidth(face, out) <= maxW) return;
+        size_t len = strlen(out);
+        while (len > 1) {
+            len--;
+            while (len > 0 && ((uint8_t)out[len] & 0xC0) == 0x80) len--;
+            out[len] = '\0';
+            if (len + 3 > n) continue;
+            strcat(out, "..");
+            if (measureWidth(face, out) <= maxW) return;
+            out[len] = '\0';
+        }
+    }
+
     // ───────────────────────────────────────────────────────────────────
     //  True Sub-Pixel SDF Anti-Aliased Shapes (Live Sprite Pixel Blend)
     //  Eliminates TFT_eSPI 0xFFFF white-corner speckles, concentric
@@ -607,12 +924,22 @@ private:
                         if (px < 0 || px >= width() || py < 0 || py >= height()) continue;
                         if (_hasVnClip && (px < _vnClipX0 || px >= _vnClipX1 || py < _vnClipY0 || py >= _vnClipY1)) continue;
 
-                        if (nibble == 15) {
-                            drawPixel(px, py, fg);
+                        if (getColorDepth() == 8) {
+                            // 8-bit RGB332 fallback: snap mid-tones to clean neutral levels to avoid green/yellow color-fringing & blotchy text
+                            if (nibble >= 10) {
+                                drawPixel(px, py, fg);
+                            } else if (nibble >= 5) {
+                                uint16_t bg = readPixel(px, py);
+                                drawPixel(px, py, alphaBlend(136, fg, bg));
+                            }
                         } else {
-                            uint8_t alpha = (nibble << 4) | nibble;
-                            uint16_t bg = readPixel(px, py);
-                            drawPixel(px, py, alphaBlend(alpha, fg, bg));
+                            if (nibble == 15) {
+                                drawPixel(px, py, fg);
+                            } else {
+                                uint8_t alpha = (nibble << 4) | nibble;
+                                uint16_t bg = readPixel(px, py);
+                                drawPixel(px, py, alphaBlend(alpha, fg, bg));
+                            }
                         }
                     }
                 }

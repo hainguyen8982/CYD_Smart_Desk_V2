@@ -37,6 +37,11 @@ void prevTheme();
 const char* getThemeName();
 uint8_t getThemeIndex();
 
+// Minimal Zen UI Mode (Apple StandBy / Braun style)
+bool isMinimalUiMode();
+void setMinimalUiMode(bool enabled);
+void toggleMinimalUiMode();
+
 // Helper
 uint16_t hexToRGB565(const char* hex);
 

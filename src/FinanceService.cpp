@@ -58,6 +58,11 @@ FinanceService::FinanceService()
 
     _data.btcRate = 83492.0f;
     _data.btcChangePercent = -0.4f;
+    const float defaultBtc7d[7] = { 82100.0f, 83200.0f, 84500.0f, 83900.0f, 84100.0f, 83820.0f, 83492.0f };
+    for (int i = 0; i < 7; i++) _data.btc7d[i] = defaultBtc7d[i];
+    _data.btcMin7d = 82100.0f;
+    _data.btcMax7d = 84500.0f;
+    _data.usdVndRate = 25897.0f;
 
     _data.valid = false;
     _data.lastFetchMs = 0;
@@ -272,6 +277,7 @@ void FinanceService::_fetchExchangeRates() {
 
             if (usdToVnd > 1000.0f) {
                 if (_mutex) xSemaphoreTake(_mutex, portMAX_DELAY);
+                _data.usdVndRate = usdToVnd;
 
                 // 1. Tính toán tỉ giá Ngoại tệ 1 (_data.cur1Code)
                 float r1 = usdToVnd;
@@ -368,6 +374,7 @@ void FinanceService::_fetchExchangeRates() {
 void FinanceService::_fetchCrypto() {
     Serial.println("[Finance] Fetching Binance BTC & PAXG...");
     HTTPClient http;
+    bool updated = false;
 
     // 1. BTC / USDT
     http.begin("https://api.binance.com/api/v3/ticker/24hr?symbol=BTCUSDT");
@@ -383,8 +390,45 @@ void FinanceService::_fetchCrypto() {
         _data.btcRate = bRate;
         _data.btcChangePercent = bChg;
         if (_mutex) xSemaphoreGive(_mutex);
+        updated = true;
 
         Serial.printf("[Finance] ✓ BTC: $%.0f (%+.2f%%)\n", bRate, bChg);
+    }
+    http.end();
+
+    yield();
+
+    // 1b. BTC / USDT 7-day daily klines (lịch sử đóng cửa 7 ngày thực tế)
+    http.begin("https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1d&limit=7");
+    http.setTimeout(4000);
+    int codeK = http.GET();
+    if (codeK == 200) {
+        JsonDocument docK;
+        DeserializationError errK = deserializeJson(docK, http.getString());
+        if (!errK && docK.is<JsonArray>() && docK.size() == 7) {
+            float b7[7];
+            float minB = 1e9f, maxB = 0.0f;
+            bool ok7 = true;
+            for (int i = 0; i < 7; i++) {
+                float cPrice = docK[i][4].as<float>();
+                if (cPrice <= 0.0f) { ok7 = false; break; }
+                b7[i] = cPrice;
+            }
+            if (ok7) {
+                if (_mutex) xSemaphoreTake(_mutex, portMAX_DELAY);
+                if (_data.btcRate > 0.0f) b7[6] = _data.btcRate;
+                for (int i = 0; i < 7; i++) {
+                    _data.btc7d[i] = b7[i];
+                    if (b7[i] < minB) minB = b7[i];
+                    if (b7[i] > maxB) maxB = b7[i];
+                }
+                _data.btcMin7d = minB;
+                _data.btcMax7d = maxB;
+                if (_mutex) xSemaphoreGive(_mutex);
+                updated = true;
+                Serial.printf("[Finance] ✓ BTC 7d: min=$%.0f max=$%.0f\n", minB, maxB);
+            }
+        }
     }
     http.end();
 
@@ -407,7 +451,7 @@ void FinanceService::_fetchCrypto() {
 
             // Tính chênh lệch giá vàng Trong Nước (SJC) vs Thế Giới
             // 1 lượng vàng = 1.20565 troy ounce (quy đổi theo tỉ giá USD)
-            float usdRef = (_data.cur1Rate > 10000.0f) ? _data.cur1Rate : 25897.0f;
+            float usdRef = (_data.usdVndRate > 10000.0f) ? _data.usdVndRate : 25897.0f;
             if (_data.sjcSell > 0.0f) {
                 float worldVndPerLuongTr = (_data.worldGoldUsd * 1.20565f * usdRef) / 1000000.0f;
                 _data.domesticDiffTr = _data.sjcSell - worldVndPerLuongTr;
@@ -415,12 +459,17 @@ void FinanceService::_fetchCrypto() {
             float curWorldGold = _data.worldGoldUsd;
             float curDiff = _data.domesticDiffTr;
             if (_mutex) xSemaphoreGive(_mutex);
+            updated = true;
 
             Serial.printf("[Finance] ✓ Gold Kitco: $%.1f/oz (Chenh lech: ~%.1ftr/luong)\n",
                           curWorldGold, curDiff);
         }
     }
     http.end();
+
+    if (updated) {
+        _saveCache();
+    }
 }
 
 void FinanceService::_loadCache() {
@@ -449,10 +498,12 @@ void FinanceService::_loadCache() {
 
     _data.btcRate = prefs.getFloat("btc_r", _data.btcRate);
     _data.btcChangePercent = prefs.getFloat("btc_chg", _data.btcChangePercent);
+    _data.usdVndRate = prefs.getFloat("usd_vnd", _data.usdVndRate);
 
     prefs.getBytes("sjc_7d", _data.sjc7d, sizeof(_data.sjc7d));
     prefs.getBytes("cur1_7d", _data.cur17d, sizeof(_data.cur17d));
     prefs.getBytes("cur2_7d", _data.cur27d, sizeof(_data.cur27d));
+    prefs.getBytes("btc_7d", _data.btc7d, sizeof(_data.btc7d));
 
     _data.sjcMin7d = prefs.getFloat("sjc_min", _data.sjcMin7d);
     _data.sjcMax7d = prefs.getFloat("sjc_max", _data.sjcMax7d);
@@ -460,6 +511,8 @@ void FinanceService::_loadCache() {
     _data.cur1Max7d = prefs.getFloat("cur1_max", _data.cur1Max7d);
     _data.cur2Min7d = prefs.getFloat("cur2_min", _data.cur2Min7d);
     _data.cur2Max7d = prefs.getFloat("cur2_max", _data.cur2Max7d);
+    _data.btcMin7d = prefs.getFloat("btc_min", _data.btcMin7d);
+    _data.btcMax7d = prefs.getFloat("btc_max", _data.btcMax7d);
 
     // Tính toán lại microbars 5 ngày đồng bộ tuyệt đối từ chuỗi 7 ngày đã tải
     for (int i = 0; i < 5; i++) {
@@ -504,10 +557,12 @@ void FinanceService::_saveCache() {
 
     prefs.putFloat("btc_r", d.btcRate);
     prefs.putFloat("btc_chg", d.btcChangePercent);
+    prefs.putFloat("usd_vnd", d.usdVndRate);
 
     prefs.putBytes("sjc_7d", d.sjc7d, sizeof(d.sjc7d));
     prefs.putBytes("cur1_7d", d.cur17d, sizeof(d.cur17d));
     prefs.putBytes("cur2_7d", d.cur27d, sizeof(d.cur27d));
+    prefs.putBytes("btc_7d", d.btc7d, sizeof(d.btc7d));
 
     prefs.putFloat("sjc_min", d.sjcMin7d);
     prefs.putFloat("sjc_max", d.sjcMax7d);
@@ -515,6 +570,8 @@ void FinanceService::_saveCache() {
     prefs.putFloat("cur1_max", d.cur1Max7d);
     prefs.putFloat("cur2_min", d.cur2Min7d);
     prefs.putFloat("cur2_max", d.cur2Max7d);
+    prefs.putFloat("btc_min", d.btcMin7d);
+    prefs.putFloat("btc_max", d.btcMax7d);
 
     prefs.end();
 }

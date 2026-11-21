@@ -49,6 +49,10 @@ struct FinanceData {
     // ── Macro / Crypto: BTC / USDT ──
     float btcRate;              // USD (vd: 83492.0f)
     float btcChangePercent;     // % biến động 24h (vd: -0.4f)
+    float btc7d[7];             // Lịch sử đóng cửa 7 ngày (Binance 1d klines)
+    float btcMin7d;             // Đáy 7 ngày (USD)
+    float btcMax7d;             // Đỉnh 7 ngày (USD)
+    float usdVndRate;           // Tỉ giá USD/VND gốc (quy đổi BTC & Kitco)
 
     bool          valid;
     unsigned long lastFetchMs;

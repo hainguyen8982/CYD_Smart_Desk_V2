@@ -7,6 +7,7 @@
 
 ThemeTokens theme;
 static uint8_t currentThemeIdx = 0;
+static bool minimalUiEnabled = true;  // Default to Minimal Zen UI (Apple StandBy / Braun style)
 static const uint8_t TOTAL_THEMES = 8;
 
 static const char* THEME_NAMES[] = {
@@ -210,18 +211,22 @@ void saveTheme() {
     Preferences prefs;
     prefs.begin("cyd_theme", false);
     prefs.putUChar("idx", currentThemeIdx);
+    prefs.putBool("minimal", minimalUiEnabled);
     prefs.end();
-    Serial.printf("[Theme] Saved theme index: %d (%s)\n", currentThemeIdx, THEME_NAMES[currentThemeIdx]);
+    Serial.printf("[Theme] Saved theme index: %d (%s) | MinimalZen: %d\n",
+                  currentThemeIdx, THEME_NAMES[currentThemeIdx], minimalUiEnabled ? 1 : 0);
 }
 
 void initTheme() {
     Preferences prefs;
     prefs.begin("cyd_theme", true);
     currentThemeIdx = prefs.getUChar("idx", 0);
+    minimalUiEnabled = prefs.getBool("minimal", true);
     prefs.end();
     if (currentThemeIdx >= TOTAL_THEMES) currentThemeIdx = 0;
     applyThemePreset(currentThemeIdx);
-    Serial.printf("[Theme] Initialized theme: %s (idx: %d)\n", THEME_NAMES[currentThemeIdx], currentThemeIdx);
+    Serial.printf("[Theme] Initialized theme: %s (idx: %d) | MinimalZen: %d\n",
+                  THEME_NAMES[currentThemeIdx], currentThemeIdx, minimalUiEnabled ? 1 : 0);
 }
 
 const char* getThemeName() {
@@ -230,4 +235,18 @@ const char* getThemeName() {
 
 uint8_t getThemeIndex() {
     return currentThemeIdx;
+}
+
+bool isMinimalUiMode() {
+    return minimalUiEnabled;
+}
+
+void setMinimalUiMode(bool enabled) {
+    minimalUiEnabled = enabled;
+    saveTheme();
+}
+
+void toggleMinimalUiMode() {
+    minimalUiEnabled = !minimalUiEnabled;
+    saveTheme();
 }

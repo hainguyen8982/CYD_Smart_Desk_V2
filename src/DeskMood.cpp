@@ -293,6 +293,19 @@ static void drawMemeBitmap160(TFT_eSprite& spr, int16_t startX, int16_t startY, 
     }
 }
 
+static void drawMemeBitmap160_16bit(TFT_eSPI& tft, int16_t startX, int16_t startY, const uint16_t* bmp) {
+    if (!bmp) return;
+    // Background is pure C_BLACK (0x0000 == MEME_TRANSPARENT_COLOR), so streaming
+    // the full 160x160 RGB565 bitmap directly yields 65,536-color clarity.
+    tft.startWrite();
+    tft.setAddrWindow(startX, startY, MEME_BITMAP_W, MEME_BITMAP_H);
+    const uint32_t total = (uint32_t)MEME_BITMAP_W * MEME_BITMAP_H;
+    for (uint32_t i = 0; i < total; i++) {
+        tft.pushColor(pgm_read_word(&bmp[i]));
+    }
+    tft.endWrite();
+}
+
 // ═══════════════════════════════════════════════════════════════════════
 //  RENDER SIGNBOARD (MEME KHỔNG LỒ 160x160 > 2/3 MÀN HÌNH - KHÔNG VÒNG TRÒN)
 // ═══════════════════════════════════════════════════════════════════════
@@ -381,6 +394,72 @@ void DeskMood::renderPage(VnSprite& spr, uint8_t lang, uint16_t themeBg) {
             spr.fillSmoothCircle(dx, 226, 2, theme.track, themeBg);
         }
     }
+}
+
+void DeskMood::renderPageZen16(TFT_eSPI& tft, VnSprite& spr, const VnFontFace* lightFont, uint8_t lang) {
+    const uint16_t zenBg = C_BLACK;
+    const uint16_t zenBorder = RGB565(64, 70, 82);
+    const uint16_t zenMuted = RGB565(200, 206, 216);
+    const uint16_t zenDim = RGB565(96, 102, 114);
+    const uint16_t zenTrack = RGB565(56, 62, 72);
+    const uint16_t swapCol = RGB565(180, 188, 200);
+
+    tft.fillScreen(zenBg);
+
+    const int16_t cx = 160;
+    const uint16_t* memeBmp = getMemeBitmap((uint8_t)_pack, (uint8_t)_mood);
+    drawMemeBitmap160_16bit(tft, 80, 2, memeBmp);
+
+    // Top-right Pack Swap button (X=284..312, Y=8..36 -> inside X>=265 && Y<=46)
+    VnSprite::drawOutlineRoundRect16(tft, 284, 8, 28, 28, 8, zenBg, zenBorder, zenBg);
+    int16_t icx = 298, icy = 22;
+    tft.drawFastHLine(icx - 5, icy - 5, 8, swapCol);
+    tft.drawFastVLine(icx - 6, icy - 4, 4, swapCol);
+    tft.drawLine(icx, icy - 8, icx + 3, icy - 5, swapCol);
+    tft.drawLine(icx, icy - 2, icx + 3, icy - 5, swapCol);
+    tft.drawFastHLine(icx - 2, icy + 5, 8, swapCol);
+    tft.drawFastVLine(icx + 6, icy + 1, 4, swapCol);
+    tft.drawLine(icx, icy + 8, icx - 3, icy + 5, swapCol);
+    tft.drawLine(icx, icy + 2, icx - 3, icy + 5, swapCol);
+
+    // Outline Neon Mood Pill (Y=165..191)
+    const char* tagStr = (_customEnabled[_mood] && _customTags[_mood][0] != '\0')
+                         ? _customTags[_mood]
+                         : getTag(_mood, lang);
+    uint16_t accent = getAccentColor(_mood);
+    int16_t textW = spr.measureSmoothFace(lightFont, tagStr);
+    int16_t tagW = textW + 34;
+    if (tagW < 128) tagW = 128;
+    if (tagW > 300) tagW = 300;
+    int16_t tagX = cx - tagW / 2;
+    char tagFit[64];
+    VnSprite::fitText(lightFont, tagStr, tagW - 30, tagFit, sizeof(tagFit));
+    VnSprite::drawSmoothFace16(tft, lightFont, tagFit, cx, 178, MC_DATUM,
+                               accent, zenBg, tagX + 14, 168, tagW - 28, 20);
+    VnSprite::drawOutlineRing16(tft, tagX, 165, tagW, 26, 13, zenBg, accent, zenBg);
+
+    // Quote / Message line (Y=205)
+    const char* msgStr = (_customEnabled[_mood] && _customMsgs[_mood][0] != '\0')
+                         ? _customMsgs[_mood]
+                         : getMessage(_mood, lang);
+    char msgFit[112];
+    VnSprite::fitText(lightFont, msgStr, 296, msgFit, sizeof(msgFit));
+    VnSprite::drawSmoothFace16(tft, lightFont, msgFit, cx, 205, MC_DATUM,
+                               zenMuted, zenBg, 10, 194, 300, 22);
+
+    // 6 Smooth Status Indicator Dots (Y=224)
+    int16_t dotStartX = cx - (MOOD_COUNT * 14) / 2 + 7;
+    for (int i = 0; i < MOOD_COUNT; i++) {
+        int16_t dx = dotStartX + i * 14;
+        if (i == (int)_mood) {
+            VnSprite::fillSmoothRoundRect16(tft, dx - 6, 222, 13, 5, 2, accent, zenBg);
+        } else {
+            VnSprite::fillSmoothRoundRect16(tft, dx - 2, 222, 5, 5, 2, zenTrack, zenBg);
+        }
+    }
+
+    // Minimal Dock indicator bar at bottom edge
+    tft.fillRoundRect(134, 236, 52, 3, 1, zenDim);
 }
 
 // ═══════════════════════════════════════════════════════════════════════

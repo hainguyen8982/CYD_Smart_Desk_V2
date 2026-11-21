@@ -56,6 +56,7 @@ public:
     void resetMoodToDefault(MoodType m);
 
     void renderPage(VnSprite& spr, uint8_t lang, uint16_t themeBg);
+    void renderPageZen16(TFT_eSPI& tft, VnSprite& spr, const VnFontFace* lightFont, uint8_t lang);
     bool handleTouch(int16_t x, int16_t y);
 
 private:

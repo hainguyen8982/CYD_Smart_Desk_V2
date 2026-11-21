@@ -366,6 +366,12 @@ input[type=range] { width: 100%; accent-color: var(--accent); height: 6px; borde
         <span data-i18n="sec_theme_title">Giao diện (Theme) & Độ sáng</span>
       </div>
 
+      <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 8px;">Phong cách hiển thị (Clock / Pomodoro / Finance):</div>
+      <div class="grid-2" id="uiStyleButtons" style="margin-bottom: 14px;">
+        <button class="btn-chip" id="btnStyleZen" onclick="setUiStyle(true)">✨ Minimal Zen</button>
+        <button class="btn-chip" id="btnStyleClassic" onclick="setUiStyle(false)">💎 Classic</button>
+      </div>
+
       <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 8px;" data-i18n="theme_sub">Bộ sưu tập Giao diện (Theme):</div>
       <div class="grid-2" id="themeButtons">
         <button class="btn-chip" onclick="switchTheme(0)">Cyber Neon</button>
@@ -1128,6 +1134,19 @@ function highlightTheme(id) {
   btns.forEach((b, idx) => b.classList.toggle('active', idx === id));
 }
 
+function highlightUiStyle(isMinimal) {
+  const bZen = document.getElementById('btnStyleZen');
+  const bCls = document.getElementById('btnStyleClassic');
+  if (bZen) bZen.classList.toggle('active', !!isMinimal);
+  if (bCls) bCls.classList.toggle('active', !isMinimal);
+}
+
+function setUiStyle(isMinimal) {
+  highlightUiStyle(isMinimal);
+  showToast(isMinimal ? '✨ Đã bật Minimal Zen' : '💎 Đã chuyển Classic');
+  fetch(`/api/uistyle?minimal=${isMinimal ? 1 : 0}`).catch(() => {});
+}
+
 function getMoodName(m) {
   const arr = (currentLang === 1)
     ? ['🟢 Happy', '🔴 Deep Focus', '⚡ Frustrated', '🟡 Drained 0%', '🟣 Bored', '🎉 Weekend / Party']
@@ -1369,6 +1388,7 @@ async function fetchStatus() {
     }
 
     highlightTheme(data.theme);
+    if (data.minimalUi !== undefined) highlightUiStyle(data.minimalUi);
 
     const bSlider = document.getElementById('brightSlider');
     if (bSlider && !bSlider.matches(':active')) {
@@ -2000,6 +2020,7 @@ void WebDashboard::_setupRoutes() {
     doc["sleepEndH"] = eh;
     doc["sleepEndM"] = em;
     doc["sleepEn"] = sEn;
+    doc["minimalUi"] = isMinimalUiMode();
 
     JsonArray wifiArr = doc["wifiProfiles"].to<JsonArray>();
     for (uint8_t i = 0; i < wifiProfiles.getProfileCount(); i++) {
@@ -2124,6 +2145,18 @@ void WebDashboard::_setupRoutes() {
       request->send(200, "application/json", "{\"success\":true}");
     } else {
       request->send(400, "application/json", "{\"error\":\"Missing id\"}");
+    }
+  });
+
+  // ── GET /api/uistyle?minimal=0|1 ───────────────────────────────
+  _server.on("/api/uistyle", HTTP_GET, [](AsyncWebServerRequest *request) {
+    if (request->hasParam("minimal")) {
+      bool m = (request->getParam("minimal")->value() == "1" || request->getParam("minimal")->value() == "true");
+      setMinimalUiMode(m);
+      display.triggerRender();
+      request->send(200, "application/json", "{\"success\":true}");
+    } else {
+      request->send(400, "application/json", "{\"error\":\"Missing minimal\"}");
     }
   });
 
