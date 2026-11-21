@@ -320,9 +320,178 @@ private:
         return nullptr;
     }
 
-    static uint16_t decodeNextUTF8(const char*& p) {
+    // ── Vector icon glyphs for symbols/emoji not present in the bitmap font ──
+    enum : uint8_t { SYM_NONE = 0, SYM_ZERO, SYM_STAR, SYM_HEART, SYM_FLOWER,
+                     SYM_YINYANG, SYM_RING, SYM_CAKE, SYM_CANDLE };
+
+    static uint8_t symbolType(uint32_t c) {
+        // Zero-width modifiers: variation selectors, ZWJ, keycap, skin tones
+        if (c == 0xFE0F || c == 0xFE0E || c == 0x200D || c == 0x20E3 ||
+            (c >= 0x1F3FB && c <= 0x1F3FF)) return SYM_ZERO;
+        switch (c) {
+            case 0x2605: case 0x2606: case 0x2B50: case 0x1F31F: case 0x2728:
+            case 0x1F389: case 0x1F38A: case 0x1F381:             return SYM_STAR;
+            case 0x2764: case 0x2665: case 0x2661: case 0x1F9E1:
+            case 0x1F90D: case 0x1F5A4:                            return SYM_HEART;
+            case 0x273F: case 0x2740: case 0x1F338: case 0x1F33A:
+            case 0x1F337: case 0x1F339: case 0x1F33C:              return SYM_FLOWER;
+            case 0x262F:                                           return SYM_YINYANG;
+            case 0x1F48D: case 0x1F48E:                            return SYM_RING;
+            case 0x1F382: case 0x1F370: case 0x1F9C1:              return SYM_CAKE;
+            case 0x1F56F:                                          return SYM_CANDLE;
+            default: break;
+        }
+        if (c >= 0x1F493 && c <= 0x1F49F) return SYM_HEART;
+        // Any other emoji / dingbat → generic star so nothing renders as blank
+        if ((c >= 0x1F300 && c <= 0x1FAFF) || (c >= 0x2600 && c <= 0x27BF)) return SYM_STAR;
+        return SYM_NONE;
+    }
+
+    static int16_t symbolSize(const VnFontFace* face) {
+        int16_t s = face->baseline;
+        if (s < 7) s = 7;
+        return s;
+    }
+
+    static int16_t symbolAdvance(const VnFontFace* face, uint8_t type) {
+        if (type == SYM_ZERO) return 0;
+        return symbolSize(face) + 2;
+    }
+
+    static bool inStar(float u, float v) {
+        // 5-point star, point up, outer R=1, inner r=0.42 (even-odd ray cast)
+        static float px[10], py[10];
+        static bool init = false;
+        if (!init) {
+            for (int i = 0; i < 10; i++) {
+                float a = -1.5707963f + i * 0.6283185f;
+                float r = (i & 1) ? 0.42f : 1.0f;
+                px[i] = cosf(a) * r;
+                py[i] = sinf(a) * r + 0.08f;
+            }
+            init = true;
+        }
+        bool in = false;
+        for (int i = 0, j = 9; i < 10; j = i++) {
+            if (((py[i] > v) != (py[j] > v)) &&
+                (u < (px[j] - px[i]) * (v - py[i]) / (py[j] - py[i]) + px[i])) in = !in;
+        }
+        return in;
+    }
+
+    // Returns color id: 0 none, 1 text, 2 red/pink, 3 dim, 4 orange flame, 5 ice white
+    static uint8_t shapeColor(uint8_t type, float u, float v) {
+        switch (type) {
+            case SYM_STAR:
+                return inStar(u, v) ? 1 : 0;
+            case SYM_HEART: {
+                float x = u * 1.25f, y = -v * 1.25f + 0.25f;
+                float a = x * x + y * y - 1.0f;
+                return (a * a * a - x * x * y * y * y <= 0.0f) ? 2 : 0;
+            }
+            case SYM_FLOWER: {
+                if (u * u + v * v < 0.07f) return 4;
+                static const float fxp[5] = { 0.0f, 0.5231f, 0.3233f, -0.3233f, -0.5231f };
+                static const float fyp[5] = { -0.55f, -0.1700f, 0.4450f, 0.4450f, -0.1700f };
+                for (int i = 0; i < 5; i++) {
+                    float dx = u - fxp[i], dy = v - fyp[i];
+                    if (dx * dx + dy * dy < 0.17f) return 1;
+                }
+                return 0;
+            }
+            case SYM_YINYANG: {
+                float r2 = u * u + v * v;
+                if (r2 > 1.0f) return 0;
+                if (r2 > 0.78f) return 1;                         // outline ring
+                float dT = u * u + (v + 0.45f) * (v + 0.45f);
+                float dB = u * u + (v - 0.45f) * (v - 0.45f);
+                if (dT < 0.02f) return 3;
+                if (dB < 0.02f) return 1;
+                if (dT < 0.20f) return 1;
+                if (dB < 0.20f) return 3;
+                return (u < 0.0f) ? 1 : 3;
+            }
+            case SYM_RING: {
+                if (fabsf(u) + fabsf(v + 0.55f) < 0.34f) return 5; // diamond
+                float d2 = u * u + (v - 0.25f) * (v - 0.25f);
+                return (d2 < 0.49f && d2 > 0.22f) ? 1 : 0;
+            }
+            case SYM_CAKE: {
+                float fx = u / 0.16f, fy = (v + 0.68f) / 0.26f;
+                if (fx * fx + fy * fy < 1.0f) return 4;            // flame
+                if (fabsf(u) < 0.09f && v > -0.45f && v < 0.0f) return 1; // candle
+                if (fabsf(u) < 0.88f && v >= 0.0f && v < 0.25f) return 2; // frosting
+                if (fabsf(u) < 0.88f && v >= 0.25f && v < 0.92f) return 1; // body
+                return 0;
+            }
+            case SYM_CANDLE: {
+                float fx = u / 0.2f, fy = (v + 0.5f) / 0.36f;
+                if (fx * fx + fy * fy < 1.0f) return 4;
+                if (fabsf(u) < 0.04f && v > -0.2f && v < -0.05f) return 3; // wick
+                if (fabsf(u) < 0.3f && v >= -0.05f && v < 0.95f) return 1;
+                return 0;
+            }
+            default: return 0;
+        }
+    }
+
+    void drawSymbol(uint8_t type, int32_t x, int32_t top, int16_t sz) {
+        uint16_t fg = textcolor;
+        uint16_t pal[6];
+        pal[0] = 0;
+        pal[1] = fg;
+        pal[2] = color565(255, 80, 120);
+        pal[3] = alphaBlend(90, fg, color565(12, 18, 30));
+        pal[4] = color565(255, 165, 40);
+        pal[5] = color565(205, 240, 255);
+        float inv = 2.0f / (float)sz;
+        for (int16_t ry = 0; ry < sz; ry++) {
+            int32_t py = top + ry;
+            if (py < 0 || py >= height()) continue;
+            if (_hasVnClip && (py < _vnClipY0 || py >= _vnClipY1)) continue;
+            for (int16_t rx = 0; rx < sz; rx++) {
+                int32_t px = x + rx;
+                if (px < 0 || px >= width()) continue;
+                if (_hasVnClip && (px < _vnClipX0 || px >= _vnClipX1)) continue;
+                // 2x2 supersampling for anti-aliased edges
+                uint8_t cnt[6] = {0, 0, 0, 0, 0, 0};
+                for (int sy = 0; sy < 2; sy++) {
+                    for (int sx = 0; sx < 2; sx++) {
+                        float u = (rx + 0.25f + 0.5f * sx) * inv - 1.0f;
+                        float v = (ry + 0.25f + 0.5f * sy) * inv - 1.0f;
+                        cnt[shapeColor(type, u, v)]++;
+                    }
+                }
+                uint8_t best = 0, hits = 0;
+                for (uint8_t k = 1; k < 6; k++) {
+                    hits += cnt[k];
+                    if (cnt[k] > cnt[best] || best == 0) { if (cnt[k]) best = k; }
+                }
+                if (hits == 0 || best == 0) continue;
+                if (hits == 4) {
+                    drawPixel(px, py, pal[best]);
+                } else {
+                    uint16_t bg = readPixel(px, py);
+                    drawPixel(px, py, alphaBlend(hits * 64 - 1, pal[best], bg));
+                }
+            }
+        }
+    }
+
+    static uint32_t decodeNextUTF8(const char*& p) {
         uint8_t c0 = (uint8_t)(*p++);
         if (c0 < 0x80) return c0;
+        if ((c0 & 0xF8) == 0xF0) {
+            uint8_t c1 = (uint8_t)p[0];
+            if ((c1 & 0xC0) != 0x80) return c0;
+            uint8_t c2 = (uint8_t)p[1];
+            if ((c2 & 0xC0) != 0x80) return c0;
+            uint8_t c3 = (uint8_t)p[2];
+            if ((c3 & 0xC0) != 0x80) return c0;
+            p += 3;
+            return ((uint32_t)(c0 & 0x07) << 18) | ((uint32_t)(c1 & 0x3F) << 12) |
+                   ((uint32_t)(c2 & 0x3F) << 6) | (c3 & 0x3F);
+        }
         if ((c0 & 0xE0) == 0xC0) {
             uint8_t c1 = (uint8_t)(*p);
             if ((c1 & 0xC0) == 0x80) {
@@ -366,8 +535,11 @@ private:
         const char* p = s;
         VnGlyph g;
         while (*p) {
-            uint16_t code = decodeNextUTF8(p);
-            if (findGlyph(face, code, g)) {
+            uint32_t code = decodeNextUTF8(p);
+            uint8_t sym = (code > 0xFFFF || code >= 0x2600 || code == 0x200D) ? symbolType(code) : SYM_NONE;
+            if (sym != SYM_NONE) {
+                w += symbolAdvance(face, sym);
+            } else if (code <= 0xFFFF && findGlyph(face, (uint16_t)code, g)) {
                 w += g.xAdvance;
             } else {
                 w += face->spaceWidth;
@@ -402,8 +574,18 @@ private:
         uint16_t fg = textcolor;
 
         while (*p) {
-            uint16_t code = decodeNextUTF8(p);
-            if (!findGlyph(face, code, g)) {
+            uint32_t code = decodeNextUTF8(p);
+            uint8_t sym = (code > 0xFFFF || code >= 0x2600 || code == 0x200D) ? symbolType(code) : SYM_NONE;
+            if (sym != SYM_NONE) {
+                if (sym != SYM_ZERO) {
+                    int16_t sz = symbolSize(face);
+                    int32_t top = poY + baseline - sz;
+                    drawSymbol(sym, curX + 1, top, sz);
+                }
+                curX += symbolAdvance(face, sym);
+                continue;
+            }
+            if (code > 0xFFFF || !findGlyph(face, (uint16_t)code, g)) {
                 curX += face->spaceWidth;
                 continue;
             }

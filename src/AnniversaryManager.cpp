@@ -138,7 +138,7 @@ void AnniversaryManager::begin() {
     _count = 0;
 
     Preferences prefs;
-    if (prefs.begin("cyd_anniv", true)) {
+    if (prefs.begin("cyd_anniv", false)) {
         String json = prefs.getString("data", "");
         prefs.end();
 
@@ -182,13 +182,16 @@ void AnniversaryManager::save() {
 
     Preferences prefs;
     if (prefs.begin("cyd_anniv", false)) {
-        prefs.putString("data", json);
+        size_t written = prefs.putString("data", json);
         prefs.end();
-        Serial.printf("[AnniversaryManager] Saved %d items to NVS (%d bytes)\n", _count, json.length());
+        Serial.printf("[AnniversaryManager] Saved %d items to NVS (%d bytes, written %d)\n", _count, json.length(), written);
+    } else {
+        Serial.println("[AnniversaryManager] ERROR: prefs.begin('cyd_anniv', false) failed!");
     }
 }
 
 bool AnniversaryManager::addItem(uint8_t day, uint8_t month, bool isLunar, const char* title) {
+    if (!_loaded) begin();
     if (_count >= MAX_ANNIVERSARIES || !title || strlen(title) == 0) return false;
     if (month < 1 || month > 12 || day < 1 || day > 31) return false;
 
@@ -225,6 +228,11 @@ void AnniversaryManager::clear() {
 const AnniversaryItem* AnniversaryManager::getItem(uint8_t index) const {
     if (index < _count) return &_items[index];
     return nullptr;
+}
+
+uint8_t AnniversaryManager::getCount() {
+    if (!_loaded) begin();
+    return _count;
 }
 
 String AnniversaryManager::checkPersonalAnniversary(uint8_t sDay, uint8_t sMonth, uint8_t lDay, uint8_t lMonth, bool isEnglish) {

@@ -36,6 +36,12 @@ public:
     bool handleTouch(uint16_t x, uint16_t y);
     void wakeDock();
     void triggerRender() { _lastRender = 0; }
+    void resetTickerCache() {
+        _cachedTickerMsg = "";
+        _tickerCachedDay = 255;
+        _tickerOffset = 0;
+        _lastRender = 0;
+    }
 
     // Chỉ bật kéo trượt ngang 25ms khi đang ở đúng thanh Slider Độ sáng của trang Cài đặt
     bool isBrightnessSliderActive() const {

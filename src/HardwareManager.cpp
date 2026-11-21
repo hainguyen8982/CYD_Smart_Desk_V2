@@ -20,6 +20,8 @@ HardwareManager::HardwareManager()
       _smoothedLdr(-1),
       _screenOff(false),
       _scheduleScreenOff(false),
+      _manualWakeActive(false),
+      _manualWakeUntil(0),
       _savedBrightness(85),
       _powerMode(0),            // Mặc định: Chế độ Văn phòng (0 = Office, 1 = Home)
       _officeStartHour(18),     // Mặc định Văn phòng: Tan ca 18:30
@@ -80,6 +82,16 @@ void HardwareManager::begin() {
                   sh, sm, eh, em, en ? 1 : 0);
 }
 
+void HardwareManager::extendManualWake(unsigned long durationMs) {
+    _manualWakeActive = true;
+    _manualWakeUntil = millis() + durationMs;
+}
+
+bool HardwareManager::isManualWakeActive() const {
+    if (!_manualWakeActive) return false;
+    return (long)(_manualWakeUntil - millis()) > 0;
+}
+
 void HardwareManager::turnScreenOff() {
     if (_screenOff) return;
     if (_currentBrightness > 0) {
@@ -87,6 +99,7 @@ void HardwareManager::turnScreenOff() {
     }
     _screenOff = true;
     _scheduleScreenOff = false;
+    clearManualWake();
     analogWrite(PIN_TFT_BL, 0);
     // Hạ xung nhịp CPU từ 240MHz xuống 80MHz khi màn hình tắt để tiết kiệm điện & máy mát lạnh
     setCpuFrequencyMhz(80);
@@ -99,13 +112,15 @@ void HardwareManager::turnScreenOn() {
     if (!_screenOff) return;
     _screenOff = false;
     _scheduleScreenOff = false;
+    // Giữ sáng 60 phút (OT Override) để tránh bị lịch tắt văn phòng tắt lại ngay lập tức
+    extendManualWake();
     // Khôi phục xung nhịp tối đa 240MHz để đồ họa đạt 30 FPS mượt mà
     setCpuFrequencyMhz(240);
     uint8_t restoreB = (_savedBrightness >= 15) ? _savedBrightness : 85;
     setBacklight(restoreB);
     savePowerSettings();
     ecosystem.sendEvent(EVT_MORNING_WAKE, restoreB);
-    Serial.printf("[HardwareManager] Screen woke UP (Restored to %d%%, CPU @ %d MHz)\n", restoreB, getCpuFrequencyMhz());
+    Serial.printf("[HardwareManager] Screen woke UP (Restored to %d%%, CPU @ %d MHz, OT override 60m)\n", restoreB, getCpuFrequencyMhz());
 }
 
 void HardwareManager::toggleScreenPower() {
@@ -258,6 +273,22 @@ void HardwareManager::updateAutoBrightness() {
         }
 
         if (inOfficeSleep) {
+            // Nếu người dùng vừa chủ động đánh thức (làm OT) -> Giữ màn hình sáng 60 phút, không tắt lại ngay!
+            if (isManualWakeActive()) {
+                if (_screenOff) return;
+                if (_autoBrightness) {
+                    int target = map(rawLdr, 0, 800, 90, 45);
+                    target = constrain(target, 40, 95);
+                    if (_smoothedLdr == -1) _smoothedLdr = target;
+                    else _smoothedLdr = (_smoothedLdr * 3 + target) / 4;
+                    setBacklight(_smoothedLdr);
+                }
+                return;
+            } else if (_manualWakeActive) {
+                // Hết 60 phút không tương tác -> Xóa cờ OT override để tự động tắt khi phòng tối
+                clearManualWake();
+            }
+
             // Ngoài giờ làm việc:
             // Phòng tối (đã tắt đèn ra về, rawLdr >= 350) -> TẮT ĐEN MÀN HÌNH HOÀN TOÀN (0%)
             // Phòng vẫn bật đèn (làm thêm OT, rawLdr < 350) -> Giữ sáng làm việc bình thường (50%-90%)
@@ -270,6 +301,7 @@ void HardwareManager::updateAutoBrightness() {
             } else {
                 if (_screenOff && _scheduleScreenOff && rawLdr < 250) {
                     turnScreenOn();
+                    clearManualWake();
                 }
                 if (_screenOff) return;
                 int target = map(rawLdr, 0, 350, 90, 50);
@@ -279,16 +311,21 @@ void HardwareManager::updateAutoBrightness() {
                 setBacklight(_smoothedLdr);
                 return;
             }
-        } else if (_screenOff && _scheduleScreenOff) {
-            // Đã đến giờ vào ca sáng (!inOfficeSleep) -> Tự động bật sáng màn hình đón ngày mới!
-            turnScreenOn();
-            if (!_autoBrightness) return;
+        } else {
+            clearManualWake();
+            if (_screenOff && _scheduleScreenOff) {
+                // Đã đến giờ vào ca sáng (!inOfficeSleep) -> Tự động bật sáng màn hình đón ngày mới!
+                turnScreenOn();
+                clearManualWake();
+                if (!_autoBrightness) return;
+            }
         }
     } 
     // 2. CHẾ ĐỘ Ở NHÀ (Home Mode - Giảm mờ xem giờ ban đêm 5%):
     else {
         if (_screenOff && _scheduleScreenOff) {
             turnScreenOn();
+            clearManualWake();
             if (!_autoBrightness) return;
         }
         bool inHomeSleep = false;

@@ -96,6 +96,9 @@ public:
     void turnScreenOn();
     void toggleScreenPower();
     bool isScreenOff() const { return _screenOff; }
+    void extendManualWake(unsigned long durationMs = 3600000UL); // Giữ sáng 60 phút khi làm OT
+    void clearManualWake() { _manualWakeActive = false; _manualWakeUntil = 0; }
+    bool isManualWakeActive() const;
 
     uint8_t getPowerMode() const { return _powerMode; } // 0 = Office (Default), 1 = Home
     void setPowerMode(uint8_t mode);
@@ -130,6 +133,8 @@ private:
     // Power & Sleep Schedule State
     bool          _screenOff;
     bool          _scheduleScreenOff;     // True if screen was turned off automatically by schedule
+    bool          _manualWakeActive;      // True when user manually woke screen during sleep schedule (OT override)
+    unsigned long _manualWakeUntil;       // millis() timestamp when OT override expires
     uint8_t       _savedBrightness;
     uint8_t       _powerMode;            // 0 = Office (Default), 1 = Home
 

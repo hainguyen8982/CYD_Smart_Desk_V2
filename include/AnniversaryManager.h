@@ -14,7 +14,7 @@ struct AnniversaryItem {
     uint8_t day;        // 1..31
     uint8_t month;      // 1..12
     bool    isLunar;    // true = Âm lịch, false = Dương lịch
-    char    title[48];  // Tên sự kiện (UTF-8)
+    char    title[64];  // Tên sự kiện (UTF-8)
 };
 
 class AnniversaryManager {
@@ -27,7 +27,7 @@ public:
     bool deleteItem(uint8_t index);
     void clear();
 
-    uint8_t getCount() const { return _count; }
+    uint8_t getCount();
     const AnniversaryItem* getItem(uint8_t index) const;
 
     // Trả về thông điệp ticker đầy đủ cho ngày hôm nay theo mức độ ưu tiên

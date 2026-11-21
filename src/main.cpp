@@ -106,6 +106,10 @@ void loop() {
             hardware.playTouchSound();
             return; // Wake tap only, don't trigger underlying page controls
         }
+        // Nếu đang làm OT (đánh thức thủ công ngoài giờ), mỗi lần chạm lại gia hạn thêm 60 phút
+        if (hardware.isManualWakeActive()) {
+            hardware.extendManualWake();
+        }
         display.handleTouch(tx, ty);
     }
 

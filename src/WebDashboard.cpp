@@ -50,20 +50,20 @@ static const char MANIFEST_JSON[] PROGMEM = R"rawliteral({
 
 // PWA Service Worker script
 static const char SW_JS[] PROGMEM = R"rawliteral(
-const CACHE_NAME = 'cyd-smartdesk-v2';
+const CACHE_NAME = 'cyd-smartdesk-v2.3';
 self.addEventListener('install', e => {
   self.skipWaiting();
 });
 self.addEventListener('activate', e => {
-  e.waitUntil(self.clients.claim());
+  e.waitUntil(
+    caches.keys().then(keys => Promise.all(
+      keys.map(k => caches.delete(k))
+    )).then(() => self.clients.claim())
+  );
 });
 self.addEventListener('fetch', e => {
-  if (e.request.url.includes('/api/') || e.request.url.includes('/status')) {
-    return;
-  }
-  e.respondWith(
-    fetch(e.request).catch(() => caches.match(e.request))
-  );
+  // Always fetch fresh network content; never serve stale HTML or API responses
+  return;
 });
 )rawliteral";
 
@@ -136,6 +136,13 @@ body { background: var(--bg); color: var(--text); padding: 16px; min-height: 100
 .slider-hdr { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-dim); }
 input[type=range] { width: 100%; accent-color: var(--accent); height: 6px; border-radius: 3px; background: #1C2638; outline: none; }
 
+/* Tab Navigation */
+.tab-bar { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 5px; background: var(--card); border: 1px solid var(--card-border); border-radius: 14px; position: sticky; top: 8px; z-index: 50; backdrop-filter: blur(14px); box-shadow: 0 6px 20px rgba(0,0,0,0.35); }
+.tab-btn { background: transparent; border: none; color: var(--text-dim); padding: 10px 8px; border-radius: 10px; font-size: 13px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: all 0.2s; }
+.tab-btn.active { background: linear-gradient(135deg, #00E5FF, #00A3FF); color: #070B14; box-shadow: 0 0 12px var(--accent-glow); }
+.tab-panel { display: none; flex-direction: column; gap: 16px; }
+.tab-panel.active { display: flex; }
+
 /* Toast Notification */
 #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(100px); background: #162238; border: 1px solid var(--accent); color: #fff; padding: 12px 22px; border-radius: 30px; font-size: 13px; font-weight: 600; box-shadow: 0 8px 24px rgba(0,0,0,0.6); transition: transform 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28); z-index: 999; pointer-events: none; }
 #toast.show { transform: translateX(-50%) translateY(0); }
@@ -149,7 +156,7 @@ input[type=range] { width: 100%; accent-color: var(--accent); height: 6px; borde
     <div class="brand">
       <div class="brand-icon">V2</div>
       <div>
-        <div class="brand-title">CYD SmartDesk</div>
+        <div class="brand-title">CYD SmartDesk <span style="font-size:11px; padding:2px 7px; border-radius:12px; background:rgba(0,229,255,0.2); color:var(--accent); font-weight:700; vertical-align:middle;">v2.3</span></div>
         <div class="brand-sub" data-i18n="brand_sub">Màn hình để bàn thông minh</div>
       </div>
     </div>
@@ -175,451 +182,411 @@ input[type=range] { width: 100%; accent-color: var(--accent); height: 6px; borde
     </div>
   </div>
 
-  <!-- 1. Desk Mood & Signboard Section -->
-  <div class="card">
-    <div class="card-title">
-      <span style="font-size: 18px;">🎭</span>
-      <span data-i18n="sec_mood_title">Tâm trạng & Biển hiệu Bàn làm việc (Desk Mood)</span>
-    </div>
-
-    <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 8px;" data-i18n="sec_pack_sub">Bộ Meme Nhân Vật (Meme Pack):</div>
-    <div class="grid-3" id="packButtons" style="margin-bottom: 14px;">
-      <button class="btn-chip" onclick="switchPack(0)">🥟 Mochi Guy</button>
-      <button class="btn-chip" onclick="switchPack(1)">⭐ Sao Vàng</button>
-      <button class="btn-chip" onclick="switchPack(2)">🐰 Thỏ Trắng</button>
-    </div>
-
-    <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 8px;" data-i18n="sec_mood_sub">Tâm trạng bàn làm việc (Desk Mood):</div>
-    <div class="grid-2" id="moodButtons" style="margin-bottom: 16px;">
-      <button class="btn-chip" onclick="switchMood(0)">🟢 Vui vẻ</button>
-      <button class="btn-chip" onclick="switchMood(1)">🔴 Tập trung cao</button>
-      <button class="btn-chip" onclick="switchMood(2)">⚡ Đang bực mình</button>
-      <button class="btn-chip" onclick="switchMood(3)">🟡 Sập nguồn 0%</button>
-      <button class="btn-chip" onclick="switchMood(4)">🟣 Đang chán</button>
-      <button class="btn-chip" onclick="switchMood(5)">🎉 Cuối tuần / Quẩy</button>
-    </div>
-
-    <!-- Custom Status Toggle & Inputs (Tùy chỉnh riêng cho từng trạng thái) -->
-    <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 14px;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-        <div style="font-size: 13px; font-weight: 600; color: #fff;">
-          <span data-i18n="mood_custom_prefix">Tùy chỉnh riêng cho: </span>
-          <span id="curEditMoodName" style="color: var(--accent); font-weight: 700;">🟢 Vui vẻ</span>
-        </div>
-        <input type="checkbox" id="customMoodToggle" onchange="toggleCustomMood(this.checked)" style="width: 18px; height: 18px; accent-color: var(--accent); cursor: pointer;">
-      </div>
-      <div style="font-size: 11px; color: var(--text-dim); line-height: 1.5; margin-bottom: 12px;" data-i18n="mood_custom_hint">
-        • Bật để đặt Tiêu đề & Thông điệp riêng cho trạng thái này.<br>
-        • Các trạng thái khác vẫn giữ nguyên câu riêng hoặc câu mặc định song ngữ.
-      </div>
-
-      <div id="customMoodInputs" style="display: none;">
-        <div style="margin-bottom: 12px;">
-          <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--text-dim); margin-bottom: 4px;">
-            <span data-i18n="mood_tag_label">Tiêu đề bảng Neon (Tối đa 20 ký tự, in HOA):</span>
-            <span id="customTagCount" style="color: var(--accent); font-weight: 600;">0/20</span>
-          </div>
-          <input type="text" id="customTagInput" class="select-control" maxlength="20" placeholder="VD: ĐANG ĐI HỌP, THÈM CÀ PHÊ..." oninput="updateMoodCounters()" style="width: 100%; text-transform: uppercase;">
-        </div>
-
-        <div style="margin-bottom: 12px;">
-          <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--text-dim); margin-bottom: 4px;">
-            <span data-i18n="mood_msg_label">Câu nhắn phía dưới (Tối đa 36 ký tự):</span>
-            <span id="customMsgCount" style="color: var(--accent); font-weight: 600;">0/36</span>
-          </div>
-          <input type="text" id="customMsgInput" class="select-control" maxlength="36" placeholder="VD: Về sau 30p • Gấp thì gọi điện nhé!" oninput="updateMoodCounters()" style="width: 100%;">
-        </div>
-
-        <!-- Quick suggestions container -->
-        <div style="font-size: 11px; color: var(--text-dim); margin-bottom: 6px;" data-i18n="mood_quick_label">Gợi ý nhanh cho trạng thái này:</div>
-        <div id="quickMoodContainer" style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px;"></div>
-
-        <div style="display: flex; gap: 8px;">
-          <button type="button" class="btn btn-accent" style="flex: 2;" onclick="saveCustomMood()">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-            <span id="saveMoodBtnText" data-i18n="btn_save_mood">Lưu Trạng Thái</span>
-          </button>
-          <button type="button" class="btn btn-outline" style="flex: 1;" onclick="resetDefaultMood()" data-i18n="btn_reset_mood">Mặc định</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- 2. Remote Screen Control Section -->
-  <div class="card">
-    <div class="card-title">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-      <span data-i18n="sec_ctrl_title">Điều khiển màn hình từ xa</span>
-    </div>
-
-    <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 8px;" data-i18n="page_sub">Chuyển trang hiển thị:</div>
-    <div class="grid-3" id="pageButtons">
-      <button class="btn-chip" onclick="switchPage(0)">🕒 Đồng hồ</button>
-      <button class="btn-chip" onclick="switchPage(1)">📅 Lịch âm</button>
-      <button class="btn-chip" onclick="switchPage(2)">📈 Tài chính</button>
-      <button class="btn-chip" onclick="switchPage(3)">🍅 Pomodoro</button>
-      <button class="btn-chip" onclick="switchPage(4)">🎭 Tâm trạng</button>
-      <button class="btn-chip" onclick="switchPage(5)">⚙️ Cài đặt</button>
-    </div>
-
-    <div style="font-size: 12px; color: var(--text-dim); margin: 14px 0 8px;" data-i18n="theme_sub">Bộ sưu tập Giao diện (Theme):</div>
-    <div class="grid-2" id="themeButtons">
-      <button class="btn-chip" onclick="switchTheme(0)">Cyber Neon</button>
-      <button class="btn-chip" onclick="switchTheme(1)">Minimal Obsidian</button>
-      <button class="btn-chip" onclick="switchTheme(2)">Sunset Amber</button>
-      <button class="btn-chip" onclick="switchTheme(3)">Cyberpunk</button>
-      <button class="btn-chip" onclick="switchTheme(4)">💜 Pastel Lavender</button>
-      <button class="btn-chip" onclick="switchTheme(5)">❄️ Nordic Frost</button>
-      <button class="btn-chip" onclick="switchTheme(6)">🌸 Sakura Blossom</button>
-      <button class="btn-chip" onclick="switchTheme(7)">🌿 Emerald Forest</button>
-    </div>
-
-    <div class="slider-wrap">
-      <div class="slider-hdr">
-        <span data-i18n="bright_label">Độ sáng màn hình</span>
-        <span id="brightVal">80%</span>
-      </div>
-      <input type="range" id="brightSlider" min="10" max="100" value="80" oninput="changeBrightness(this.value)">
-    </div>
-  </div>
-
-  <!-- Office Mode & Power Management Section -->
-  <div class="card">
-    <div class="card-title">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>
-      <span data-i18n="sec_power_title">🏢 Chế độ Văn phòng & Quản lý Nguồn</span>
-    </div>
-
-    <!-- Quick 1-tap Screen Toggle -->
-    <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 12px 14px; margin-bottom: 14px;">
-      <div>
-        <div style="font-size: 13px; font-weight: 700; color: #fff;" data-i18n="screen_pwr_label">Nguồn màn hình CYD:</div>
-        <div id="screenStateBadge" style="font-size: 11px; color: var(--success); font-weight: 600; margin-top: 2px;">🟢 Màn hình đang BẬT</div>
-      </div>
-      <button id="screenPowerBtn" type="button" class="btn btn-outline" style="width: auto; padding: 8px 14px; font-size: 12px; border-radius: 10px; border-color: rgba(255,59,48,0.5); color: #ff6b6b;" onclick="toggleScreenPower()">
-        <span style="font-size: 14px;">⏻</span> <span id="screenPowerBtnText" data-i18n="btn_screen_off">Tắt màn hình ngay</span>
-      </button>
-    </div>
-
-    <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 8px;" data-i18n="power_mode_label">Không gian sử dụng (Profile):</div>
-    <div class="grid-2" id="powerModeButtons" style="margin-bottom: 10px;">
-      <button type="button" class="btn-chip active" onclick="switchPowerMode(0)">
-        <div style="font-weight: 700;" data-i18n="mode_office_title">🏢 Văn phòng (Mặc định)</div>
-        <div style="font-size: 10px; opacity: 0.8; margin-top: 2px;" data-i18n="mode_office_sub">Tắt đen 0% ngoài giờ</div>
-      </button>
-      <button type="button" class="btn-chip" onclick="switchPowerMode(1)">
-        <div style="font-weight: 700;" data-i18n="mode_home_title">🏠 Ở nhà (Đồng hồ đêm)</div>
-        <div style="font-size: 10px; opacity: 0.8; margin-top: 2px;" data-i18n="mode_home_sub">Giảm mờ 5% xem giờ</div>
-      </button>
-    </div>
-
-    <!-- Power Schedule Form -->
-    <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 14px; margin-top: 10px;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-        <label for="sleepScheduleEn" id="sleepScheduleEnLabel" style="font-size: 13px; font-weight: 600; color: #fff; cursor: pointer;" data-i18n="sleep_sched_en">Hẹn giờ nghỉ tự động:</label>
-        <input type="checkbox" id="sleepScheduleEn" style="width: 18px; height: 18px; accent-color: var(--accent); cursor: pointer;">
-      </div>
-
-      <div class="grid-2" style="margin-bottom: 12px;">
-        <div>
-          <div id="sleepStartLabel" style="font-size: 11px; color: var(--text-dim); margin-bottom: 4px;" data-i18n="sleep_start_lbl">Tan ca (Tắt màn hình):</div>
-          <input type="time" id="sleepStartTime" class="select-control" value="18:30">
-        </div>
-        <div>
-          <div id="sleepEndLabel" style="font-size: 11px; color: var(--text-dim); margin-bottom: 4px;" data-i18n="sleep_end_lbl">Vào ca (Bật lại):</div>
-          <input type="time" id="sleepEndTime" class="select-control" value="07:45">
-        </div>
-      </div>
-
-      <div id="powerHintText" style="font-size: 11px; color: var(--text-dim); line-height: 1.5; margin-bottom: 12px; border-left: 2px solid var(--accent); padding-left: 8px;" data-i18n="power_hint">
-        • <b>Tối ưu cho văn phòng:</b> Sau giờ làm việc, khi phòng tắt đèn ra về thiết bị sẽ tự động tắt đen hoàn toàn để tiết kiệm điện & bảo vệ màn hình.<br>
-        • <b>Cảm biến LDR thông minh:</b> Dù đã đến giờ hẹn, nếu phòng còn bật đèn làm thêm (OT), màn hình vẫn giữ sáng để phục vụ bạn.<br>
-        • <b>Chạm để bật:</b> Bất cứ lúc nào bạn chạm tay vào màn hình SmartDesk sẽ lập tức bật sáng lại!
-      </div>
-
-      <button type="button" class="btn btn-accent" onclick="savePowerSchedule()">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-        <span data-i18n="btn_save_power">Lưu Cài Đặt Hẹn Giờ</span>
-      </button>
-    </div>
-  </div>
-
-  <!-- 3. Desk Pet & Pomodoro Station Section -->
-  <div class="card">
-    <div class="card-title" style="justify-content: space-between;">
-      <div style="display:flex; align-items:center; gap:8px;">
-        <span style="font-size: 18px;">🍅</span>
-        <span data-i18n="sec_pet_title">Trạm Tập Trung Pomodoro & Desk Pet</span>
-      </div>
-      <span id="webPomoTimer" style="font-size: 15px; font-weight: 800; color: var(--accent); font-family: monospace;">25:00</span>
-    </div>
-
-    <div class="grid-3" id="pomoModeButtons" style="margin-bottom: 10px;">
-      <button type="button" class="btn-chip active" onclick="setWebPomoMode(0)">🔥 Focus 25p</button>
-      <button type="button" class="btn-chip" onclick="setWebPomoMode(1)">☕ Nghỉ 5p</button>
-      <button type="button" class="btn-chip" onclick="setWebPomoMode(2)">🛋️ Nghỉ 15p</button>
-    </div>
-
-    <div style="display: flex; gap: 8px; margin-bottom: 14px;">
-      <button type="button" id="btnWebPomoStart" class="btn btn-accent" style="flex: 2;" onclick="toggleWebPomodoro()">
-        ▶️ Bắt đầu Pomodoro (Đồng bộ EMO)
-      </button>
-      <button type="button" class="btn btn-outline" style="flex: 1;" onclick="resetWebPomodoro()">
-        🔄 Đặt lại
-      </button>
-    </div>
-
-    <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 8px;" data-i18n="sec_pet_sub">
-      Chọn bạn đồng hành hiển thị ở tâm vòng tròn Pomodoro:
-    </div>
-    <div class="grid-4" id="petButtons">
-      <button class="btn-chip" onclick="switchPet(0)">🍅 Cà chua</button>
-      <button class="btn-chip" onclick="switchPet(1)">🐱 Mèo Pixel</button>
-      <button class="btn-chip" onclick="switchPet(2)">🐕 Shiba Inu</button>
-      <button class="btn-chip" onclick="switchPet(3)">🦫 Capybara</button>
-    </div>
-  </div>
-
-  <!-- 4. Alarm & Smart Reminder Section -->
-  <div class="card">
-    <div class="card-title">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-      <span data-i18n="sec_alarm_title">Báo thức & Lời nhắc SmartDesk</span>
-    </div>
-    <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 12px;" data-i18n="sec_alarm_sub">
-      Thiết lập giờ báo thức và lời nhắn hiển thị trên màn hình để bàn:
-    </div>
-
-    <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 12px;">
-      <input type="time" id="alarmTimeInput" class="select-control" style="font-size: 17px; font-weight: 600; padding: 6px 10px; width: 130px; text-align: center;">
-      <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; user-select: none;">
-        <input type="checkbox" id="alarmEnInput" style="width: 18px; height: 18px; accent-color: var(--accent);">
-        <span data-i18n="alarm_en_label">Kích hoạt báo thức</span>
-      </label>
-    </div>
-
-    <div style="margin-bottom: 10px;">
-      <div style="font-size: 11px; color: var(--text-dim); margin-bottom: 4px;" data-i18n="alarm_msg_label">Nội dung lời nhắc / thông báo khi chuông reo:</div>
-      <input type="text" id="alarmMsgInput" class="select-control" placeholder="VD: Uống nước, Vận động, Họp online..." data-i18n-ph="alarm_msg_ph" maxlength="36" style="width: 100%;">
-    </div>
-
-    <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px;">
-      <button class="btn-chip" style="font-size: 11px; padding: 3px 8px;" onclick="setQuickMsg('drink')" data-i18n="quick_drink">💧 Uống nước</button>
-      <button class="btn-chip" style="font-size: 11px; padding: 3px 8px;" onclick="setQuickMsg('sport')" data-i18n="quick_sport">🏃 Vận động</button>
-      <button class="btn-chip" style="font-size: 11px; padding: 3px 8px;" onclick="setQuickMsg('rest')" data-i18n="quick_rest">☕ Nghỉ ngơi</button>
-      <button class="btn-chip" style="font-size: 11px; padding: 3px 8px;" onclick="setQuickMsg('work')" data-i18n="quick_work">💼 Tan ca</button>
-    </div>
-
-    <button class="btn btn-accent" onclick="saveAlarmSettings()" data-i18n="btn_save_alarm">
-      Lưu cài đặt báo thức
+  <!-- 2-Tab Navigation Bar -->
+  <div class="tab-bar">
+    <button type="button" id="tabBtnPersonal" class="tab-btn active" onclick="switchTab('personal')">
+      <span>📝</span> <span data-i18n="tab_personal">Cá nhân</span>
+    </button>
+    <button type="button" id="tabBtnSettings" class="tab-btn" onclick="switchTab('settings')">
+      <span>⚙️</span> <span data-i18n="tab_settings">Cài đặt</span>
     </button>
   </div>
 
-  <!-- 5. Personal Anniversaries & Perpetual Calendar Section -->
-  <div class="card">
-    <div class="card-title">
-      <span style="font-size: 18px;">🎉</span>
-      <span data-i18n="sec_anniv_title">Ngày Kỷ Niệm & Lịch Vạn Niên (Desk Ticker)</span>
-    </div>
-    <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 12px;" data-i18n="sec_anniv_sub">
-      Nhắc nhở ngày sinh nhật, ngày cưới, ngày giỗ (Dương lịch & Âm lịch) chạy dưới chân màn hình chính:
-    </div>
+  <!-- ═══════════════════════════════════════════════════════════════ -->
+  <!-- TAB 1: CÁ NHÂN (Kỷ niệm, Báo thức, Lời nhắn Tâm trạng)          -->
+  <!-- ═══════════════════════════════════════════════════════════════ -->
+  <div id="panelPersonal" class="tab-panel active">
 
-    <!-- Live Preview Banner -->
-    <div style="margin-bottom: 14px;">
-      <div style="font-size: 11px; color: var(--text-dim); margin-bottom: 5px;" data-i18n="anniv_preview_label">Dòng chữ hiển thị trên màn hình hôm nay:</div>
-      <div id="annivTodayBanner" style="background: rgba(8, 14, 24, 0.95); border: 1px solid var(--accent); border-radius: 8px; padding: 10px 14px; font-size: 12px; font-weight: 600; color: #00E5FF; text-align: center; word-break: break-word; box-shadow: 0 0 12px rgba(0,229,255,0.15);">
-        Đang đồng bộ...
+    <!-- 1. Personal Anniversaries & Perpetual Calendar Section -->
+    <div class="card">
+      <div class="card-title">
+        <span style="font-size: 18px;">🎉</span>
+        <span data-i18n="sec_anniv_title">Ngày Kỷ Niệm & Lịch Vạn Niên (Desk Ticker)</span>
+      </div>
+      <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 10px;" data-i18n="sec_anniv_sub">
+        Nhắc nhở sinh nhật, ngày cưới, ngày giỗ (Dương & Âm lịch) chạy dưới chân màn hình:
+      </div>
+
+      <!-- Live Preview Banner -->
+      <div style="margin-bottom: 12px;">
+        <div style="font-size: 11px; color: var(--text-dim); margin-bottom: 5px;" data-i18n="anniv_preview_label">Dòng chữ hiển thị trên màn hình hôm nay:</div>
+        <div id="annivTodayBanner" style="background: rgba(8, 14, 24, 0.95); border: 1px solid var(--accent); border-radius: 8px; padding: 10px 14px; font-size: 12px; font-weight: 600; color: #00E5FF; text-align: center; word-break: break-word; box-shadow: 0 0 12px rgba(0,229,255,0.15);">
+          Đang đồng bộ...
+        </div>
+      </div>
+
+      <!-- Add Anniversary Form -->
+      <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--card-border); border-radius: 10px; padding: 12px; margin-bottom: 12px;">
+        <div style="display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap;">
+          <div style="flex: 1; min-width: 110px;">
+            <label style="font-size: 11px; color: var(--text-dim); display: block; margin-bottom: 4px;">Loại lịch:</label>
+            <select id="annivTypeSelect" class="select-control" style="width: 100%; font-size: 13px;">
+              <option value="0" data-i18n="anniv_type_solar">☀️ Dương lịch</option>
+              <option value="1" data-i18n="anniv_type_lunar">🌙 Âm lịch</option>
+            </select>
+          </div>
+          <div style="width: 75px;">
+            <label style="font-size: 11px; color: var(--text-dim); display: block; margin-bottom: 4px;" data-i18n="anniv_day_label">Ngày:</label>
+            <input type="number" id="annivDayInput" class="select-control" min="1" max="31" value="1" style="width: 100%; text-align: center; font-weight: 600;">
+          </div>
+          <div style="width: 75px;">
+            <label style="font-size: 11px; color: var(--text-dim); display: block; margin-bottom: 4px;" data-i18n="anniv_month_label">Tháng:</label>
+            <input type="number" id="annivMonthInput" class="select-control" min="1" max="12" value="1" style="width: 100%; text-align: center; font-weight: 600;">
+          </div>
+        </div>
+
+        <div style="margin-bottom: 8px;">
+          <label style="font-size: 11px; color: var(--text-dim); display: block; margin-bottom: 4px;" data-i18n="anniv_title_label">Tên ngày kỷ niệm / Lời nhắc:</label>
+          <input type="text" id="annivTitleInput" class="select-control" placeholder="VD: Sinh nhật Vợ yêu, Kỷ niệm ngày cưới..." data-i18n-ph="anniv_title_ph" maxlength="40" style="width: 100%;">
+        </div>
+
+        <!-- Quick chips for 1-tap fill -->
+        <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px;">
+          <button type="button" class="btn-chip" style="font-size: 11px; padding: 3px 8px;" onclick="setQuickAnniv('🎂 Sinh nhật')">🎂 Sinh nhật</button>
+          <button type="button" class="btn-chip" style="font-size: 11px; padding: 3px 8px;" onclick="setQuickAnniv('💍 Kỷ niệm ngày cưới')">💍 Kỷ niệm ngày cưới</button>
+          <button type="button" class="btn-chip" style="font-size: 11px; padding: 3px 8px;" onclick="setQuickAnniv('❤️ Ngày hẹn hò')">❤️ Hẹn hò</button>
+          <button type="button" class="btn-chip" style="font-size: 11px; padding: 3px 8px;" onclick="setQuickAnniv('🕯️ Giỗ gia tiên')">🕯️ Ngày giỗ</button>
+        </div>
+
+        <button type="button" class="btn btn-accent" style="width: 100%;" onclick="addAnniversary()" data-i18n="btn_add_anniv">
+          ➕ Thêm Kỷ Niệm
+        </button>
+      </div>
+
+      <!-- List of Saved Anniversaries -->
+      <div style="font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 8px;" data-i18n="anniv_list_title">
+        Danh sách ngày kỷ niệm đã lưu:
+      </div>
+      <div id="annivListContainer" style="display: flex; flex-direction: column; gap: 8px;">
+        <!-- Populated dynamically via JS -->
       </div>
     </div>
 
-    <!-- Add Anniversary Form -->
-    <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--card-border); border-radius: 10px; padding: 12px; margin-bottom: 14px;">
-      <div style="display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap;">
-        <div style="flex: 1; min-width: 110px;">
-          <label style="font-size: 11px; color: var(--text-dim); display: block; margin-bottom: 4px;">Loại lịch:</label>
-          <select id="annivTypeSelect" class="select-control" style="width: 100%; font-size: 13px;">
-            <option value="0" data-i18n="anniv_type_solar">☀️ Dương lịch</option>
-            <option value="1" data-i18n="anniv_type_lunar">🌙 Âm lịch</option>
-          </select>
-        </div>
-        <div style="width: 75px;">
-          <label style="font-size: 11px; color: var(--text-dim); display: block; margin-bottom: 4px;" data-i18n="anniv_day_label">Ngày:</label>
-          <input type="number" id="annivDayInput" class="select-control" min="1" max="31" value="1" style="width: 100%; text-align: center; font-weight: 600;">
-        </div>
-        <div style="width: 75px;">
-          <label style="font-size: 11px; color: var(--text-dim); display: block; margin-bottom: 4px;" data-i18n="anniv_month_label">Tháng:</label>
-          <input type="number" id="annivMonthInput" class="select-control" min="1" max="12" value="1" style="width: 100%; text-align: center; font-weight: 600;">
-        </div>
+    <!-- 2. Alarm & Smart Reminder Section -->
+    <div class="card">
+      <div class="card-title">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+        <span data-i18n="sec_alarm_title">Báo thức & Lời nhắc SmartDesk</span>
+      </div>
+
+      <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 12px;">
+        <input type="time" id="alarmTimeInput" class="select-control" style="font-size: 17px; font-weight: 600; padding: 6px 10px; width: 130px; text-align: center;">
+        <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; user-select: none;">
+          <input type="checkbox" id="alarmEnInput" style="width: 18px; height: 18px; accent-color: var(--accent);">
+          <span data-i18n="alarm_en_label">Kích hoạt báo thức</span>
+        </label>
       </div>
 
       <div style="margin-bottom: 10px;">
-        <label style="font-size: 11px; color: var(--text-dim); display: block; margin-bottom: 4px;" data-i18n="anniv_title_label">Tên ngày kỷ niệm / Lời nhắc:</label>
-        <input type="text" id="annivTitleInput" class="select-control" placeholder="VD: Sinh nhật Vợ yêu, Kỷ niệm ngày cưới..." data-i18n-ph="anniv_title_ph" maxlength="40" style="width: 100%;">
+        <div style="font-size: 11px; color: var(--text-dim); margin-bottom: 4px;" data-i18n="alarm_msg_label">Nội dung lời nhắc / thông báo khi chuông reo:</div>
+        <input type="text" id="alarmMsgInput" class="select-control" placeholder="VD: Uống nước, Vận động, Họp online..." data-i18n-ph="alarm_msg_ph" maxlength="36" style="width: 100%;">
       </div>
 
-      <button type="button" class="btn btn-accent" style="width: 100%;" onclick="addAnniversary()" data-i18n="btn_add_anniv">
-        ➕ Thêm Kỷ Niệm
+      <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px;">
+        <button class="btn-chip" style="font-size: 11px; padding: 3px 8px;" onclick="setQuickMsg('drink')" data-i18n="quick_drink">💧 Uống nước</button>
+        <button class="btn-chip" style="font-size: 11px; padding: 3px 8px;" onclick="setQuickMsg('sport')" data-i18n="quick_sport">🏃 Vận động</button>
+        <button class="btn-chip" style="font-size: 11px; padding: 3px 8px;" onclick="setQuickMsg('rest')" data-i18n="quick_rest">☕ Nghỉ ngơi</button>
+        <button class="btn-chip" style="font-size: 11px; padding: 3px 8px;" onclick="setQuickMsg('work')" data-i18n="quick_work">💼 Tan ca</button>
+      </div>
+
+      <button class="btn btn-accent" onclick="saveAlarmSettings()" data-i18n="btn_save_alarm">
+        Lưu cài đặt báo thức
       </button>
     </div>
 
-    <!-- List of Saved Anniversaries -->
-    <div style="font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 8px;" data-i18n="anniv_list_title">
-      Danh sách ngày kỷ niệm đã lưu:
-    </div>
-    <div id="annivListContainer" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px;">
-      <!-- Populated dynamically via JS -->
-    </div>
+    <!-- 3. Custom Desk Mood Message Editor (Compact Dropdown) -->
+    <div class="card">
+      <div class="card-title">
+        <span style="font-size: 18px;">🎭</span>
+        <span data-i18n="sec_mood_title">Lời nhắn Tâm trạng tùy chỉnh (Desk Mood)</span>
+      </div>
 
-    <!-- Fallback Explanation -->
-    <div style="font-size: 11px; color: var(--text-dim); line-height: 1.5; background: rgba(0,229,255,0.04); border-left: 3px solid var(--accent); padding: 8px 10px; border-radius: 4px;" data-i18n="anniv_fallback_hint">
-      💡 Khi ngày hôm nay không có kỷ niệm nào, SmartDesk sẽ tự động hiển thị dữ liệu <b>Lịch Vạn Niên</b> (Can Chi ngày, Tiết Khí, Lễ Tết truyền thống và danh ngôn tích cực) để chạy chữ.
-    </div>
-  </div>
-
-  <!-- Sound & Audio Settings Section -->
-  <div class="card">
-    <div class="card-title">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
-      <span data-i18n="sec_snd_title">Âm thanh & Điệu chuông (Loa GPIO 26)</span>
-    </div>
-    <div class="grid-2">
-      <div>
-        <label style="font-size: 12px; color: var(--text-dim); display: block; margin-bottom: 6px;" data-i18n="snd_startup_label">Âm báo khởi động:</label>
-        <select class="select-control" id="startupSndSelect" onchange="changeSound()">
-          <option value="0">🎶 Marimba Acoustic</option>
-          <option value="1">💎 Pha lê (Crystal Chime)</option>
-          <option value="2">⚡ Điện tử (Cyber Synth)</option>
-          <option value="3">🕹️ Cổ điển (Retro 8-Bit)</option>
-          <option value="4">🔇 Tắt âm (Mute)</option>
+      <div style="margin-bottom: 12px;">
+        <label style="font-size: 11px; color: var(--text-dim); display: block; margin-bottom: 4px;" data-i18n="mood_select_label">Chọn tâm trạng để sửa lời nhắn riêng:</label>
+        <select id="editMoodSelect" class="select-control" onchange="onSelectEditMood(this.value)">
+          <option value="0">🟢 Vui vẻ</option>
+          <option value="1">🔴 Tập trung cao</option>
+          <option value="2">⚡ Đang bực mình</option>
+          <option value="3">🟡 Sập nguồn 0%</option>
+          <option value="4">🟣 Đang chán</option>
+          <option value="5">🎉 Cuối tuần / Quẩy</option>
         </select>
       </div>
-      <div>
-        <label style="font-size: 12px; color: var(--text-dim); display: block; margin-bottom: 6px;" data-i18n="snd_touch_label">Âm chạm cảm ứng:</label>
-        <select class="select-control" id="touchSndSelect" onchange="changeSound()">
-          <option value="0">Tắt âm (Mute)</option>
-          <option value="1">Cơ bản (Click)</option>
-          <option value="2">Giọt nước (Water)</option>
-          <option value="3">Tiếng bíp (Beep)</option>
-          <option value="4">Tiếng chim (Chirp)</option>
-        </select>
-      </div>
-    </div>
-    <div style="margin-top: 10px;">
-      <label style="font-size: 12px; color: var(--text-dim); display: block; margin-bottom: 6px;" data-i18n="snd_melody_label">Điệu chuông báo thức:</label>
-      <select class="select-control" id="alarmMelodySelect" onchange="changeSound()">
-        <option value="0">Classic Alarm</option>
-        <option value="1">Melodic Chime</option>
-        <option value="2">Cyber Rhythm</option>
-        <option value="3">Gentle Morning</option>
-      </select>
-    </div>
-    <div class="grid-2" style="margin-top: 12px;">
-      <button class="btn btn-outline" style="border-color:var(--accent); color:var(--accent);" onclick="testStartupSound()">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-        <span data-i18n="btn_test_startup">Thử âm khởi động</span>
-      </button>
-      <button class="btn btn-primary" onclick="testAlarmMelody()">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-        <span data-i18n="btn_test_melody">Thử chuông báo</span>
-      </button>
-    </div>
-  </div>
 
-  <!-- Currency Settings Section -->
-  <div class="card">
-    <div class="card-title">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v12M17 10H9.5a2.5 2.5 0 0 0 0 5H14a2.5 2.5 0 0 1 0 5H7"/></svg>
-      <span data-i18n="sec_cur_title">Cấu hình Ngoại tệ</span>
-    </div>
-    <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 12px;" data-i18n="sec_cur_sub">
-      Tùy chọn 2 đồng ngoại tệ bạn muốn theo dõi trên màn hình để bàn:
-    </div>
-    <div class="grid-2" style="margin-bottom: 12px;">
-      <div>
-        <div style="font-size: 11px; color: var(--text-dim); margin-bottom: 6px;" data-i18n="cur1_label">Ngoại tệ 1 (Mục trên):</div>
-        <select id="cur1Select" class="select-control">
-          <option value="USD">USD — Đô la Mỹ</option>
-          <option value="EUR">EUR — Euro</option>
-          <option value="CAD">CAD — Đô la Canada</option>
-          <option value="JPY">JPY — Yên Nhật</option>
-          <option value="GBP">GBP — Bảng Anh</option>
-          <option value="AUD">AUD — Đô la Úc</option>
-          <option value="SGD">SGD — Đô la Singapore</option>
-          <option value="CNY">CNY — Nhân dân tệ</option>
-          <option value="KRW">KRW — Won Hàn Quốc</option>
-          <option value="CHF">CHF — Franc Thụy Sĩ</option>
-          <option value="THB">THB — Baht Thái</option>
-        </select>
-      </div>
-      <div>
-        <div style="font-size: 11px; color: var(--text-dim); margin-bottom: 6px;" data-i18n="cur2_label">Ngoại tệ 2 (Mục dưới):</div>
-        <select id="cur2Select" class="select-control">
-          <option value="CAD">CAD — Đô la Canada</option>
-          <option value="EUR">EUR — Euro</option>
-          <option value="USD">USD — Đô la Mỹ</option>
-          <option value="JPY">JPY — Yên Nhật</option>
-          <option value="GBP">GBP — Bảng Anh</option>
-          <option value="AUD">AUD — Đô la Úc</option>
-          <option value="SGD">SGD — Đô la Singapore</option>
-          <option value="CNY">CNY — Nhân dân tệ</option>
-          <option value="KRW">KRW — Won Hàn Quốc</option>
-          <option value="CHF">CHF — Franc Thụy Sĩ</option>
-          <option value="THB">THB — Baht Thái</option>
-        </select>
-      </div>
-    </div>
-    <button class="btn btn-accent" onclick="saveCurrencies()" data-i18n="btn_save_cur">
-      Lưu cấu hình ngoại tệ
-    </button>
-  </div>
+      <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 14px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+          <div style="font-size: 13px; font-weight: 600; color: #fff;">
+            <span data-i18n="mood_custom_prefix">Tùy chỉnh riêng cho: </span>
+            <span id="curEditMoodName" style="color: var(--accent); font-weight: 700;">🟢 Vui vẻ</span>
+          </div>
+          <input type="checkbox" id="customMoodToggle" onchange="toggleCustomMood(this.checked)" style="width: 18px; height: 18px; accent-color: var(--accent); cursor: pointer;">
+        </div>
 
-  <!-- Network & WiFi Section -->
-  <div class="card">
-    <div class="card-title">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>
-      <span data-i18n="sec_wifi_title">Cài đặt Mạng & WiFi</span>
-    </div>
-    <div style="font-size: 12px; color: var(--text-dim); line-height: 1.7; margin-bottom: 12px;">
-      <div><span data-i18n="wifi_mdns">• Tên miền mDNS: </span><b style="color:var(--accent);">http://smartdesk.local</b></div>
-      <div><span data-i18n="wifi_ip_prefix">• Địa chỉ IP hiện tại: </span><span id="wifiIp" style="color:#fff;">...</span><span data-i18n="wifi_rssi_prefix"> (Sóng: </span><span id="wifiRssi">...</span> dBm)</div>
-    </div>
+        <div id="customMoodInputs" style="display: none; margin-top: 10px;">
+          <div style="margin-bottom: 10px;">
+            <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--text-dim); margin-bottom: 4px;">
+              <span data-i18n="mood_tag_label">Tiêu đề bảng Neon (Tối đa 20 ký tự, in HOA):</span>
+              <span id="customTagCount" style="color: var(--accent); font-weight: 600;">0/20</span>
+            </div>
+            <input type="text" id="customTagInput" class="select-control" maxlength="20" placeholder="VD: ĐANG ĐI HỌP, THÈM CÀ PHÊ..." oninput="updateMoodCounters()" style="width: 100%; text-transform: uppercase;">
+          </div>
 
-    <!-- Multi-WiFi Profiles List -->
-    <div style="margin-bottom: 14px;">
-      <div style="font-size: 12px; font-weight: 600; color: var(--accent); margin-bottom: 8px; display:flex; justify-content:space-between; align-items:center;">
-        <span data-i18n="wifi_saved_title">Mạng đã ghi nhớ (Tối đa 3 mạng):</span>
-        <span id="wifiProfileCount" style="color:var(--text-dim); font-size:11px;">0/3</span>
-      </div>
-      <div id="wifiProfilesList" style="display:flex; flex-direction:column; gap:6px;">
-        <div style="font-size:11px; color:var(--text-dim); font-style:italic; padding:4px 0;">Đang tải danh sách...</div>
-      </div>
-    </div>
+          <div style="margin-bottom: 10px;">
+            <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--text-dim); margin-bottom: 4px;">
+              <span data-i18n="mood_msg_label">Câu nhắn phía dưới (Tối đa 36 ký tự):</span>
+              <span id="customMsgCount" style="color: var(--accent); font-weight: 600;">0/36</span>
+            </div>
+            <input type="text" id="customMsgInput" class="select-control" maxlength="36" placeholder="VD: Về sau 30p • Gấp thì gọi điện nhé!" oninput="updateMoodCounters()" style="width: 100%;">
+          </div>
 
-    <div style="display:flex; flex-direction:column; gap:8px;">
-      <!-- Collapsible Add WiFi Form -->
-      <div id="addWifiForm" style="display:none; background:rgba(0,229,255,0.06); border:1px solid rgba(0,229,255,0.25); border-radius:12px; padding:12px; margin-bottom:4px;">
-        <div style="font-size:12px; font-weight:700; color:var(--accent); margin-bottom:8px;" data-i18n="wifi_add_title">Nhập thông tin WiFi:</div>
-        <input type="text" id="newWifiSsid" placeholder="Tên WiFi (SSID)" style="width:100%; padding:10px; border-radius:8px; border:1px solid var(--card-border); background:#070B14; color:#fff; font-size:13px; margin-bottom:8px;">
-        <input type="password" id="newWifiPass" placeholder="Mật khẩu WiFi (bỏ trống nếu không pass)" style="width:100%; padding:10px; border-radius:8px; border:1px solid var(--card-border); background:#070B14; color:#fff; font-size:13px; margin-bottom:10px;">
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
-          <button class="btn btn-accent" style="padding:10px;" onclick="submitNewWifi()" data-i18n="btn_save_wifi">💾 Lưu mạng</button>
-          <button class="btn btn-outline" style="padding:10px;" onclick="toggleAddWifiForm(false)" data-i18n="btn_cancel">Hủy</button>
+          <div style="font-size: 11px; color: var(--text-dim); margin-bottom: 6px;" data-i18n="mood_quick_label">Gợi ý nhanh:</div>
+          <div id="quickMoodContainer" style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px;"></div>
+
+          <div style="display: flex; gap: 8px;">
+            <button type="button" class="btn btn-accent" style="flex: 2;" onclick="saveCustomMood()">
+              <span id="saveMoodBtnText" data-i18n="btn_save_mood">Lưu Trạng Thái</span>
+            </button>
+            <button type="button" class="btn btn-outline" style="flex: 1;" onclick="resetDefaultMood()" data-i18n="btn_reset_mood">Mặc định</button>
+          </div>
         </div>
       </div>
-      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
-        <button class="btn btn-primary" onclick="toggleAddWifiForm(true)" data-i18n="btn_add_wifi">
-          ➕ Nhập WiFi mới
-        </button>
-        <button class="btn btn-outline" onclick="openWiFiPortal()" style="border-color:var(--accent); color:var(--accent);" data-i18n="btn_qr_portal">
-          📷 Quét QR trên CYD
+    </div>
+
+  </div><!-- /#panelPersonal -->
+
+  <!-- ═══════════════════════════════════════════════════════════════ -->
+  <!-- TAB 2: CÀI ĐẶT (Theme, Độ sáng, Nguồn, Ngoại tệ, Âm thanh, WiFi)-->
+  <!-- ═══════════════════════════════════════════════════════════════ -->
+  <div id="panelSettings" class="tab-panel">
+
+    <!-- 1. Theme & Brightness Section -->
+    <div class="card">
+      <div class="card-title">
+        <span style="font-size: 18px;">🎨</span>
+        <span data-i18n="sec_theme_title">Giao diện (Theme) & Độ sáng</span>
+      </div>
+
+      <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 8px;" data-i18n="theme_sub">Bộ sưu tập Giao diện (Theme):</div>
+      <div class="grid-2" id="themeButtons">
+        <button class="btn-chip" onclick="switchTheme(0)">Cyber Neon</button>
+        <button class="btn-chip" onclick="switchTheme(1)">Minimal Obsidian</button>
+        <button class="btn-chip" onclick="switchTheme(2)">Sunset Amber</button>
+        <button class="btn-chip" onclick="switchTheme(3)">Cyberpunk</button>
+        <button class="btn-chip" onclick="switchTheme(4)">💜 Pastel Lavender</button>
+        <button class="btn-chip" onclick="switchTheme(5)">❄️ Nordic Frost</button>
+        <button class="btn-chip" onclick="switchTheme(6)">🌸 Sakura Blossom</button>
+        <button class="btn-chip" onclick="switchTheme(7)">🌿 Emerald Forest</button>
+      </div>
+
+      <div class="slider-wrap" style="margin-top: 14px;">
+        <div class="slider-hdr">
+          <span data-i18n="bright_label">Độ sáng màn hình</span>
+          <span id="brightVal">80%</span>
+        </div>
+        <input type="range" id="brightSlider" min="10" max="100" value="80" oninput="changeBrightness(this.value)">
+      </div>
+    </div>
+
+    <!-- 2. Office Mode & Power Management Section -->
+    <div class="card">
+      <div class="card-title">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>
+        <span data-i18n="sec_power_title">🏢 Chế độ Văn phòng & Quản lý Nguồn</span>
+      </div>
+
+      <!-- Quick 1-tap Screen Toggle -->
+      <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 12px 14px; margin-bottom: 14px;">
+        <div>
+          <div style="font-size: 13px; font-weight: 700; color: #fff;" data-i18n="screen_pwr_label">Nguồn màn hình CYD:</div>
+          <div id="screenStateBadge" style="font-size: 11px; color: var(--success); font-weight: 600; margin-top: 2px;">🟢 Màn hình đang BẬT</div>
+        </div>
+        <button id="screenPowerBtn" type="button" class="btn btn-outline" style="width: auto; padding: 8px 14px; font-size: 12px; border-radius: 10px; border-color: rgba(255,59,48,0.5); color: #ff6b6b;" onclick="toggleScreenPower()">
+          <span style="font-size: 14px;">⏻</span> <span id="screenPowerBtnText" data-i18n="btn_screen_off">Tắt màn hình ngay</span>
         </button>
       </div>
-      <button class="btn btn-outline" style="border-color:rgba(255,59,48,0.4); color:var(--danger); padding:8px; font-size:12px;" onclick="resetWifi()" data-i18n="btn_reset_wifi">
-        Xóa hết & Reset WiFi
+
+      <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 8px;" data-i18n="power_mode_label">Không gian sử dụng (Profile):</div>
+      <div class="grid-2" id="powerModeButtons" style="margin-bottom: 10px;">
+        <button type="button" class="btn-chip active" onclick="switchPowerMode(0)">
+          <div style="font-weight: 700;" data-i18n="mode_office_title">🏢 Văn phòng (Mặc định)</div>
+          <div style="font-size: 10px; opacity: 0.8; margin-top: 2px;" data-i18n="mode_office_sub">Tắt đen 0% ngoài giờ</div>
+        </button>
+        <button type="button" class="btn-chip" onclick="switchPowerMode(1)">
+          <div style="font-weight: 700;" data-i18n="mode_home_title">🏠 Ở nhà (Đồng hồ đêm)</div>
+          <div style="font-size: 10px; opacity: 0.8; margin-top: 2px;" data-i18n="mode_home_sub">Giảm mờ 5% xem giờ</div>
+        </button>
+      </div>
+
+      <!-- Power Schedule Form -->
+      <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 14px; margin-top: 10px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <label for="sleepScheduleEn" id="sleepScheduleEnLabel" style="font-size: 13px; font-weight: 600; color: #fff; cursor: pointer;" data-i18n="sleep_sched_en">Hẹn giờ nghỉ tự động:</label>
+          <input type="checkbox" id="sleepScheduleEn" style="width: 18px; height: 18px; accent-color: var(--accent); cursor: pointer;">
+        </div>
+
+        <div class="grid-2" style="margin-bottom: 12px;">
+          <div>
+            <div id="sleepStartLabel" style="font-size: 11px; color: var(--text-dim); margin-bottom: 4px;" data-i18n="sleep_start_lbl">Tan ca (Tắt màn hình):</div>
+            <input type="time" id="sleepStartTime" class="select-control" value="18:30">
+          </div>
+          <div>
+            <div id="sleepEndLabel" style="font-size: 11px; color: var(--text-dim); margin-bottom: 4px;" data-i18n="sleep_end_lbl">Vào ca (Bật lại):</div>
+            <input type="time" id="sleepEndTime" class="select-control" value="07:45">
+          </div>
+        </div>
+
+        <div id="powerHintText" style="font-size: 11px; color: var(--text-dim); line-height: 1.5; margin-bottom: 12px; border-left: 2px solid var(--accent); padding-left: 8px;" data-i18n="power_hint">
+          • <b>Làm thêm OT:</b> Chạm màn hình để đánh thức sẽ tự động giữ sáng <b>60 phút</b> (và tự gia hạn mỗi lần chạm lại).<br>
+          • Hết 60 phút không tương tác & phòng tối, màn hình sẽ tự tắt 0W bảo vệ tấm nền.
+        </div>
+
+        <button type="button" class="btn btn-accent" onclick="savePowerSchedule()">
+          <span data-i18n="btn_save_power">Lưu Cài Đặt Hẹn Giờ</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- 3. Currency Settings Section -->
+    <div class="card">
+      <div class="card-title">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v12M17 10H9.5a2.5 2.5 0 0 0 0 5H14a2.5 2.5 0 0 1 0 5H7"/></svg>
+        <span data-i18n="sec_cur_title">Cấu hình Ngoại tệ</span>
+      </div>
+      <div class="grid-2" style="margin-bottom: 12px;">
+        <div>
+          <div style="font-size: 11px; color: var(--text-dim); margin-bottom: 6px;" data-i18n="cur1_label">Ngoại tệ 1 (Mục trên):</div>
+          <select id="cur1Select" class="select-control">
+            <option value="USD">USD — Đô la Mỹ</option>
+            <option value="EUR">EUR — Euro</option>
+            <option value="CAD">CAD — Đô la Canada</option>
+            <option value="JPY">JPY — Yên Nhật</option>
+            <option value="GBP">GBP — Bảng Anh</option>
+            <option value="AUD">AUD — Đô la Úc</option>
+            <option value="SGD">SGD — Đô la Singapore</option>
+            <option value="CNY">CNY — Nhân dân tệ</option>
+            <option value="KRW">KRW — Won Hàn Quốc</option>
+            <option value="CHF">CHF — Franc Thụy Sĩ</option>
+            <option value="THB">THB — Baht Thái</option>
+          </select>
+        </div>
+        <div>
+          <div style="font-size: 11px; color: var(--text-dim); margin-bottom: 6px;" data-i18n="cur2_label">Ngoại tệ 2 (Mục dưới):</div>
+          <select id="cur2Select" class="select-control">
+            <option value="CAD">CAD — Đô la Canada</option>
+            <option value="EUR">EUR — Euro</option>
+            <option value="USD">USD — Đô la Mỹ</option>
+            <option value="JPY">JPY — Yên Nhật</option>
+            <option value="GBP">GBP — Bảng Anh</option>
+            <option value="AUD">AUD — Đô la Úc</option>
+            <option value="SGD">SGD — Đô la Singapore</option>
+            <option value="CNY">CNY — Nhân dân tệ</option>
+            <option value="KRW">KRW — Won Hàn Quốc</option>
+            <option value="CHF">CHF — Franc Thụy Sĩ</option>
+            <option value="THB">THB — Baht Thái</option>
+          </select>
+        </div>
+      </div>
+      <button class="btn btn-accent" onclick="saveCurrencies()" data-i18n="btn_save_cur">
+        Lưu cấu hình ngoại tệ
       </button>
     </div>
-  </div>
+
+    <!-- 4. Sound & Audio Settings Section -->
+    <div class="card">
+      <div class="card-title">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+        <span data-i18n="sec_snd_title">Âm thanh & Điệu chuông</span>
+      </div>
+      <div class="grid-2">
+        <div>
+          <label style="font-size: 12px; color: var(--text-dim); display: block; margin-bottom: 6px;" data-i18n="snd_startup_label">Âm báo khởi động:</label>
+          <select class="select-control" id="startupSndSelect" onchange="changeSound()">
+            <option value="0">🎶 Marimba Acoustic</option>
+            <option value="1">💎 Pha lê (Crystal Chime)</option>
+            <option value="2">⚡ Điện tử (Cyber Synth)</option>
+            <option value="3">🕹️ Cổ điển (Retro 8-Bit)</option>
+            <option value="4">🔇 Tắt âm (Mute)</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size: 12px; color: var(--text-dim); display: block; margin-bottom: 6px;" data-i18n="snd_touch_label">Âm chạm cảm ứng:</label>
+          <select class="select-control" id="touchSndSelect" onchange="changeSound()">
+            <option value="0">Tắt âm (Mute)</option>
+            <option value="1">Cơ bản (Click)</option>
+            <option value="2">Giọt nước (Water)</option>
+            <option value="3">Tiếng bíp (Beep)</option>
+            <option value="4">Tiếng chim (Chirp)</option>
+          </select>
+        </div>
+      </div>
+      <div style="margin-top: 10px;">
+        <label style="font-size: 12px; color: var(--text-dim); display: block; margin-bottom: 6px;" data-i18n="snd_melody_label">Điệu chuông báo thức:</label>
+        <select class="select-control" id="alarmMelodySelect" onchange="changeSound()">
+          <option value="0">Classic Alarm</option>
+          <option value="1">Melodic Chime</option>
+          <option value="2">Cyber Rhythm</option>
+          <option value="3">Gentle Morning</option>
+        </select>
+      </div>
+      <div class="grid-2" style="margin-top: 12px;">
+        <button class="btn btn-outline" style="border-color:var(--accent); color:var(--accent);" onclick="testStartupSound()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          <span data-i18n="btn_test_startup">Thử âm khởi động</span>
+        </button>
+        <button class="btn btn-primary" onclick="testAlarmMelody()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          <span data-i18n="btn_test_melody">Thử chuông báo</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- 5. Network & WiFi Section -->
+    <div class="card">
+      <div class="card-title">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>
+        <span data-i18n="sec_wifi_title">Cài đặt Mạng & WiFi</span>
+      </div>
+      <div style="font-size: 12px; color: var(--text-dim); line-height: 1.7; margin-bottom: 12px;">
+        <div><span data-i18n="wifi_mdns">• Tên miền mDNS: </span><b style="color:var(--accent);">http://smartdesk.local</b></div>
+        <div><span data-i18n="wifi_ip_prefix">• Địa chỉ IP hiện tại: </span><span id="wifiIp" style="color:#fff;">...</span><span data-i18n="wifi_rssi_prefix"> (Sóng: </span><span id="wifiRssi">...</span> dBm)</div>
+      </div>
+
+      <!-- Multi-WiFi Profiles List -->
+      <div style="margin-bottom: 14px;">
+        <div style="font-size: 12px; font-weight: 600; color: var(--accent); margin-bottom: 8px; display:flex; justify-content:space-between; align-items:center;">
+          <span data-i18n="wifi_saved_title">Mạng đã ghi nhớ (Tối đa 3 mạng):</span>
+          <span id="wifiProfileCount" style="color:var(--text-dim); font-size:11px;">0/3</span>
+        </div>
+        <div id="wifiProfilesList" style="display:flex; flex-direction:column; gap:6px;">
+          <div style="font-size:11px; color:var(--text-dim); font-style:italic; padding:4px 0;">Đang tải danh sách...</div>
+        </div>
+      </div>
+
+      <div style="display:flex; flex-direction:column; gap:8px;">
+        <div id="addWifiForm" style="display:none; background:rgba(0,229,255,0.06); border:1px solid rgba(0,229,255,0.25); border-radius:12px; padding:12px; margin-bottom:4px;">
+          <div style="font-size:12px; font-weight:700; color:var(--accent); margin-bottom:8px;" data-i18n="wifi_add_title">Nhập thông tin WiFi:</div>
+          <input type="text" id="newWifiSsid" placeholder="Tên WiFi (SSID)" style="width:100%; padding:10px; border-radius:8px; border:1px solid var(--card-border); background:#070B14; color:#fff; font-size:13px; margin-bottom:8px;">
+          <input type="password" id="newWifiPass" placeholder="Mật khẩu WiFi (bỏ trống nếu không pass)" style="width:100%; padding:10px; border-radius:8px; border:1px solid var(--card-border); background:#070B14; color:#fff; font-size:13px; margin-bottom:10px;">
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+            <button class="btn btn-accent" style="padding:10px;" onclick="submitNewWifi()" data-i18n="btn_save_wifi">💾 Lưu mạng</button>
+            <button class="btn btn-outline" style="padding:10px;" onclick="toggleAddWifiForm(false)" data-i18n="btn_cancel">Hủy</button>
+          </div>
+        </div>
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
+          <button class="btn btn-primary" onclick="toggleAddWifiForm(true)" data-i18n="btn_add_wifi">
+            ➕ Nhập WiFi mới
+          </button>
+          <button class="btn btn-outline" onclick="openWiFiPortal()" style="border-color:var(--accent); color:var(--accent);" data-i18n="btn_qr_portal">
+            📷 Quét QR trên CYD
+          </button>
+        </div>
+        <button class="btn btn-outline" style="border-color:rgba(255,59,48,0.4); color:var(--danger); padding:8px; font-size:12px;" onclick="resetWifi()" data-i18n="btn_reset_wifi">
+          Xóa hết & Reset WiFi
+        </button>
+      </div>
+    </div>
+
+  </div><!-- /#panelSettings -->
 
 </div>
 
@@ -631,13 +598,15 @@ const I18N = {
   0: {
     brand_sub: "Màn hình để bàn thông minh",
     status_online: "Trực tuyến",
+    tab_personal: "Cá nhân",
+    tab_settings: "Cài đặt",
+    sec_theme_title: "Giao diện (Theme) & Độ sáng",
+    mood_select_label: "Chọn tâm trạng để sửa lời nhắn riêng:",
     sec_cur_title: "Cấu hình Ngoại tệ",
-    sec_cur_sub: "Tùy chọn 2 đồng ngoại tệ bạn muốn theo dõi trên màn hình để bàn:",
     cur1_label: "Ngoại tệ 1 (Mục trên):",
     cur2_label: "Ngoại tệ 2 (Mục dưới):",
     btn_save_cur: "Lưu cấu hình ngoại tệ",
     sec_alarm_title: "Báo thức & Lời nhắc SmartDesk",
-    sec_alarm_sub: "Thiết lập giờ báo thức và lời nhắn hiển thị trên màn hình để bàn:",
     alarm_en_label: "Kích hoạt báo thức",
     alarm_msg_label: "Nội dung lời nhắc / thông báo khi chuông reo:",
     alarm_msg_ph: "VD: Uống nước, Vận động, Họp online...",
@@ -647,7 +616,7 @@ const I18N = {
     quick_work: "💼 Tan ca",
     btn_save_alarm: "Lưu cài đặt báo thức",
     sec_anniv_title: "Ngày Kỷ Niệm & Lịch Vạn Niên (Desk Ticker)",
-    sec_anniv_sub: "Nhắc nhở ngày sinh nhật, ngày cưới, ngày giỗ (Dương lịch & Âm lịch) chạy dưới chân màn hình chính:",
+    sec_anniv_sub: "Nhắc nhở sinh nhật, ngày cưới, ngày giỗ (Dương & Âm lịch) chạy dưới chân màn hình:",
     anniv_preview_label: "Dòng chữ hiển thị trên màn hình hôm nay:",
     anniv_type_solar: "☀️ Dương lịch",
     anniv_type_lunar: "🌙 Âm lịch",
@@ -658,19 +627,13 @@ const I18N = {
     btn_add_anniv: "➕ Thêm Kỷ Niệm",
     anniv_list_title: "Danh sách ngày kỷ niệm đã lưu:",
     anniv_empty: "Chưa có ngày kỷ niệm nào. Hãy thêm ngày quan trọng của bạn ở trên!",
-    anniv_fallback_hint: "💡 Khi ngày hôm nay không có kỷ niệm nào, SmartDesk sẽ tự động hiển thị dữ liệu <b>Lịch Vạn Niên</b> (Can Chi ngày, Tiết Khí, Lễ Tết truyền thống và danh ngôn tích cực) để chạy chữ.",
     t_anniv_added: "Đã thêm ngày kỷ niệm thành công!",
     t_anniv_del: "Đã xóa ngày kỷ niệm!",
     t_anniv_err: "Lỗi lưu ngày kỷ niệm!",
     t_anniv_fill: "Vui lòng nhập đầy đủ ngày, tháng và tên sự kiện!",
-    sec_ctrl_title: "Điều khiển màn hình từ xa",
-    page_sub: "Chuyển trang hiển thị:",
     theme_sub: "Bộ sưu tập Giao diện (Theme):",
     bright_label: "Độ sáng màn hình",
-    sec_pet_title: "Thú cưng Pomodoro (Desk Pet)",
-    sec_pet_sub: "Chọn bạn đồng hành hiển thị ở tâm vòng tròn Pomodoro (gõ phím cùng bạn khi cày deadline):",
-    t_pet: "Đã chọn thú cưng: ",
-    sec_snd_title: "Âm thanh & Điệu chuông (Loa GPIO 26)",
+    sec_snd_title: "Âm thanh & Điệu chuông",
     snd_startup_label: "Âm báo khởi động:",
     snd_touch_label: "Âm chạm cảm ứng:",
     snd_melody_label: "Điệu chuông báo thức:",
@@ -681,14 +644,8 @@ const I18N = {
     wifi_mdns: "• Tên miền mDNS: ",
     wifi_ip_prefix: "• Địa chỉ IP hiện tại: ",
     wifi_rssi_prefix: " (Sóng: ",
-    sec_mood_title: "Tâm trạng & Biển hiệu Bàn làm việc (Desk Mood)",
-    sec_pack_sub: "Bộ Meme Nhân Vật (Meme Pack):",
-    t_pack: "Đã chọn bộ meme: ",
-    sec_mood_sub: "Tâm trạng bàn làm việc (Desk Mood):",
-    t_mood: "Đã đổi tâm trạng: ",
+    sec_mood_title: "Lời nhắn Tâm trạng tùy chỉnh (Desk Mood)",
     mood_custom_prefix: "Tùy chỉnh riêng cho: ",
-    mood_custom_toggle: "Tùy chỉnh Tiêu đề & Thông điệp riêng",
-    mood_custom_hint: "• Bật để đặt Tiêu đề & Thông điệp riêng cho trạng thái này.<br>• Các trạng thái khác vẫn giữ nguyên câu riêng hoặc câu mặc định song ngữ.",
     mood_tag_label: "Tiêu đề bảng Neon (Tối đa 20 ký tự, in HOA):",
     mood_msg_label: "Câu nhắn phía dưới (Tối đa 36 ký tự):",
     mood_quick_label: "Gợi ý nhanh:",
@@ -709,8 +666,6 @@ const I18N = {
     t_wifi_del_err: "Lỗi xóa mạng!",
     t_wifi_portal_prompt: "SmartDesk sẽ mở giao diện Quét QR cài đặt mạng trên màn hình CYD. Bạn có muốn tiếp tục?",
     t_wifi_del_confirm: "Bạn có chắc muốn xóa mạng này khỏi bộ nhớ SmartDesk?",
-    p0: "🕒 Đồng hồ", p1: "📅 Lịch âm", p2: "📈 Tài chính", p3: "🍅 Pomodoro", p4: "🎭 Tâm trạng", p5: "⚙️ Cài đặt",
-    t_page: "Đã chuyển: ",
     t_snd_save: "Đã lưu cấu hình âm thanh!",
     t_snd_err: "Lỗi lưu âm thanh",
     t_test_melody: "Đang phát thử chuông trên loa...",
@@ -745,14 +700,14 @@ const I18N = {
     sleep_sched_en_off: "Hẹn giờ tan ca (Tắt màn hình 0%):",
     sleep_start_lbl_off: "Tan ca (Tắt màn hình):",
     sleep_end_lbl_off: "Vào ca (Bật lại):",
-    power_hint_off: "• <b>Tối ưu cho văn phòng:</b> Sau giờ làm việc, khi phòng tắt đèn ra về thiết bị sẽ tự động tắt đen hoàn toàn để tiết kiệm điện & bảo vệ màn hình.<br>• <b>Cảm biến LDR thông minh:</b> Dù đã đến giờ hẹn, nếu phòng còn bật đèn làm thêm (OT), màn hình vẫn giữ sáng để phục vụ bạn.<br>• <b>Chạm để bật:</b> Bất cứ lúc nào bạn chạm tay vào màn hình SmartDesk sẽ lập tức bật sáng lại!",
+    power_hint_off: "• <b>Làm thêm OT:</b> Chạm màn hình để đánh thức sẽ tự động giữ sáng <b>60 phút</b> (và tự gia hạn mỗi lần chạm lại).<br>• Hết 60 phút không tương tác & phòng tối, màn hình sẽ tự tắt 0W bảo vệ tấm nền.",
     sleep_sched_en_hom: "Hẹn giờ đi ngủ (Mờ dịu 5% đêm):",
     sleep_start_lbl_hom: "Giờ đi ngủ (Dịu mờ 5%):",
     sleep_end_lbl_hom: "Giờ thức dậy (Sáng lại):",
-    power_hint_hom: "• <b>Đồng hồ đêm êm dịu:</b> Trong khung giờ ngủ, khi phòng tắt đèn màn hình sẽ tự giảm mờ còn 5% để bạn xem giờ ban đêm mà không hề chói mắt.<br>• <b>Tự động theo giấc ngủ:</b> Nếu bạn ngủ sớm tắt đèn trước giờ hẹn, cảm biến LDR sẽ tự động giảm mờ ngay.<br>• <b>Thức khuya bật đèn:</b> Nếu bạn còn thức làm việc, màn hình vẫn giữ độ sáng thoải mái phục vụ bạn!",
+    power_hint_hom: "• <b>Đồng hồ đêm êm dịu:</b> Trong khung giờ ngủ khi phòng tắt đèn, màn hình tự giảm mờ còn 5% để xem giờ không chói mắt.",
     sleep_start_lbl: "Tan ca (Tắt màn hình):",
     sleep_end_lbl: "Vào ca (Bật lại):",
-    power_hint: "• <b>Tối ưu cho văn phòng:</b> Sau giờ làm việc, khi phòng tắt đèn ra về thiết bị sẽ tự động tắt đen hoàn toàn để tiết kiệm điện & bảo vệ màn hình.<br>• <b>Cảm biến LDR thông minh:</b> Dù đã đến giờ hẹn, nếu phòng còn bật đèn làm thêm (OT), màn hình vẫn giữ sáng để phục vụ bạn.<br>• <b>Chạm để bật:</b> Bất cứ lúc nào bạn chạm tay vào màn hình SmartDesk sẽ lập tức bật sáng lại!",
+    power_hint: "• <b>Làm thêm OT:</b> Chạm màn hình để đánh thức sẽ tự động giữ sáng <b>60 phút</b> (và tự gia hạn mỗi lần chạm lại).<br>• Hết 60 phút không tương tác & phòng tối, màn hình sẽ tự tắt 0W bảo vệ tấm nền.",
     btn_save_power: "Lưu Cài Đặt Hẹn Giờ",
     t_mode_office: "Đã chọn: Chế độ Văn phòng (Mặc định)",
     t_mode_home: "Đã chọn: Chế độ Ở nhà (Đồng hồ đêm)",
@@ -768,13 +723,15 @@ const I18N = {
   1: {
     brand_sub: "Smart Desktop Companion",
     status_online: "Online",
+    tab_personal: "Personal",
+    tab_settings: "Settings",
+    sec_theme_title: "Themes & Brightness",
+    mood_select_label: "Select mood to customize message:",
     sec_cur_title: "Currency Settings",
-    sec_cur_sub: "Select 2 currencies to track on your desktop screen:",
     cur1_label: "Currency 1 (Top):",
     cur2_label: "Currency 2 (Bottom):",
     btn_save_cur: "Save Currency Settings",
     sec_alarm_title: "Alarm & Smart Reminders",
-    sec_alarm_sub: "Configure alarm time and notification message for desktop screen:",
     alarm_en_label: "Enable Alarm",
     alarm_msg_label: "Reminder message when alarm rings:",
     alarm_msg_ph: "e.g., Drink water, Stretch, Meeting...",
@@ -795,13 +752,10 @@ const I18N = {
     btn_add_anniv: "➕ Add Anniversary",
     anniv_list_title: "Saved Personal Anniversaries:",
     anniv_empty: "No anniversaries saved yet. Add your important dates above!",
-    anniv_fallback_hint: "💡 When today has no saved personal anniversary, SmartDesk automatically falls back to <b>Perpetual Calendar data</b> (Daily Can Chi, Solar Terms, traditional holidays and inspiring motivational quotes).",
     t_anniv_added: "Anniversary added successfully!",
     t_anniv_del: "Anniversary deleted!",
     t_anniv_err: "Error saving anniversary!",
     t_anniv_fill: "Please enter day, month and event title!",
-    sec_ctrl_title: "Remote Screen Control",
-    page_sub: "Switch Display Page:",
     theme_sub: "Theme Presets:",
     bright_label: "Screen Brightness",
     sec_power_title: "🏢 Office Mode & Power Management",
@@ -819,31 +773,22 @@ const I18N = {
     sleep_sched_en_off: "Auto Screen Off Schedule:",
     sleep_start_lbl_off: "Off Work (Screen Off):",
     sleep_end_lbl_off: "Start Work (Screen On):",
-    power_hint_off: "• <b>Optimized for Office:</b> After work hours, when room lights are turned off, the screen shuts off completely (0%) to save power and extend LCD life.<br>• <b>Smart Ambient Sensor (LDR):</b> Even past schedule, if office lights remain on (overtime work), the screen stays active for you.<br>• <b>Wake on Touch:</b> Tap anywhere on the CYD screen anytime to wake it up instantly!",
+    power_hint_off: "• <b>Overtime (OT) Mode:</b> Tapping the screen to wake keeps it on for <b>60 minutes</b> (auto-extends on each tap).<br>• Turns off automatically after 60m idle in a dark room.",
     sleep_sched_en_hom: "Night Clock Sleep Schedule:",
     sleep_start_lbl_hom: "Bedtime (Dim to 5%):",
     sleep_end_lbl_hom: "Wakeup (Restore brightness):",
-    power_hint_hom: "• <b>Gentle Night Clock:</b> During bedtime hours, when room lights are turned off, the screen dims to 5% for easy night viewing without glare.<br>• <b>Adaptive Bedtime:</b> If you sleep early and turn off room lights before schedule, the LDR sensor dims the screen immediately.<br>• <b>Late Night Work:</b> If room lights stay on while you work, the screen maintains comfortable brightness for you!",
+    power_hint_hom: "• <b>Gentle Night Clock:</b> Dims to 5% in dark rooms during bedtime for glare-free viewing.",
     sleep_start_lbl: "Off Work (Screen Off):",
     sleep_end_lbl: "Start Work (Screen On):",
-    power_hint: "• <b>Optimized for Office:</b> After work hours, when room lights are turned off, the screen shuts off completely (0%) to save power and extend LCD life.<br>• <b>Smart Ambient Sensor (LDR):</b> Even past schedule, if office lights remain on (overtime work), the screen stays active for you.<br>• <b>Wake on Touch:</b> Tap anywhere on the CYD screen anytime to wake it up instantly!",
+    power_hint: "• <b>Overtime (OT) Mode:</b> Tapping the screen to wake keeps it on for <b>60 minutes</b> (auto-extends on each tap).<br>• Turns off automatically after 60m idle in a dark room.",
     btn_save_power: "Save Sleep Schedule",
     t_mode_office: "Selected: Office Mode (Default)",
     t_mode_home: "Selected: Home Mode (Night Clock)",
     t_screen_turned_off: "Screen turned off!",
     t_screen_turned_on: "Screen turned on!",
     t_power_saved: "Power schedule saved successfully!",
-    sec_pet_title: "Pomodoro Companion (Desk Pet)",
-    sec_pet_sub: "Select your companion in the center of the Pomodoro dial (types along while you focus):",
-    t_pet: "Selected companion: ",
-    sec_mood_title: "Desk Mood & Vibe Signboard",
-    sec_pack_sub: "Meme Character Pack:",
-    t_pack: "Selected meme pack: ",
-    sec_mood_sub: "Desk Mood / Vibe Signboard:",
-    t_mood: "Selected vibe: ",
+    sec_mood_title: "Custom Desk Mood Messages",
     mood_custom_prefix: "Customizing for: ",
-    mood_custom_toggle: "Custom Status Title & Message",
-    mood_custom_hint: "• Enable to set custom Title & Message specifically for this mood.<br>• Other moods will keep their own custom or default bilingual quotes.",
     mood_tag_label: "Neon Sign Title (Max 20 chars, UPPERCASE):",
     mood_msg_label: "Sub-message below (Max 36 chars):",
     mood_quick_label: "Quick presets:",
@@ -851,7 +796,7 @@ const I18N = {
     btn_reset_mood: "Reset",
     t_mood_saved: "Custom mood status saved!",
     t_mood_default: "Restored to default bilingual status!",
-    sec_snd_title: "Sound & Melodies (Speaker GPIO 26)",
+    sec_snd_title: "Sound & Melodies",
     snd_startup_label: "Startup Boot Sound:",
     snd_touch_label: "Touch sound feedback:",
     snd_melody_label: "Alarm Melody:",
@@ -875,8 +820,6 @@ const I18N = {
     t_wifi_del_err: "Failed to remove network!",
     t_wifi_portal_prompt: "SmartDesk will open the on-screen QR Setup Portal on CYD. Continue?",
     t_wifi_del_confirm: "Are you sure you want to remove this network from memory?",
-    p0: "🕒 Clock", p1: "📅 Calendar", p2: "📈 Finance", p3: "🍅 Pomodoro", p4: "🎭 Mood", p5: "⚙️ Settings",
-    t_page: "Switched to: ",
     t_snd_save: "Sound settings saved!",
     t_snd_err: "Failed to save sound settings",
     t_test_melody: "Playing alarm melody on speaker...",
@@ -952,36 +895,16 @@ function applyLanguage(l) {
     });
   }
 
-  const pBtns = document.querySelectorAll('#pageButtons .btn-chip');
-  if (pBtns.length >= 6) {
-    pBtns[0].textContent = dict.p0;
-    pBtns[1].textContent = dict.p1;
-    pBtns[2].textContent = dict.p2;
-    pBtns[3].textContent = dict.p3;
-    pBtns[4].textContent = dict.p4;
-    pBtns[5].textContent = dict.p5;
+  // Cập nhật dropdown chọn Tâm trạng (Desk Mood) theo ngôn ngữ
+  const moodSel = document.getElementById('editMoodSelect');
+  if (moodSel) {
+    const moodNames = (l === 1)
+      ? ['🟢 Happy', '🔴 Deep Focus', '⚡ Frustrated', '🟡 Drained 0%', '🟣 Bored', '🎉 Weekend / Party']
+      : ['🟢 Vui vẻ', '🔴 Tập trung cao', '⚡ Đang bực mình', '🟡 Sập nguồn 0%', '🟣 Đang chán', '🎉 Cuối tuần / Quẩy'];
+    Array.from(moodSel.options).forEach((opt, idx) => {
+      if (moodNames[idx]) opt.textContent = moodNames[idx];
+    });
   }
-
-  // Cập nhật bộ nút Meme Pack theo ngôn ngữ
-  const packNames = (l === 1) 
-    ? ['🥟 Mochi Guy', '⭐ Golden Star', '🐰 White Rabbit']
-    : ['🥟 Mochi Guy', '⭐ Sao Vàng', '🐰 Thỏ Trắng'];
-  const packBtns = document.querySelectorAll('#packButtons .btn-chip');
-  packBtns.forEach((b, idx) => { if (packNames[idx]) b.textContent = packNames[idx]; });
-
-  // Cập nhật các nút Tâm trạng (Desk Mood) theo ngôn ngữ
-  const moodNames = (l === 1)
-    ? ['🟢 Happy', '🔴 Deep Focus', '⚡ Frustrated', '🟡 Drained 0%', '🟣 Bored', '🎉 Weekend / Party']
-    : ['🟢 Vui vẻ', '🔴 Tập trung cao', '⚡ Đang bực mình', '🟡 Sập nguồn 0%', '🟣 Đang chán', '🎉 Cuối tuần / Quẩy'];
-  const moodBtns = document.querySelectorAll('#moodButtons .btn-chip');
-  moodBtns.forEach((b, idx) => { if (moodNames[idx]) b.textContent = moodNames[idx]; });
-
-  // Cập nhật các nút Thú cưng (Desk Pet) theo ngôn ngữ
-  const petNames = (l === 1)
-    ? ['🍅 Tomato', '🐱 Pixel Cat', '🐕 Shiba Inu', '🦫 Capybara']
-    : ['🍅 Cà chua', '🐱 Mèo Pixel', '🐕 Shiba Inu', '🦫 Capybara'];
-  const petBtns = document.querySelectorAll('#petButtons .btn-chip');
-  petBtns.forEach((b, idx) => { if (petNames[idx]) b.textContent = petNames[idx]; });
 
   // Cập nhật tùy chọn Âm khởi động theo ngôn ngữ (5 chế độ âm thanh)
   const startupSel = document.getElementById('startupSndSelect');
@@ -1000,6 +923,19 @@ function applyLanguage(l) {
   // Cập nhật trạng thái nút nguồn & thông tin chế độ nguồn
   updateScreenPowerUI();
   updatePowerScheduleUI();
+}
+
+function switchTab(tab) {
+  const isSettings = (tab === 'settings');
+  const p1 = document.getElementById('panelPersonal');
+  const p2 = document.getElementById('panelSettings');
+  const b1 = document.getElementById('tabBtnPersonal');
+  const b2 = document.getElementById('tabBtnSettings');
+  if (p1) p1.classList.toggle('active', !isSettings);
+  if (p2) p2.classList.toggle('active', isSettings);
+  if (b1) b1.classList.toggle('active', !isSettings);
+  if (b2) b2.classList.toggle('active', isSettings);
+  try { sessionStorage.setItem('cyd_tab', isSettings ? 'settings' : 'personal'); } catch (e) {}
 }
 
 let currentPowerMode = 0;
@@ -1137,18 +1073,6 @@ function showToast(msg, isSuccess = true) {
   setTimeout(() => t.classList.remove('show'), 2500);
 }
 
-let pageDebounce = null;
-function switchPage(pageId) {
-  highlightPage(pageId);
-  const dict = getDict();
-  const pageNames = [dict.p0, dict.p1, dict.p2, dict.p3, dict.p4, dict.p5];
-  showToast(`${dict.t_page}${pageNames[pageId] || pageId}`);
-  clearTimeout(pageDebounce);
-  pageDebounce = setTimeout(() => {
-    fetch(`/api/page?id=${pageId}`).catch(() => {});
-  }, 80);
-}
-
 let soundDebounce = null;
 function changeSound() {
   const touch = document.getElementById('touchSndSelect').value;
@@ -1199,108 +1123,9 @@ function changeBrightness(val) {
   }, 200);
 }
 
-function highlightPage(id) {
-  const btns = document.querySelectorAll('#pageButtons .btn-chip');
-  btns.forEach((b, idx) => b.classList.toggle('active', idx === id));
-}
-
 function highlightTheme(id) {
   const btns = document.querySelectorAll('#themeButtons .btn-chip');
   btns.forEach((b, idx) => b.classList.toggle('active', idx === id));
-}
-
-function getPetName(petId) {
-  const arr = (currentLang === 1)
-    ? ['Tomato', 'Pixel Cat', 'Shiba Inu', 'Capybara']
-    : ['Cà chua', 'Mèo Pixel', 'Shiba Inu', 'Capybara'];
-  return arr[petId] || ('Pet ' + petId);
-}
-
-function highlightPet(id) {
-  const btns = document.querySelectorAll('#petButtons .btn-chip');
-  btns.forEach((b, idx) => b.classList.toggle('active', idx === id));
-}
-function switchPet(petId) {
-  highlightPet(petId);
-  const dict = getDict();
-  showToast(`${dict.t_pet}${getPetName(petId)}`);
-  fetch(`/api/pet?set=${petId}`).catch(() => {});
-}
-
-let currentPomoState = 0; // 0=STOPPED, 1=RUNNING, 2=PAUSED
-let currentPomoMode = 0;
-
-function updateWebPomoUI(state, mode, remSec) {
-  currentPomoState = state;
-  currentPomoMode = mode;
-  const modeBtns = document.querySelectorAll('#pomoModeButtons .btn-chip');
-  modeBtns.forEach((b, idx) => b.classList.toggle('active', idx === mode));
-
-  const timerEl = document.getElementById('webPomoTimer');
-  if (timerEl && remSec !== undefined) {
-    const mm = String(Math.floor(remSec / 60)).padStart(2, '0');
-    const ss = String(remSec % 60).padStart(2, '0');
-    timerEl.textContent = `${mm}:${ss}`;
-  }
-
-  const startBtn = document.getElementById('btnWebPomoStart');
-  if (startBtn) {
-    if (state === 1) {
-      startBtn.textContent = (currentLang === 1) ? '⏸️ Pause Pomodoro' : '⏸️ Tạm dừng Pomodoro';
-      startBtn.style.background = 'linear-gradient(135deg, #ff5e00, #ff2a55)';
-    } else if (state === 2) {
-      startBtn.textContent = (currentLang === 1) ? '▶️ Resume Pomodoro' : '▶️ Tiếp tục Pomodoro';
-      startBtn.style.background = '';
-    } else {
-      startBtn.textContent = (currentLang === 1) ? '▶️ Start Pomodoro (Sync EMO)' : '▶️ Bắt đầu Pomodoro (Đồng bộ EMO)';
-      startBtn.style.background = '';
-    }
-  }
-}
-
-function toggleWebPomodoro() {
-  const act = (currentPomoState === 1) ? 'pause' : 'start';
-  fetch(`/api/pomodoro?action=${act}`)
-    .then(() => {
-      showToast(act === 'start'
-        ? ((currentLang === 1) ? 'Pomodoro Started!' : 'Đã kích hoạt Pomodoro & đồng bộ EMO!')
-        : ((currentLang === 1) ? 'Pomodoro Paused!' : 'Đã tạm dừng Pomodoro!'));
-      setTimeout(fetchStatus, 150);
-    })
-    .catch(() => {});
-}
-
-function resetWebPomodoro() {
-  fetch('/api/pomodoro?action=reset')
-    .then(() => {
-      showToast((currentLang === 1) ? 'Pomodoro Reset!' : 'Đã đặt lại Pomodoro!');
-      setTimeout(fetchStatus, 150);
-    })
-    .catch(() => {});
-}
-
-function setWebPomoMode(m) {
-  fetch(`/api/pomodoro?action=mode&m=${m}`)
-    .then(() => setTimeout(fetchStatus, 150))
-    .catch(() => {});
-}
-
-function getPackName(packId) {
-  const arr = (currentLang === 1)
-    ? ['Mochi Guy', 'Golden Star', 'White Rabbit']
-    : ['Mochi Guy', 'Sao Vàng', 'Thỏ Trắng'];
-  return arr[packId] || ('Pack ' + packId);
-}
-
-function highlightPack(id) {
-  const btns = document.querySelectorAll('#packButtons .btn-chip');
-  btns.forEach((b, idx) => b.classList.toggle('active', idx === id));
-}
-function switchPack(packId) {
-  highlightPack(packId);
-  const dict = getDict();
-  showToast(`${dict.t_pack || "Bộ meme: "}${getPackName(packId)}`);
-  fetch(`/api/mood?pack=${packId}`).catch(() => {});
 }
 
 function getMoodName(m) {
@@ -1350,11 +1175,6 @@ const QUICK_SUGGESTIONS_EN = [
   [ { t: 'PARTY TIME!', m: 'No deadlines tonight!' }, { t: 'TGIF - CHILL', m: 'Weekend mode activated!' } ]
 ];
 
-function highlightMood(id) {
-  const btns = document.querySelectorAll('#moodButtons .btn-chip');
-  btns.forEach((b, idx) => b.classList.toggle('active', idx === id));
-}
-
 function renderQuickMoodChips(m) {
   const container = document.getElementById('quickMoodContainer');
   if (!container) return;
@@ -1366,6 +1186,8 @@ function renderQuickMoodChips(m) {
 
 function updateMoodEditorUI() {
   const m = currentEditMood;
+  const sel = document.getElementById('editMoodSelect');
+  if (sel && !sel.matches(':focus')) sel.value = String(m);
   const lbl = document.getElementById('curEditMoodName');
   if (lbl) lbl.textContent = getMoodName(m);
 
@@ -1384,12 +1206,8 @@ function updateMoodEditorUI() {
   updateMoodCounters();
 }
 
-function switchMood(moodId) {
-  highlightMood(moodId);
-  currentEditMood = moodId;
-  const dict = getDict();
-  showToast(`${dict.t_mood}${getMoodName(moodId)}`);
-  fetch(`/api/mood?set=${moodId}`).catch(() => {});
+function onSelectEditMood(moodId) {
+  currentEditMood = parseInt(moodId, 10) || 0;
   updateMoodEditorUI();
 }
 
@@ -1550,7 +1368,6 @@ async function fetchStatus() {
       }
     }
 
-    highlightPage(data.page);
     highlightTheme(data.theme);
 
     const bSlider = document.getElementById('brightSlider');
@@ -1593,20 +1410,8 @@ async function fetchStatus() {
       const b = document.getElementById('startupSndSelect');
       if (b && !b.matches(':focus')) b.value = data.startupSound;
     }
-    if (data.pet !== undefined) {
-      highlightPet(data.pet);
-    }
-    if (data.pomoState !== undefined) {
-      updateWebPomoUI(data.pomoState, data.pomoMode || 0, data.pomoRemSec);
-    }
-    if (data.mood !== undefined) {
-      highlightMood(data.mood);
-      if (!isInitialStatusLoaded) {
-        currentEditMood = data.mood;
-      }
-    }
-    if (data.pack !== undefined) {
-      highlightPack(data.pack);
+    if (data.mood !== undefined && !isInitialStatusLoaded) {
+      currentEditMood = data.mood;
     }
 
     if (data.screenOff !== undefined) {
@@ -1840,17 +1645,28 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 });
 
+try {
+  const savedTab = sessionStorage.getItem('cyd_tab');
+  if (savedTab === 'settings') switchTab('settings');
+} catch (e) {}
 applyLanguage(0);
 fetchStatus();
 startAutoSync();
 fetchAnniversaries();
+
+// Set default day & month inputs to current local date
+const _today = new Date();
+const _dayInp = document.getElementById('annivDayInput');
+const _moInp = document.getElementById('annivMonthInput');
+if (_dayInp && _dayInp.value === '1') _dayInp.value = _today.getDate();
+if (_moInp && _moInp.value === '1') _moInp.value = _today.getMonth() + 1;
 
 // ── Anniversary Manager Functions ────────────────────────────────────
 let anniversaryList = [];
 
 async function fetchAnniversaries() {
   try {
-    const res = await fetch('/api/anniversaries');
+    const res = await fetch('/api/anniversaries?_t=' + Date.now(), { cache: 'no-store' });
     if (!res.ok) return;
     const data = await res.json();
     anniversaryList = data.items || [];
@@ -1860,7 +1676,9 @@ async function fetchAnniversaries() {
       const banner = document.getElementById('annivTodayBanner');
       if (banner) banner.textContent = data.today;
     }
-  } catch (e) { /* silent */ }
+  } catch (e) {
+    console.error('fetchAnniversaries error:', e);
+  }
 }
 
 function renderAnniversaryList() {
@@ -1871,57 +1689,93 @@ function renderAnniversaryList() {
     container.innerHTML = `<div style="text-align:center;color:var(--text-dim);font-size:12px;padding:12px;">${dict.anniv_empty || 'Chưa có ngày kỷ niệm nào.'}</div>`;
     return;
   }
-  container.innerHTML = anniversaryList.map((item, idx) => `
+  container.innerHTML = anniversaryList.map((item, idx) => {
+    const d = item.day !== undefined ? item.day : item.d;
+    const m = item.month !== undefined ? item.month : item.m;
+    const isL = item.isLunar !== undefined ? item.isLunar : item.l;
+    const t = item.title !== undefined ? item.title : item.t;
+    return `
     <div style="display:flex;align-items:center;gap:10px;background:rgba(255,255,255,0.03);border:1px solid var(--card-border);border-radius:8px;padding:9px 12px;">
-      <span style="font-size:16px;">${item.isLunar ? '🌙' : '☀️'}</span>
+      <span style="font-size:16px;">${isL ? '🌙' : '☀️'}</span>
       <div style="flex:1;min-width:0;">
-        <div style="font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(item.title)}</div>
-        <div style="font-size:11px;color:var(--text-dim);">${String(item.day).padStart(2,'0')}/${String(item.month).padStart(2,'0')} ${item.isLunar ? '(ÂL)' : ''}</div>
+        <div style="font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(t)}</div>
+        <div style="font-size:11px;color:var(--text-dim);">${String(d).padStart(2,'0')}/${String(m).padStart(2,'0')} ${isL ? '(ÂL)' : ''}</div>
       </div>
       <button onclick="deleteAnniversary(${idx})" style="background:rgba(255,80,80,0.15);border:1px solid rgba(255,80,80,0.3);color:#ff6060;border-radius:6px;padding:4px 8px;font-size:12px;cursor:pointer;">✕</button>
     </div>
-  `).join('');
+  `;
+  }).join('');
 }
 
 function escapeHtml(str) {
-  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  if (!str) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function setQuickAnniv(t) {
+  const inp = document.getElementById('annivTitleInput');
+  if (inp) {
+    inp.value = t;
+    inp.focus();
+  }
 }
 
 async function addAnniversary() {
   const dict = getDict();
-  const day = parseInt(document.getElementById('annivDayInput').value, 10);
-  const month = parseInt(document.getElementById('annivMonthInput').value, 10);
-  const isLunar = document.getElementById('annivTypeSelect').value === '1' ? 1 : 0;
-  const title = encodeURIComponent(document.getElementById('annivTitleInput').value.trim());
+  const dayInp = document.getElementById('annivDayInput');
+  const monthInp = document.getElementById('annivMonthInput');
+  const titleInp = document.getElementById('annivTitleInput');
+  const typeInp = document.getElementById('annivTypeSelect');
 
-  if (!day || !month || !title) {
-    showToast(dict.t_anniv_fill || 'Vui lòng nhập đầy đủ thông tin!', false);
+  const day = parseInt(dayInp.value, 10);
+  const month = parseInt(monthInp.value, 10);
+  const isLunar = typeInp.value === '1' ? 1 : 0;
+  let rawTitle = titleInp.value.trim();
+
+  // If user left title blank, provide a friendly default title
+  if (!rawTitle) {
+    rawTitle = (currentLang === 1) ? 'Special Anniversary' : 'Kỷ niệm đặc biệt';
+  }
+
+  if (!day || !month) {
+    showToast(dict.t_anniv_fill || 'Vui lòng nhập ngày tháng hợp lệ!', false);
+    return;
+  }
+  if (anniversaryList.length >= 32) {
+    showToast((currentLang === 1) ? 'Maximum limit of 32 anniversaries reached!' : 'Đã đạt giới hạn tối đa 32 ngày kỷ niệm!', false);
     return;
   }
 
+  const title = encodeURIComponent(rawTitle);
+
   try {
-    const res = await fetch(`/api/anniversaries/add?d=${day}&m=${month}&l=${isLunar}&t=${title}`);
-    if (res.ok) {
+    const url = `/api/anniversaries/add?d=${day}&m=${month}&l=${isLunar}&t=${title}&_t=${Date.now()}`;
+    const res = await fetch(url, { method: 'POST', cache: 'no-store' });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data.success) {
       showToast(dict.t_anniv_added || 'Đã thêm ngày kỷ niệm!');
-      document.getElementById('annivTitleInput').value = '';
+      titleInp.value = '';
       await fetchAnniversaries();
     } else {
-      showToast(dict.t_anniv_err || 'Lỗi lưu ngày kỷ niệm!', false);
+      const msg = (data && data.error) ? ('Lỗi: ' + data.error) : ((dict.t_anniv_err || 'Lỗi lưu ngày kỷ niệm!') + ` (Mã: ${res.status})`);
+      showToast(msg, false);
     }
   } catch (e) {
-    showToast(dict.t_conn_err, false);
+    showToast((dict.t_conn_err || 'Lỗi kết nối!') + ': ' + e.message, false);
   }
 }
 
 async function deleteAnniversary(idx) {
   const dict = getDict();
   try {
-    const res = await fetch(`/api/anniversaries/delete?i=${idx}`);
-    if (res.ok) {
+    const res = await fetch(`/api/anniversaries/delete?i=${idx}&_t=${Date.now()}`, { method: 'POST', cache: 'no-store' });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data.success) {
       showToast(dict.t_anniv_del || 'Đã xóa!');
       await fetchAnniversaries();
     } else {
-      showToast(dict.t_anniv_err || 'Lỗi xóa!', false);
+      const msg = (data && data.error) ? ('Lỗi: ' + data.error) : (dict.t_anniv_err || 'Lỗi xóa!');
+      showToast(msg, false);
     }
   } catch (e) {
     showToast(dict.t_conn_err, false);
@@ -1931,6 +1785,50 @@ async function deleteAnniversary(idx) {
 </body>
 </html>
 )rawliteral";
+
+static String urlDecode(const String& str) {
+    String decoded = "";
+    decoded.reserve(str.length());
+    for (size_t i = 0; i < str.length(); i++) {
+        if (str[i] == '%' && i + 2 < str.length()) {
+            char c1 = str[i + 1];
+            char c2 = str[i + 2];
+            auto hexVal = [](char c) -> int {
+                if (c >= '0' && c <= '9') return c - '0';
+                if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+                if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+                return -1;
+            };
+            int h1 = hexVal(c1);
+            int h2 = hexVal(c2);
+            if (h1 >= 0 && h2 >= 0) {
+                uint8_t b = (uint8_t)((h1 << 4) | h2);
+                decoded += (char)b;
+                i += 2;
+                continue;
+            }
+        } else if (str[i] == '+') {
+            decoded += ' ';
+            continue;
+        }
+        decoded += str[i];
+    }
+    return decoded;
+}
+
+static void safeAsciiTrim(String& s) {
+    int start = 0;
+    while (start < (int)s.length() && (s[start] == ' ' || s[start] == '\t' || s[start] == '\r' || s[start] == '\n')) {
+        start++;
+    }
+    int end = (int)s.length() - 1;
+    while (end >= start && (s[end] == ' ' || s[end] == '\t' || s[end] == '\r' || s[end] == '\n')) {
+        end--;
+    }
+    if (start > 0 || end < (int)s.length() - 1) {
+        s = (end >= start) ? s.substring(start, end + 1) : "";
+    }
+}
 
 WebDashboard::WebDashboard()
     : _server(80),
@@ -2002,7 +1900,11 @@ void WebDashboard::update() {
 void WebDashboard::_setupRoutes() {
   // ── GET /: Serve mobile dashboard ──────────────────────────────
   _server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
-    request->send_P(200, "text/html", INDEX_HTML);
+    AsyncWebServerResponse *response = request->beginResponse_P(200, "text/html", INDEX_HTML);
+    response->addHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    response->addHeader("Pragma", "no-cache");
+    response->addHeader("Expires", "0");
+    request->send(response);
   });
 
   // ── GET /manifest.json: PWA Web App Manifest ──────────────────
@@ -2231,6 +2133,7 @@ void WebDashboard::_setupRoutes() {
       uint8_t val = (uint8_t)request->getParam("val")->value().toInt();
       hardware.setAutoBrightness(false);
       hardware.setBacklight(val);
+      if (val > 0) hardware.extendManualWake();
       display.triggerRender();
       request->send(200, "application/json", "{\"success\":true}");
     } else {
@@ -2391,42 +2294,94 @@ void WebDashboard::_setupRoutes() {
     request->send(200, "application/json", res);
   });
 
-  // ── GET /api/anniversaries/add?d=1&m=6&l=0&t=... ──────────────────
-  _server.on("/api/anniversaries/add", HTTP_GET, [](AsyncWebServerRequest *request) {
-    if (!request->hasParam("d") || !request->hasParam("m") || !request->hasParam("t")) {
-      request->send(400, "application/json", "{\"error\":\"Missing d/m/t params\"}");
+  // ── GET & POST /api/anniversaries/add: Add personal anniversary ──
+  auto addAnnivHandler = [](AsyncWebServerRequest *request) {
+    uint8_t day = 0, month = 0;
+    bool isLunar = false;
+    String titleRaw = "";
+
+    // Safely extract parameters from GET query or POST body
+    for (size_t i = 0; i < request->params(); i++) {
+        const AsyncWebParameter* p = request->getParam(i);
+        if (!p) continue;
+        String name = p->name();
+        String val = p->value();
+        if (name == "d" || name == "day") day = (uint8_t)val.toInt();
+        else if (name == "m" || name == "month") month = (uint8_t)val.toInt();
+        else if (name == "l" || name == "isLunar") isLunar = (val == "1" || val == "true");
+        else if (name == "t" || name == "title") titleRaw = val;
+    }
+
+    String title = urlDecode(titleRaw);
+    safeAsciiTrim(title);
+
+    if (title.length() == 0) {
+      title = (getLanguage() == LANG_EN) ? "Special Anniversary" : "Kỷ niệm đặc biệt";
+    }
+
+    if (day < 1 || day > 31 || month < 1 || month > 12) {
+      Serial.printf("[WebDashboard] Add anniversary rejected: day=%d, month=%d, titleRaw='%s'\n", day, month, titleRaw.c_str());
+      AsyncWebServerResponse *res = request->beginResponse(400, "application/json", "{\"success\":false,\"error\":\"Ngày hoặc tháng không hợp lệ (1-31, 1-12)\"}");
+      res->addHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+      request->send(res);
       return;
     }
-    uint8_t day   = (uint8_t)request->getParam("d")->value().toInt();
-    uint8_t month = (uint8_t)request->getParam("m")->value().toInt();
-    bool    isLunar = request->hasParam("l") ? (request->getParam("l")->value() == "1") : false;
-    String  title = request->getParam("t")->value();
 
-    if (day < 1 || day > 31 || month < 1 || month > 12 || title.length() == 0) {
-      request->send(400, "application/json", "{\"error\":\"Invalid day/month or empty title\"}");
+    if (anniversaryMgr.getCount() >= MAX_ANNIVERSARIES) {
+      AsyncWebServerResponse *res = request->beginResponse(400, "application/json", "{\"success\":false,\"error\":\"Đã đạt giới hạn tối đa 32 ngày kỷ niệm!\"}");
+      res->addHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+      request->send(res);
       return;
     }
 
     bool ok = anniversaryMgr.addItem(day, month, isLunar, title.c_str());
-    if (ok) {
-      request->send(200, "application/json", "{\"success\":true}");
-    } else {
-      request->send(500, "application/json", "{\"error\":\"Full or invalid input\"}");
-    }
-  });
+    Serial.printf("[WebDashboard] Add anniversary: %d/%d (%s) - '%s' -> %s (total: %d)\n",
+                  day, month, isLunar ? "AL" : "DL", title.c_str(), ok ? "OK" : "FAIL", anniversaryMgr.getCount());
 
-  // ── GET /api/anniversaries/delete?i=X ─────────────────────────────
-  _server.on("/api/anniversaries/delete", HTTP_GET, [](AsyncWebServerRequest *request) {
-    if (!request->hasParam("i")) {
-      request->send(400, "application/json", "{\"error\":\"Missing i param\"}");
+    if (ok) {
+      display.resetTickerCache();
+      display.triggerRender();
+      AsyncWebServerResponse *res = request->beginResponse(200, "application/json", "{\"success\":true}");
+      res->addHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+      request->send(res);
+    } else {
+      AsyncWebServerResponse *res = request->beginResponse(500, "application/json", "{\"success\":false,\"error\":\"Không thể ghi vào bộ nhớ flash NVS\"}");
+      res->addHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+      request->send(res);
+    }
+  };
+  _server.on("/api/anniversaries/add", HTTP_GET, addAnnivHandler);
+  _server.on("/api/anniversaries/add", HTTP_POST, addAnnivHandler);
+
+  // ── GET & POST /api/anniversaries/delete?i=X ───────────────────────
+  auto delAnnivHandler = [](AsyncWebServerRequest *request) {
+    uint8_t idx = 255;
+    for (size_t i = 0; i < request->params(); i++) {
+        const AsyncWebParameter* p = request->getParam(i);
+        if (p && (p->name() == "i" || p->name() == "index")) {
+            idx = (uint8_t)p->value().toInt();
+            break;
+        }
+    }
+    if (idx == 255) {
+      AsyncWebServerResponse *res = request->beginResponse(400, "application/json", "{\"success\":false,\"error\":\"Missing i param\"}");
+      res->addHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+      request->send(res);
       return;
     }
-    uint8_t idx = (uint8_t)request->getParam("i")->value().toInt();
     bool ok = anniversaryMgr.deleteItem(idx);
     if (ok) {
-      request->send(200, "application/json", "{\"success\":true}");
+      display.resetTickerCache();
+      display.triggerRender();
+      AsyncWebServerResponse *res = request->beginResponse(200, "application/json", "{\"success\":true}");
+      res->addHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+      request->send(res);
     } else {
-      request->send(400, "application/json", "{\"error\":\"Index out of range\"}");
+      AsyncWebServerResponse *res = request->beginResponse(400, "application/json", "{\"success\":false,\"error\":\"Index out of range\"}");
+      res->addHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+      request->send(res);
     }
-  });
+  };
+  _server.on("/api/anniversaries/delete", HTTP_GET, delAnnivHandler);
+  _server.on("/api/anniversaries/delete", HTTP_POST, delAnnivHandler);
 }
