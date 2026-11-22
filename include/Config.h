@@ -39,15 +39,14 @@
 #define SCREEN_H        240
 
 // ─── Touch type flag ────────────────────────────────────────
-// Define this for boards that use a capacitive touch controller (CST816D).
-// For resistive‑touch boards (original CYD), comment it out.
-// This flag is used to adjust thresholds and enable multitouch where supported.
+// Automatically enabled for NiceMCU 2.8" IPS (CST816D capacitive).
+#ifdef BOARD_NICEMCU_28IPS
 #define USE_CAPACITIVE_TOUCH
+#endif
 
 
 // ─── Defaults ────────────────────────────────────────────────────────
 #define DEFAULT_CITY            "Hanoi"
-#define DEFAULT_OWM_KEY         "bd5e378503939ddaee5f12d250261283"
 #define NTP_SERVER              "pool.ntp.org"
 #define TIMEZONE_OFFSET_SEC     25200   // UTC+7 Vietnam
 

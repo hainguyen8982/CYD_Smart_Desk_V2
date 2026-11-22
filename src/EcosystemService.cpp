@@ -50,7 +50,14 @@ void EcosystemService::_registerPeerMac(const uint8_t *mac) {
 void EcosystemService::begin() {
     if (_initialized) {
         WiFi.setSleep(false);
-        _ensureBroadcastPeer();
+        if (!esp_now_is_peer_exist(_broadcastMac)) {
+            // WiFiManager hoặc quá trình đổi Wi-Fi có thể đã tắt tầng ESP-NOW -> khởi tạo lại
+            if (esp_now_init() == ESP_OK) {
+                esp_now_register_recv_cb(espNowRxCallback);
+            }
+            _ensureBroadcastPeer();
+            _hasPeerMac = false;
+        }
         return;
     }
 
@@ -89,12 +96,14 @@ bool EcosystemService::sendEvent(uint8_t eventType, uint16_t payload) {
     pkt.payload   = payload;
     pkt.checksum  = ecoCalculateChecksum(pkt);
 
-    // Nếu đã biết địa chỉ MAC của EMO Companion -> Gửi Unicast (có 802.11 ACK & tự động phát lại phần cứng)
+    // Nếu đã biết MAC của EMO Companion -> CHỈ gửi Unicast (tránh EMO nhận trùng 2 gói tin!)
+    // Chỉ fallback sang Broadcast nếu Unicast thất bại hoặc chưa ghép nối.
     if (_hasPeerMac && esp_now_is_peer_exist(_peerMac)) {
-        esp_now_send(_peerMac, (const uint8_t *)&pkt, sizeof(pkt));
+        if (esp_now_send(_peerMac, (const uint8_t *)&pkt, sizeof(pkt)) == ESP_OK) {
+            return true;
+        }
     }
 
-    // Đồng thời phát Broadcast để đảm bảo mọi thiết bị trong hệ sinh thái đều nhận được
     esp_err_t res = esp_now_send(_broadcastMac, (const uint8_t *)&pkt, sizeof(pkt));
     return (res == ESP_OK);
 }
@@ -123,9 +132,10 @@ void EcosystemService::onDataReceived(const uint8_t *mac, const uint8_t *data, i
     // Chỉ nhận gói tin từ EMO Companion (0x02)
     if (pkt.senderId != ECO_SENDER_EMO) return;
 
-    // Ghi nhớ địa chỉ MAC của EMO Companion để truyền Unicast tin cậy 100%
-    if (mac) {
-        _registerPeerMac(mac);
+    // Đẩy MAC sang Core 1 để đăng ký peer an toàn (không gọi esp_now_add_peer / Serial trong RX callback Core 0)
+    if (mac && (!_hasPeerMac || memcmp(_peerMac, mac, 6) != 0)) {
+        memcpy(_pendingPeerMac, mac, 6);
+        _hasPendingPeerMac = true;
     }
 
     // Cập nhật mốc thời gian sống ngay lập tức
@@ -141,6 +151,19 @@ void EcosystemService::onDataReceived(const uint8_t *mac, const uint8_t *data, i
 
 void EcosystemService::update() {
     if (!_initialized) return;
+
+    // 0. Đăng ký Unicast Peer an toàn trên Core 1 nếu vừa nhận gói tin từ EMO Companion
+    if (_hasPendingPeerMac) {
+        uint8_t macCopy[6];
+        memcpy(macCopy, _pendingPeerMac, 6);
+        _hasPendingPeerMac = false;
+        _registerPeerMac(macCopy);
+    }
+
+    // Nếu EMO Companion mất tín hiệu > 45s -> xóa cache Unicast để tự Broadcast dò lại
+    if (_hasPeerMac && !isCompanionPaired()) {
+        _hasPeerMac = false;
+    }
 
     // 1. Xử lý các gói tin nhận được từ EMO Companion trên luồng chính Core 1
     while (_rxTail != _rxHead) {

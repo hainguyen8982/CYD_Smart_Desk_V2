@@ -133,6 +133,7 @@ void FinanceService::setCurrencies(const char* c1, const char* c2) {
     if (changed) {
         Serial.printf("[FinanceService] Currencies changed -> Cur1=%s, Cur2=%s\n", _data.cur1Code, _data.cur2Code);
         _saveCache();
+        _lastCacheSaveMs = 0; // Lưu lại ngay khi tải xong tỉ giá cho ngoại tệ mới
         fetchNow(); // Non-blocking background trigger
     }
 }
@@ -170,7 +171,12 @@ void FinanceService::fetchDirect() {
     _lastFetch = millis();
     if (_mutex) xSemaphoreGive(_mutex);
 
-    _saveCache();
+    // Giới hạn ghi NVS tối đa 1 lần / giờ để chống mòn Flash (thay vì 3 lần mỗi 15 phút)
+    unsigned long nowMs = millis();
+    if (_lastCacheSaveMs == 0 || (nowMs - _lastCacheSaveMs >= 3600000UL)) {
+        _saveCache();
+        _lastCacheSaveMs = nowMs;
+    }
 
     Serial.println("[FinanceService] <<< Market data updated & cached successfully!");
     _isFetching = false;
@@ -362,7 +368,6 @@ void FinanceService::_fetchExchangeRates() {
                 Serial.printf("[Finance] ✓ FX: %s=%.0f (%+.2f%%), %s=%.0f (%+.2f%%)\n",
                               cur1, r1, _data.cur1ChangePercent,
                               cur2, r2, _data.cur2ChangePercent);
-                _saveCache();
             }
         }
     } else {
@@ -466,10 +471,7 @@ void FinanceService::_fetchCrypto() {
         }
     }
     http.end();
-
-    if (updated) {
-        _saveCache();
-    }
+    (void)updated;
 }
 
 void FinanceService::_loadCache() {

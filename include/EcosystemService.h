@@ -27,6 +27,8 @@ private:
     uint8_t _broadcastMac[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
     uint8_t _peerMac[6] = {0, 0, 0, 0, 0, 0};
     bool _hasPeerMac = false;
+    uint8_t _pendingPeerMac[6] = {0, 0, 0, 0, 0, 0};
+    volatile bool _hasPendingPeerMac = false;
 
     // Hàng đợi vòng nhẹ (Lock-free Ring Buffer) để đẩy sự kiện từ Callback Core 0 sang Core 1
     static constexpr uint8_t RX_QUEUE_SIZE = 8;

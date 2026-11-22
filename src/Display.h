@@ -40,9 +40,7 @@ public:
     _zen16ScreenValid = false;
   }
   void resetTickerCache() {
-    _cachedTickerMsg = "";
-    _tickerCachedDay = 255;
-    _tickerOffset = 0;
+    _tickerResetPending = true;
     _lastRender = 0;
   }
 
@@ -149,6 +147,7 @@ private:
   int _alarmLastTriggerDay;
   int _alarmLastTriggerMin;
   unsigned long _alarmAutoCloseTime;
+  volatile bool _alarmPopupDirty = false;
   char _alarmMessage[80];
 
   void loadAlarmSettings();
@@ -192,38 +191,39 @@ private:
   unsigned long _lastTickerTick;
   unsigned long _lastPetTick = 0;
   uint8_t _tickerCachedDay;
+  volatile bool _tickerResetPending = false;
   String _cachedTickerMsg;
   void renderClockTicker16(bool forceFull, bool needBody, int todayMday);
 
-    // ── Unified 16-bit Page renderers (ZEN & VIBE modes) ─────
-    void renderPage0_MinimalZen16(bool forceFull);
-    void renderPage0_VibeBento16(bool forceFull);
-    void renderPage1_CalendarZen16();
-    void renderPage2_FinanceZen16();
-    void renderPage3_PomodoroZen16(bool forceFull);
-    void renderPage3_PomodoroVibe16(bool forceFull);
-    void renderPage4_MoodZen16();
-    void renderPage5_SettingsZen16(bool forceFull);
-    void renderSettingsBrightnessBarZen16(bool forceFull);
-    volatile bool _zen16ScreenValid = false;
-    uint8_t _zen16LastPage = 255;
-    uint8_t _zen16LastPopup = 0;
-    uint8_t _zen16LastCurrencyTab = 255;
-    uint8_t _zen16LastThemeIdx = 255;
-    bool _zen16LastMinimalUi = true;
-    bool _zen16LastDock = false;
-    int _zen16LastMin = -1;
-    int16_t _zen16LastCalYear = 0;
-    int8_t _zen16LastCalMonth = 0;
-    uint16_t _zen16LastPomoSec = 65535;
-    uint8_t _zen16LastPomoState = 255;
-    uint8_t _zen16LastPomoMode = 255;
-    bool _zen16LastAlarmEn = false;
-    int _zen16LastBri = -1;
-    bool _zen16LastAutoBri = false;
-    bool _zen16LastWifiOk = false;
-    uint8_t _zen16SetDirty = 0x3F;
-    bool handleTouchSettings(int16_t x, int16_t y);
+  // ── Unified 16-bit Page renderers (ZEN & VIBE modes) ─────
+  void renderPage0_MinimalZen16(bool forceFull);
+  void renderPage0_VibeBento16(bool forceFull);
+  void renderPage1_CalendarZen16();
+  void renderPage2_FinanceZen16();
+  void renderPage3_PomodoroZen16(bool forceFull);
+  void renderPage3_PomodoroVibe16(bool forceFull);
+  void renderPage4_MoodZen16();
+  void renderPage5_SettingsZen16(bool forceFull);
+  void renderSettingsBrightnessBarZen16(bool forceFull);
+  volatile bool _zen16ScreenValid = false;
+  uint8_t _zen16LastPage = 255;
+  uint8_t _zen16LastPopup = 0;
+  uint8_t _zen16LastCurrencyTab = 255;
+  uint8_t _zen16LastThemeIdx = 255;
+  bool _zen16LastMinimalUi = true;
+  bool _zen16LastDock = false;
+  int _zen16LastMin = -1;
+  int16_t _zen16LastCalYear = 0;
+  int8_t _zen16LastCalMonth = 0;
+  uint16_t _zen16LastPomoSec = 65535;
+  uint8_t _zen16LastPomoState = 255;
+  uint8_t _zen16LastPomoMode = 255;
+  bool _zen16LastAlarmEn = false;
+  int _zen16LastBri = -1;
+  bool _zen16LastAutoBri = false;
+  bool _zen16LastWifiOk = false;
+  uint8_t _zen16SetDirty = 0x3F;
+  bool handleTouchSettings(int16_t x, int16_t y);
 
   // ── Smart Dock & Calibration ────────────────────────────
   void renderDock();

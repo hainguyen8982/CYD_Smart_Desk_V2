@@ -276,15 +276,29 @@ void DeskMood::_saveSettings() {
     }
 }
 
-static void drawMemeBitmap160_16bit(TFT_eSPI& tft, int16_t startX, int16_t startY, const uint16_t* bmp) {
-    if (!bmp) return;
-    // Background is pure C_BLACK (0x0000 == MEME_TRANSPARENT_COLOR), so streaming
-    // the full 160x160 RGB565 bitmap directly yields 65,536-color clarity.
+static void drawMemeBitmap160_16bit(TFT_eSPI& tft, int16_t startX, int16_t startY, const MemeRleBitmap* bmp) {
+    if (!bmp || !bmp->palette || !bmp->rle) return;
+    // Stream Palette+RLE8 directly from PROGMEM to 16-bit ST7789/ILI9341 (0 bytes RAM!)
     tft.startWrite();
     tft.setAddrWindow(startX, startY, MEME_BITMAP_W, MEME_BITMAP_H);
-    const uint32_t total = (uint32_t)MEME_BITMAP_W * MEME_BITMAP_H;
-    for (uint32_t i = 0; i < total; i++) {
-        tft.pushColor(pgm_read_word(&bmp[i]));
+    const uint16_t* pal = bmp->palette;
+    const uint8_t*  rle = bmp->rle;
+    uint32_t i = 0;
+    const uint32_t len = bmp->rleSize;
+    while (i < len) {
+        uint8_t ctrl = pgm_read_byte(&rle[i++]);
+        if (ctrl & 0x80) {
+            uint8_t cnt = (ctrl & 0x7F) + 1;
+            uint8_t idx = pgm_read_byte(&rle[i++]);
+            uint16_t col = pgm_read_word(&pal[idx]);
+            tft.pushColor(col, cnt);
+        } else {
+            uint8_t cnt = ctrl + 1;
+            while (cnt--) {
+                uint8_t idx = pgm_read_byte(&rle[i++]);
+                tft.pushColor(pgm_read_word(&pal[idx]));
+            }
+        }
     }
     tft.endWrite();
 }
@@ -300,7 +314,7 @@ void DeskMood::renderPageZen16(TFT_eSPI& tft, VnSprite& spr, const VnFontFace* l
     tft.fillScreen(zenBg);
 
     const int16_t cx = 160;
-    const uint16_t* memeBmp = getMemeBitmap((uint8_t)_pack, (uint8_t)_mood);
+    const MemeRleBitmap* memeBmp = getMemeBitmap((uint8_t)_pack, (uint8_t)_mood);
     drawMemeBitmap160_16bit(tft, 80, 2, memeBmp);
 
     // Top-right Pack Swap button (X=284..312, Y=8..36 -> inside X>=265 && Y<=46)

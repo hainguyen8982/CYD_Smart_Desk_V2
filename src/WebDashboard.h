@@ -31,6 +31,22 @@ private:
     volatile bool  _testStartupRequested;
     volatile bool  _wifiResetRequested;
     unsigned long  _wifiResetTime;
+    volatile bool  _otaRebootRequested = false;
+    unsigned long  _otaRebootTime = 0;
+
+    // Deferred Core 1 UI/Hardware commands (prevents Core 0 async_tcp races)
+    volatile bool    _hasPendingPage = false;
+    volatile uint8_t _pendingPage = 0;
+    volatile uint8_t _pendingPomoAct = 0;   // 1=start, 2=pause, 3=reset, 4=mode
+    volatile uint8_t _pendingPomoMode = 0;
+    volatile uint8_t _pendingScreenCmd = 0; // 1=off, 2=on, 3=toggle
+    volatile bool    _hasPendingAlarm = false;
+    uint8_t          _pendingAlarmH = 7;
+    uint8_t          _pendingAlarmM = 0;
+    bool             _pendingAlarmEn = false;
+    bool             _pendingAlarmHasMsg = false;
+    char             _pendingAlarmMsg[80] = {0};
+
     void           _setupRoutes();
 };
 

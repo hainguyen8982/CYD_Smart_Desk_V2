@@ -55,12 +55,13 @@ void Display::begin() {
   deskPet.begin();     // Load saved Desk Pet mascot from NVS
   deskMood.begin();    // Load saved Desk Mood from NVS
 
-  // Mount LittleFS and ensure clean storage (purge leftover wallpaper if any)
+  // Mount LittleFS briefly to purge leftover legacy wallpaper, then unmount to save RAM
   if (LittleFS.begin(true)) {
     if (LittleFS.exists("/wallpaper.jpg")) {
       LittleFS.remove("/wallpaper.jpg");
       Serial.println("[Display] Purged legacy /wallpaper.jpg");
     }
+    LittleFS.end();
   }
 
 #ifdef BOARD_NICEMCU_28IPS
@@ -82,16 +83,11 @@ void Display::begin() {
                 ESP.getFreeHeap(),
                 heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
 
-  // Allocate sprite: try 16-bit first (~153KB), fallback to 8-bit (~76KB) if
-  // RAM insufficient
-  _spr.setColorDepth(16);
+  // Use 8-bit scratch sprite (~76.8KB) — all ZEN/VIBE typography, Bento cards,
+  // and memes stream directly in true 16-bit RGB565 to _tft! Saves ~76.8KB heap
+  // for rock-solid HTTPS/TLS, AsyncWebServer & OTA stability.
+  _spr.setColorDepth(8);
   void *buf = _spr.createSprite(SCREEN_W, SCREEN_H);
-  if (!buf) {
-    Serial.println("[Display] 16-bit sprite alloc failed (~153KB) -> Fallback "
-                   "to 8-bit (~76KB)...");
-    _spr.setColorDepth(8);
-    buf = _spr.createSprite(SCREEN_W, SCREEN_H);
-  }
 
   if (buf) {
     _sprReady = true;
@@ -425,6 +421,10 @@ void Display::update() {
   if (_activePopup == POPUP_ALARM) {
     _zen16ScreenValid = false;
     _zen16LastPopup = (uint8_t)POPUP_ALARM;
+    if (_alarmPopupDirty) {
+      _alarmPopupDirty = false;
+      renderAlarmPopup();
+    }
     if (_alarmAutoCloseTime > 0 && millis() > _alarmAutoCloseTime) {
       _alarmAutoCloseTime = 0;
       _activePopup = POPUP_NONE;
@@ -843,6 +843,12 @@ void Display::renderClockTicker16(bool forceFull, bool needBody,
   const uint16_t zenGold = RGB565(235, 190, 95);
 
   static Language lastZen16Lang = LANG_VI;
+  if (_tickerResetPending) {
+    _tickerResetPending = false;
+    _cachedTickerMsg = "";
+    _tickerCachedDay = 255;
+    _tickerOffset = 0;
+  }
   if (_tickerCachedDay != todayMday || _cachedTickerMsg.length() == 0 ||
       lastZen16Lang != getLanguage()) {
     _cachedTickerMsg =
@@ -1999,8 +2005,8 @@ void Display::setAlarm(uint8_t h, uint8_t m, bool enabled, const char *msg) {
     strlcpy(_alarmMessage, msg, sizeof(_alarmMessage));
   }
   saveAlarmSettings();
-  if (_activePopup == POPUP_ALARM && _sprReady) {
-    renderAlarmPopup();
+  if (_activePopup == POPUP_ALARM) {
+    _alarmPopupDirty = true;
   }
   _zen16ScreenValid = false;
   _lastRender = 0;
@@ -2030,6 +2036,9 @@ void Display::checkAlarmTick() {
     return;
 
   time_t nowSec = time(NULL);
+  // Chặn báo thức reo nhầm lúc 07:00 khi chưa đồng bộ giờ NTP (epoch 0 + UTC+7 = 07:00)
+  if (nowSec < 1600000000)
+    return;
   struct tm t;
   localtime_r(&nowSec, &t);
 

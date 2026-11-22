@@ -88,6 +88,7 @@ private:
     FinanceData   _data;
     mutable SemaphoreHandle_t _mutex;
     unsigned long _lastFetch;
+    unsigned long _lastCacheSaveMs = 0;
     bool          _isFetching;
 };
 

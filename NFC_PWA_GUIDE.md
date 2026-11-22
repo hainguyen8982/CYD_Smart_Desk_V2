@@ -108,3 +108,9 @@ Mặc định trên iOS, khi quẹt thẻ NFC ghi URL thông thường, Apple s�
    - Một số dòng máy Android đời cũ không hỗ trợ mDNS phân giải tên miền `.local`. Nếu gặp trường hợp này, hãy ghi thẻ NFC bằng **địa chỉ IP trực tiếp** của CYD (ví dụ: `http://192.168.1.150`). Bạn có thể cố định IP của ESP32 trong router WiFi gia đình (DHCP Static Lease).
 3. **Mất icon App trên màn hình chính:**
    - Bạn chỉ cần chạm lại thẻ NFC hoặc vào lại Safari/Chrome để bấm "Thêm vào MH chính" một lần nữa.
+
+---
+
+## 📝 Ghi Chú Thương Mại (Bàn tiếp sau Đợt 1 & Đợt 2)
+- **Vấn đề `.local` trên Android:** Android 11 trở xuống hoặc Android 12+ đang bật Private DNS / VPN / Wi-Fi văn phòng chặn mDNS thường không phân giải được `http://smartdesk.local`.
+- **Giải pháp Cloud Redirector (đề xuất):** Ghi link cố định theo ID máy lên thẻ NFC (`https://desk.<domain>/d/<CHIP_ID>`). Khi ESP32 vào Wi-Fi sẽ gửi IP LAN hiện tại lên Cloudflare Worker / Vercel; điện thoại chạm NFC sẽ nhận `302 Redirect` thẳng sang `http://<LAN_IP>` — chạy 100% trên mọi đời Android/iOS và không cần ghi lại thẻ khi đổi Wi-Fi.
