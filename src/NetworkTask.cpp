@@ -6,6 +6,7 @@
 #include "WeatherService.h"
 #include "FinanceService.h"
 #include "EcosystemService.h"
+#include "WebDashboard.h"
 #include "Display.h"
 #include "Config.h"
 #include <HTTPClient.h>
@@ -16,6 +17,7 @@ static void reportNfcLanIpIfNeeded() {
 
     static String lastReportedIp = "";
     static unsigned long lastReportMs = 0;
+    static unsigned long lastAttemptMs = 0;
     String curIp = WiFi.localIP().toString();
     unsigned long now = millis();
 
@@ -23,6 +25,13 @@ static void reportNfcLanIpIfNeeded() {
     if (curIp == lastReportedIp && lastReportMs != 0 && (now - lastReportMs < 21600000UL)) {
         return;
     }
+    // Backoff 5 phút nếu lần thử trước thất bại (tránh bão retry 500ms khi server sập)
+    if (curIp == lastReportedIp || (lastAttemptMs != 0 && (now - lastAttemptMs < 300000UL))) {
+        if (lastReportMs == 0 || curIp != lastReportedIp) {
+            if (lastAttemptMs != 0 && (now - lastAttemptMs < 300000UL)) return;
+        }
+    }
+    lastAttemptMs = now;
 
     char devId[12], mdnsHost[24];
     EcosystemService::getDeviceId(devId, sizeof(devId));
@@ -97,6 +106,12 @@ void NetworkTask::_taskWorker(void* arg) {
     vTaskDelay(pdMS_TO_TICKS(1000));
 
     while (true) {
+        // Khi đang nạp OTA: tạm dừng mọi tác vụ mạng trên Core 0 để nhường RAM & Flash
+        if (webDashboard.isOtaInProgress()) {
+            vTaskDelay(pdMS_TO_TICKS(500));
+            continue;
+        }
+
         if (WiFi.status() == WL_CONNECTED) {
             // Báo IP LAN lên NFC Cloud Redirector (chỉ chạy khi NFC_REDIRECTOR_URL được cấu hình)
             reportNfcLanIpIfNeeded();

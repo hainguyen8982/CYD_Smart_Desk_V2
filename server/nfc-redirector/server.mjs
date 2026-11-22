@@ -7,6 +7,7 @@ const DATA_DIR = process.env.DATA_DIR || "/app/data";
 const DATA_FILE = path.join(DATA_DIR, "devices.json");
 const CHECKIN_SECRET = process.env.CHECKIN_SECRET || "smartdesk-2026";
 const ADMIN_KEY = process.env.ADMIN_KEY || "";
+const MAX_DEVICES = Number(process.env.MAX_DEVICES || 10000);
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
 
@@ -22,18 +23,23 @@ try {
 }
 
 let saveTimer = null;
+function flushSaveSync() {
+  if (saveTimer) {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+  }
+  try {
+    const tmp = DATA_FILE + ".tmp";
+    fs.writeFileSync(tmp, JSON.stringify(devices, null, 2), "utf8");
+    fs.renameSync(tmp, DATA_FILE);
+  } catch (err) {
+    console.error("[Store] Failed to save devices.json:", err.message);
+  }
+}
+
 function scheduleSave() {
   if (saveTimer) return;
-  saveTimer = setTimeout(() => {
-    saveTimer = null;
-    try {
-      const tmp = DATA_FILE + ".tmp";
-      fs.writeFileSync(tmp, JSON.stringify(devices, null, 2), "utf8");
-      fs.renameSync(tmp, DATA_FILE);
-    } catch (err) {
-      console.error("[Store] Failed to save devices.json:", err.message);
-    }
-  }, 500);
+  saveTimer = setTimeout(flushSaveSync, 500);
 }
 
 // Only allow private LAN IPv4 addresses (prevents open-redirect abuse)
@@ -192,6 +198,18 @@ const server = http.createServer((req, res) => {
           return sendJson(res, 400, { ok: false, error: "invalid_lan_ip" });
         }
 
+        if (!devices[id]) {
+          const keys = Object.keys(devices);
+          if (keys.length >= MAX_DEVICES) {
+            let oldestKey = keys[0];
+            for (const k of keys) {
+              if ((devices[k].updatedAt || 0) < (devices[oldestKey].updatedAt || 0)) {
+                oldestKey = k;
+              }
+            }
+            delete devices[oldestKey];
+          }
+        }
         devices[id] = { ip, mdns, fw, updatedAt: Date.now() };
         scheduleSave();
         console.log(`[Checkin] ${id} -> ${ip}${mdns ? ` (${mdns})` : ""}`);
@@ -204,7 +222,13 @@ const server = http.createServer((req, res) => {
   }
 
   if (req.method === "GET" && pathname.startsWith("/d/")) {
-    const id = decodeURIComponent(pathname.slice(3)).replace(/\/+$/, "").toUpperCase();
+    let id = "";
+    try {
+      id = decodeURIComponent(pathname.slice(3)).replace(/\/+$/, "").toUpperCase();
+    } catch {
+      res.writeHead(400, { "Content-Type": "text/plain; charset=utf-8" });
+      return res.end("Invalid Device ID");
+    }
     if (!isValidDeviceId(id)) {
       res.writeHead(400, { "Content-Type": "text/plain; charset=utf-8" });
       return res.end("Invalid Device ID");
@@ -233,3 +257,10 @@ const server = http.createServer((req, res) => {
 server.listen(PORT, "0.0.0.0", () => {
   console.log(`[SmartDesk NFC Redirector] Listening on :${PORT} (data: ${DATA_FILE})`);
 });
+
+for (const sig of ["SIGTERM", "SIGINT"]) {
+  process.on(sig, () => {
+    flushSaveSync();
+    server.close(() => process.exit(0));
+  });
+}

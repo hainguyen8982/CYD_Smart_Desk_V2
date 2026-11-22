@@ -4,12 +4,15 @@ services:
     container_name: smartdesk-nfc-redirector
     restart: unless-stopped
     ports:
-      - "${HOST_PORT:-3080}:3000"
+      - "127.0.0.1:${HOST_PORT:-3080}:3000"
     environment:
       - PORT=3000
       - DATA_DIR=/app/data
       - CHECKIN_SECRET=${CHECKIN_SECRET:-smartdesk-2026}
       - ADMIN_KEY=${ADMIN_KEY:-}
     volumes:
-      - ./data:/app/data
+      - nfc_data:/app/data
     mem_limit: 128m
+
+volumes:
+  nfc_data:

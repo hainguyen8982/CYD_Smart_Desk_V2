@@ -212,6 +212,12 @@ void WebDashboard::update() {
     delay(200);
     ESP.restart();
   }
+  if (_otaInProgress && !_otaRebootRequested &&
+      (millis() - _otaLastChunkMs >= 15000UL)) {
+    _otaInProgress = false;
+    Update.abort();
+    Serial.println("[OTA] Aborted: client disconnected (15s idle timeout)");
+  }
   if (_otaRebootRequested && (millis() - _otaRebootTime >= 800)) {
     _otaRebootRequested = false;
     Serial.println("[OTA] Rebooting into new firmware...");
@@ -765,6 +771,7 @@ void WebDashboard::_setupRoutes() {
       },
       [this](AsyncWebServerRequest *request, String filename, size_t index,
              uint8_t *data, size_t len, bool final) {
+        _otaLastChunkMs = millis();
         if (!index) {
           _otaInProgress = true;
           size_t expectedSize = UPDATE_SIZE_UNKNOWN;

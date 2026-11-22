@@ -33,6 +33,7 @@ private:
     volatile bool  _wifiResetRequested;
     unsigned long  _wifiResetTime;
     volatile bool  _otaInProgress = false;
+    volatile unsigned long _otaLastChunkMs = 0;
     volatile bool  _otaRebootRequested = false;
     unsigned long  _otaRebootTime = 0;
 
