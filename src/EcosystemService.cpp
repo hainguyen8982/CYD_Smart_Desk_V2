@@ -3,10 +3,87 @@
 #include "DeskMood.h"
 #include "HardwareManager.h"
 #include "WeatherService.h"
+#include <Preferences.h>
 #include <WiFi.h>
 #include <math.h>
 
 EcosystemService ecosystem;
+
+void EcosystemService::getDeviceId(char* out, size_t len) {
+    uint64_t mac = ESP.getEfuseMac();
+    // 3 byte cuối của eFuse MAC -> 6 ký tự HEX viết hoa duy nhất cho từng máy (vd: A3F91C)
+    uint8_t b3 = (uint8_t)((mac >> 24) & 0xFF);
+    uint8_t b4 = (uint8_t)((mac >> 32) & 0xFF);
+    uint8_t b5 = (uint8_t)((mac >> 40) & 0xFF);
+    snprintf(out, len, "%02X%02X%02X", b3, b4, b5);
+}
+
+void EcosystemService::getMdnsHost(char* out, size_t len) {
+    char id[12];
+    getDeviceId(id, sizeof(id));
+    // Dùng 4 ký tự cuối dạng thường: smartdesk-f91c (tránh trùng mDNS nhiều máy trong văn phòng)
+    char tail[5];
+    for (int i = 0; i < 4; i++) {
+        tail[i] = (char)tolower((unsigned char)id[i + 2]);
+    }
+    tail[4] = '\0';
+    snprintf(out, len, "smartdesk-%s", tail);
+}
+
+void EcosystemService::getPairedMacStr(char* out, size_t len) const {
+    if (!_isPairedLocked) {
+        strlcpy(out, "", len);
+        return;
+    }
+    snprintf(out, len, "%02X:%02X:%02X:%02X:%02X:%02X",
+             _pairedMac[0], _pairedMac[1], _pairedMac[2],
+             _pairedMac[3], _pairedMac[4], _pairedMac[5]);
+}
+
+void EcosystemService::_loadPairedMac() {
+    Preferences prefs;
+    if (prefs.begin("cyd_eco", true)) {
+        if (prefs.getBytesLength("mac") == 6) {
+            prefs.getBytes("mac", _pairedMac, 6);
+            _isPairedLocked = true;
+            Serial.printf("[Ecosystem] Loaded locked EMO MAC: %02X:%02X:%02X:%02X:%02X:%02X\n",
+                          _pairedMac[0], _pairedMac[1], _pairedMac[2],
+                          _pairedMac[3], _pairedMac[4], _pairedMac[5]);
+        }
+        prefs.end();
+    }
+}
+
+void EcosystemService::_savePairedMac() {
+    Preferences prefs;
+    if (prefs.begin("cyd_eco", false)) {
+        if (_isPairedLocked) {
+            prefs.putBytes("mac", _pairedMac, 6);
+        } else {
+            prefs.remove("mac");
+        }
+        prefs.end();
+    }
+}
+
+void EcosystemService::startPairingMode(uint32_t durationMs) {
+    _pairingMode = true;
+    _pairingEndMs = millis() + durationMs;
+    _lastPairReqMs = 0;
+    Serial.printf("[Ecosystem] Pairing Mode ACTIVE for %lus — waiting for EMO Companion...\n",
+                  (unsigned long)(durationMs / 1000));
+}
+
+void EcosystemService::unpairCompanion() {
+    _pairingMode = false;
+    _isPairedLocked = false;
+    _hasPeerMac = false;
+    _lastCompanionHeartbeat = 0;
+    memset(_pairedMac, 0, 6);
+    memset(_peerMac, 0, 6);
+    _savePairedMac();
+    Serial.println("[Ecosystem] Unpaired EMO Companion (MAC lock cleared)");
+}
 
 static void espNowRxCallback(const uint8_t *mac, const uint8_t *data, int len) {
     ecosystem.onDataReceived(mac, data, len);
@@ -75,10 +152,17 @@ void EcosystemService::begin() {
 
     esp_now_register_recv_cb(espNowRxCallback);
     _ensureBroadcastPeer();
+    _loadPairedMac();
+    if (_isPairedLocked) {
+        _registerPeerMac(_pairedMac);
+    }
 
     _initialized = true;
     _lastPingSent = millis();
-    Serial.println("[Ecosystem] ESP-NOW Master Station initialized (CYD SmartDesk V2)");
+    char devId[12];
+    getDeviceId(devId, sizeof(devId));
+    Serial.printf("[Ecosystem] ESP-NOW Master Station initialized | DeviceID=%s | Locked=%d\n",
+                  devId, _isPairedLocked ? 1 : 0);
 
     // Gửi gói tin Heartbeat đầu tiên để dò tìm EMO Companion trên bàn
     sendEvent(EVT_HEARTBEAT, 0);
@@ -96,8 +180,16 @@ bool EcosystemService::sendEvent(uint8_t eventType, uint16_t payload) {
     pkt.payload   = payload;
     pkt.checksum  = ecoCalculateChecksum(pkt);
 
-    // Nếu đã biết MAC của EMO Companion -> CHỈ gửi Unicast (tránh EMO nhận trùng 2 gói tin!)
-    // Chỉ fallback sang Broadcast nếu Unicast thất bại hoặc chưa ghép nối.
+    // Nếu đã khóa cặp với 1 EMO cụ thể -> CHỈ gửi Unicast tới đúng MAC đó (không bao giờ Broadcast sang bàn khác!)
+    if (_isPairedLocked) {
+        if (!_hasPeerMac || !esp_now_is_peer_exist(_pairedMac)) {
+            _registerPeerMac(_pairedMac);
+        }
+        esp_err_t res = esp_now_send(_pairedMac, (const uint8_t *)&pkt, sizeof(pkt));
+        return (res == ESP_OK);
+    }
+
+    // Chưa khóa cặp: ưu tiên Unicast nếu đã biết MAC tạm, fallback Broadcast
     if (_hasPeerMac && esp_now_is_peer_exist(_peerMac)) {
         if (esp_now_send(_peerMac, (const uint8_t *)&pkt, sizeof(pkt)) == ESP_OK) {
             return true;
@@ -132,8 +224,19 @@ void EcosystemService::onDataReceived(const uint8_t *mac, const uint8_t *data, i
     // Chỉ nhận gói tin từ EMO Companion (0x02)
     if (pkt.senderId != ECO_SENDER_EMO) return;
 
-    // Đẩy MAC sang Core 1 để đăng ký peer an toàn (không gọi esp_now_add_peer / Serial trong RX callback Core 0)
-    if (mac && (!_hasPeerMac || memcmp(_peerMac, mac, 6) != 0)) {
+    // Lọc chống nhiễu văn phòng: nếu đã khóa cặp MAC và không ở Pairing Mode -> bỏ qua 100% MAC lạ!
+    if (_isPairedLocked && !_pairingMode) {
+        if (!mac || memcmp(mac, _pairedMac, 6) != 0) {
+            return;
+        }
+    }
+
+    // Nếu đang ở Pairing Mode -> nhận EMO đầu tiên phản hồi (PAIR_ACK hoặc HEARTBEAT) để khóa cứng MAC trên Core 1
+    if (_pairingMode && mac && (pkt.eventType == EVT_PAIR_ACK || pkt.eventType == EVT_HEARTBEAT || pkt.eventType == EVT_HEARTBEAT_ACK)) {
+        memcpy(_pendingPeerMac, mac, 6);
+        _pendingPairLock = true;
+        _hasPendingPeerMac = true;
+    } else if (mac && (!_hasPeerMac || memcmp(_peerMac, mac, 6) != 0)) {
         memcpy(_pendingPeerMac, mac, 6);
         _hasPendingPeerMac = true;
     }
@@ -156,12 +259,39 @@ void EcosystemService::update() {
     if (_hasPendingPeerMac) {
         uint8_t macCopy[6];
         memcpy(macCopy, _pendingPeerMac, 6);
+        bool shouldLock = _pendingPairLock;
         _hasPendingPeerMac = false;
+        _pendingPairLock = false;
         _registerPeerMac(macCopy);
+        if (shouldLock) {
+            memcpy(_pairedMac, macCopy, 6);
+            _isPairedLocked = true;
+            _pairingMode = false;
+            _savePairedMac();
+            Serial.printf("[Ecosystem] LOCKED pair with EMO MAC: %02X:%02X:%02X:%02X:%02X:%02X\n",
+                          macCopy[0], macCopy[1], macCopy[2], macCopy[3], macCopy[4], macCopy[5]);
+            sendEvent(EVT_PAIR_ACK, 0);
+            broadcastWeatherSync();
+        }
     }
 
-    // Nếu EMO Companion mất tín hiệu > 45s -> xóa cache Unicast để tự Broadcast dò lại
-    if (_hasPeerMac && !isCompanionPaired()) {
+    // Xử lý Pairing Mode (phát Broadcast EVT_PAIR_REQ mỗi 1.5s trong 30 giây)
+    uint32_t now = millis();
+    if (_pairingMode) {
+        if ((int32_t)(now - _pairingEndMs) >= 0) {
+            _pairingMode = false;
+            Serial.println("[Ecosystem] Pairing Mode timed out (30s)");
+        } else if (now - _lastPairReqMs >= 1500) {
+            _lastPairReqMs = now;
+            EcosystemPacket pkt = { ECO_MAGIC, ECO_SENDER_CYD, EVT_PAIR_REQ, 0, 0 };
+            pkt.checksum = ecoCalculateChecksum(pkt);
+            _ensureBroadcastPeer();
+            esp_now_send(_broadcastMac, (const uint8_t *)&pkt, sizeof(pkt));
+        }
+    }
+
+    // Nếu chưa khóa cặp và EMO mất tín hiệu > 45s -> xóa cache Unicast tạm để tự Broadcast dò lại
+    if (!_isPairedLocked && _hasPeerMac && !isCompanionPaired()) {
         _hasPeerMac = false;
     }
 
@@ -173,7 +303,6 @@ void EcosystemService::update() {
     }
 
     // 2. Phát nhịp tim định kỳ mỗi 15 giây để tự động nhận diện và giữ kết nối
-    uint32_t now = millis();
     if (now - _lastPingSent >= PING_INTERVAL_MS) {
         _lastPingSent = now;
         sendEvent(EVT_HEARTBEAT, 0);

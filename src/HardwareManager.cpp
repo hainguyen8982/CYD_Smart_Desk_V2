@@ -600,50 +600,71 @@ void HardwareManager::playAlarmMelody(uint8_t idx) {
         dacDisable(PIN_SPEAKER);
         _dacAtMidpoint = false;
     }
-    uint8_t m = (idx <= ALARM_MELODY_GENTLE) ? idx : _alarmMelody;
-    switch (m) {
-        case ALARM_MELODY_CLASSIC: {
-            // Rapid energetic triple-beep (êm ấm qua bộ điều chế LEDC playSoftTone)
-            for (int i = 0; i < 3; i++) {
-                playSoftTone(2200, 65, 48, false);
-                delay(25);
-            }
-            break;
+    _melodyIdx = (idx <= ALARM_MELODY_GENTLE) ? idx : _alarmMelody;
+    _melodyStep = 0;
+    _melodyNoteOn = false;
+    _melodyNextMs = 0;
+    _melodyActive = true;
+    updateSound(); // Phát nốt đầu tiên ngay lập tức (không chặn loop/cảm ứng!)
+}
+
+void HardwareManager::updateSound() {
+    if (!_melodyActive) return;
+    unsigned long now = millis();
+    if (_melodyNextMs != 0 && (long)(now - _melodyNextMs) < 0) return;
+
+    static const uint16_t classicNotes[] = { 2200, 2200, 2200 };
+    static const uint16_t classicDurs[]  = { 65, 65, 65 };
+    static const uint16_t melodicNotes[] = { 1047, 1319, 1568, 2093, 1568, 2093 };
+    static const uint16_t melodicDurs[]  = { 80, 80, 80, 110, 75, 160 };
+    static const uint16_t cyberNotes[]   = { 880, 1109, 1319, 1760 };
+    static const uint16_t cyberDurs[]    = { 70, 70, 70, 70 };
+    static const uint16_t gentleNotes[]  = { 523, 659, 784, 1047 };
+    static const uint16_t gentleDurs[]   = { 110, 110, 110, 200 };
+
+    const uint16_t* notes = melodicNotes;
+    const uint16_t* durs  = melodicDurs;
+    uint8_t count = 6;
+    uint16_t gapMs = 18;
+    uint8_t maxDuty = 46;
+
+    switch (_melodyIdx) {
+        case ALARM_MELODY_CLASSIC: notes = classicNotes; durs = classicDurs; count = 3; gapMs = 25; maxDuty = 48; break;
+        case ALARM_MELODY_MELODIC: notes = melodicNotes; durs = melodicDurs; count = 6; gapMs = 18; maxDuty = 46; break;
+        case ALARM_MELODY_CYBER:   notes = cyberNotes;   durs = cyberDurs;   count = 4; gapMs = 15; maxDuty = 45; break;
+        case ALARM_MELODY_GENTLE:  notes = gentleNotes;  durs = gentleDurs;  count = 4; gapMs = 20; maxDuty = 44; break;
+    }
+
+    const uint8_t LEDC_CH = 7;
+    if (!_melodyNoteOn) {
+        if (_melodyStep >= count) {
+            _melodyActive = false;
+            stopSound();
+            return;
         }
-        case ALARM_MELODY_MELODIC: {
-            // Joyful ascending chime: C6 (1047), E6 (1319), G6 (1568), C7 (2093)
-            static const uint16_t notes[] = { 1047, 1319, 1568, 2093, 1568, 2093 };
-            static const uint16_t durs[]  = { 80,   80,   80,   110,  75,   160  };
-            for (int i = 0; i < 6; i++) {
-                playSoftTone(notes[i], durs[i], 46, true);
-                delay(18);
-            }
-            break;
-        }
-        case ALARM_MELODY_CYBER: {
-            // Futuristic synth arpeggio: A5 (880), C#6 (1109), E6 (1319), A6 (1760)
-            static const uint16_t notes[] = { 880, 1109, 1319, 1760 };
-            for (int i = 0; i < 4; i++) {
-                playSoftTone(notes[i], 70, 45, true);
-                delay(15);
-            }
-            break;
-        }
-        case ALARM_MELODY_GENTLE: {
-            // Warm morning chime: C5 (523), E5 (659), G5 (784), C6 (1047)
-            static const uint16_t notes[] = { 523, 659, 784, 1047 };
-            static const uint16_t durs[]  = { 110, 110, 110, 200  };
-            for (int i = 0; i < 4; i++) {
-                playSoftTone(notes[i], durs[i], 44, true);
-                delay(20);
-            }
-            break;
+        uint8_t baseDuty = (uint8_t)(((uint16_t)maxDuty * _soundVolume) / 100);
+        if (baseDuty < 2) baseDuty = 2;
+        ledcSetup(LEDC_CH, notes[_melodyStep], 8);
+        ledcAttachPin(PIN_SPEAKER, LEDC_CH);
+        ledcWrite(LEDC_CH, baseDuty);
+        _melodyNoteOn = true;
+        _melodyNextMs = now + durs[_melodyStep];
+    } else {
+        ledcWrite(LEDC_CH, 0);
+        _melodyNoteOn = false;
+        _melodyStep++;
+        if (_melodyStep >= count) {
+            _melodyActive = false;
+            stopSound();
+        } else {
+            _melodyNextMs = now + gapMs;
         }
     }
-    stopSound();
 }
 
 void HardwareManager::stopSound() {
+    _melodyActive = false;
+    _melodyNoteOn = false;
     noTone(PIN_SPEAKER);
     ledcWrite(7, 0);
     ledcDetachPin(PIN_SPEAKER);

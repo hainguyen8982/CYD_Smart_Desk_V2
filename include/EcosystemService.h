@@ -12,6 +12,13 @@ public:
     void broadcastWeatherSync();
 
     bool isCompanionPaired() const;
+    bool isPairedLocked() const { return _isPairedLocked; }
+    bool isPairingMode() const { return _pairingMode; }
+    void startPairingMode(uint32_t durationMs = 30000);
+    void unpairCompanion();
+    void getPairedMacStr(char* out, size_t len) const;
+    static void getDeviceId(char* out, size_t len);
+    static void getMdnsHost(char* out, size_t len);
     const char* getStatusText(bool isEnglish = false) const;
 
     // Callback xử lý gói tin nhận từ tầng Wi-Fi (Core 0)
@@ -27,8 +34,14 @@ private:
     uint8_t _broadcastMac[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
     uint8_t _peerMac[6] = {0, 0, 0, 0, 0, 0};
     bool _hasPeerMac = false;
+    uint8_t _pairedMac[6] = {0, 0, 0, 0, 0, 0};
+    volatile bool _isPairedLocked = false;
+    volatile bool _pairingMode = false;
+    uint32_t _pairingEndMs = 0;
+    uint32_t _lastPairReqMs = 0;
     uint8_t _pendingPeerMac[6] = {0, 0, 0, 0, 0, 0};
     volatile bool _hasPendingPeerMac = false;
+    volatile bool _pendingPairLock = false;
 
     // Hàng đợi vòng nhẹ (Lock-free Ring Buffer) để đẩy sự kiện từ Callback Core 0 sang Core 1
     static constexpr uint8_t RX_QUEUE_SIZE = 8;
@@ -36,6 +49,8 @@ private:
     volatile uint8_t _rxHead = 0;
     volatile uint8_t _rxTail = 0;
 
+    void _loadPairedMac();
+    void _savePairedMac();
     void _ensureBroadcastPeer();
     void _registerPeerMac(const uint8_t *mac);
     void _processPacket(const EcosystemPacket &pkt);

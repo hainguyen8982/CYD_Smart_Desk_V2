@@ -20,6 +20,7 @@ public:
     void requestWiFiPortal() { _portalRequested = true; }
     bool isPortalRequested() const { return _portalRequested; }
     void clearPortalRequest() { _portalRequested = false; }
+    bool isOtaInProgress() const { return _otaInProgress || _otaRebootRequested; }
 
 private:
     AsyncWebServer _server;
@@ -31,6 +32,7 @@ private:
     volatile bool  _testStartupRequested;
     volatile bool  _wifiResetRequested;
     unsigned long  _wifiResetTime;
+    volatile bool  _otaInProgress = false;
     volatile bool  _otaRebootRequested = false;
     unsigned long  _otaRebootTime = 0;
 
@@ -40,6 +42,7 @@ private:
     volatile uint8_t _pendingPomoAct = 0;   // 1=start, 2=pause, 3=reset, 4=mode
     volatile uint8_t _pendingPomoMode = 0;
     volatile uint8_t _pendingScreenCmd = 0; // 1=off, 2=on, 3=toggle
+    volatile uint8_t _pendingEcoCmd = 0;    // 1=pair 30s, 2=unpair
     volatile bool    _hasPendingAlarm = false;
     uint8_t          _pendingAlarmH = 7;
     uint8_t          _pendingAlarmM = 0;

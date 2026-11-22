@@ -138,17 +138,19 @@ void WebDashboard::begin() {
   // Vô hiệu hóa WiFi Modem Sleep để phản hồi Web tức thì (không bị lag/delay sau khi idle)
   WiFi.setSleep(false);
 
-  // Kích hoạt mDNS responder: cho phép truy cập qua http://smartdesk.local/
-  if (MDNS.begin("smartdesk")) {
+  // Kích hoạt mDNS duy nhất theo đuôi MAC (vd: smartdesk-f91c.local) để tránh trùng nhiều máy trong văn phòng
+  char mdnsHost[24], devId[12];
+  EcosystemService::getMdnsHost(mdnsHost, sizeof(mdnsHost));
+  EcosystemService::getDeviceId(devId, sizeof(devId));
+  if (MDNS.begin(mdnsHost)) {
     MDNS.addService("http", "tcp", 80);
-    Serial.println("[mDNS] Responder started at http://smartdesk.local/");
+    Serial.printf("[mDNS] Responder started at http://%s.local/\n", mdnsHost);
   } else {
     Serial.println("[mDNS] Failed to start responder");
   }
 
-  Serial.printf("[WebDashboard] HTTP Server started at http://%s/ (or "
-                "http://smartdesk.local/)\n",
-                WiFi.localIP().toString().c_str());
+  Serial.printf("[WebDashboard] DeviceID=%s | http://%s/ | http://%s.local/\n",
+                devId, WiFi.localIP().toString().c_str(), mdnsHost);
 }
 
 void WebDashboard::stop() {
@@ -179,6 +181,12 @@ void WebDashboard::update() {
     if (cmd == 1) hardware.turnScreenOff();
     else if (cmd == 2) hardware.turnScreenOn();
     else if (cmd == 3) hardware.toggleScreenPower();
+  }
+  if (_pendingEcoCmd != 0) {
+    uint8_t cmd = _pendingEcoCmd;
+    _pendingEcoCmd = 0;
+    if (cmd == 1) ecosystem.startPairingMode(30000);
+    else if (cmd == 2) ecosystem.unpairCompanion();
   }
   if (_hasPendingAlarm) {
     _hasPendingAlarm = false;
@@ -247,7 +255,16 @@ void WebDashboard::_setupRoutes() {
     doc["ip"] = WiFi.localIP().toString();
     doc["rssi"] = WiFi.RSSI();
     doc["freeHeap"] = ESP.getFreeHeap();
+    char devId[12], mdnsHost[24], peerMac[20];
+    EcosystemService::getDeviceId(devId, sizeof(devId));
+    EcosystemService::getMdnsHost(mdnsHost, sizeof(mdnsHost));
+    ecosystem.getPairedMacStr(peerMac, sizeof(peerMac));
+    doc["deviceId"] = devId;
+    doc["mdnsHost"] = String(mdnsHost) + ".local";
     doc["ecoPaired"] = ecosystem.isCompanionPaired();
+    doc["ecoLocked"] = ecosystem.isPairedLocked();
+    doc["ecoPairing"] = ecosystem.isPairingMode();
+    doc["ecoPeerMac"] = peerMac;
     doc["ecoStatus"] = ecosystem.getStatusText(getLanguage() == LANG_EN);
     doc["page"] = display.getPage();
     doc["theme"] = getThemeIndex();
@@ -718,14 +735,27 @@ void WebDashboard::_setupRoutes() {
   _server.on("/api/anniversaries/delete", HTTP_GET, delAnnivHandler);
   _server.on("/api/anniversaries/delete", HTTP_POST, delAnnivHandler);
 
+  // ── POST /api/eco/pair & /api/eco/unpair: Khóa cặp MAC EMO (chống nhiễu văn phòng) ──
+  _server.on("/api/eco/pair", HTTP_POST, [this](AsyncWebServerRequest *request) {
+    _pendingEcoCmd = 1;
+    request->send(200, "application/json", "{\"success\":true}");
+  });
+  _server.on("/api/eco/unpair", HTTP_POST, [this](AsyncWebServerRequest *request) {
+    _pendingEcoCmd = 2;
+    request->send(200, "application/json", "{\"success\":true}");
+  });
+
   // ── POST /api/ota: Web Firmware OTA Update (dual-slot min_spiffs.csv) ──
   _server.on(
       "/api/ota", HTTP_POST,
       [this](AsyncWebServerRequest *request) {
-        bool ok = !Update.hasError();
-        AsyncWebServerResponse *res = request->beginResponse(
-            ok ? 200 : 500, "application/json",
-            ok ? "{\"success\":true}" : "{\"success\":false,\"error\":\"OTA failed\"}");
+        bool ok = !Update.hasError() && Update.isFinished();
+        _otaInProgress = false;
+        String errMsg = ok ? "" : String(Update.errorString());
+        String body = ok ? "{\"success\":true}"
+                         : ("{\"success\":false,\"error\":\"" + errMsg + "\"}");
+        AsyncWebServerResponse *res =
+            request->beginResponse(ok ? 200 : 500, "application/json", body);
         res->addHeader("Connection", "close");
         request->send(res);
         if (ok) {
@@ -733,12 +763,17 @@ void WebDashboard::_setupRoutes() {
           _otaRebootRequested = true;
         }
       },
-      [](AsyncWebServerRequest *request, String filename, size_t index,
-         uint8_t *data, size_t len, bool final) {
+      [this](AsyncWebServerRequest *request, String filename, size_t index,
+             uint8_t *data, size_t len, bool final) {
         if (!index) {
-          Serial.printf("[OTA] Start upload: %s (FreeHeap=%u)\n",
-                        filename.c_str(), ESP.getFreeHeap());
-          if (!Update.begin(UPDATE_SIZE_UNKNOWN, U_FLASH)) {
+          _otaInProgress = true;
+          size_t expectedSize = UPDATE_SIZE_UNKNOWN;
+          if (request->hasParam("size")) {
+            expectedSize = (size_t)request->getParam("size")->value().toInt();
+          }
+          Serial.printf("[OTA] Start: %s (%u B, FreeHeap=%u)\n",
+                        filename.c_str(), (unsigned)expectedSize, ESP.getFreeHeap());
+          if (!Update.begin(expectedSize, U_FLASH)) {
             Update.printError(Serial);
           }
         }
@@ -752,6 +787,7 @@ void WebDashboard::_setupRoutes() {
             Serial.printf("[OTA] Update Success: %u bytes\n", index + len);
           } else {
             Update.printError(Serial);
+            _otaInProgress = false;
           }
         }
       });

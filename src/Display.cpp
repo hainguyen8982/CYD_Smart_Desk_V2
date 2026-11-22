@@ -617,11 +617,14 @@ void Display::drawMinimalWeatherIcon(int16_t cx, int16_t cy,
 
   if (weatherType == WEATHER_CLEAR) {
     if (isNight) {
-      // Crisp minimalist crescent moon outline
-      _spr.fillSmoothCircle(cx, cy, 11, lineCol, bgCol);
-      _spr.fillSmoothCircle(cx, cy, 9, bgCol, lineCol);
-      _spr.fillSmoothCircle(cx + 5, cy - 3, 9, bgCol, bgCol);
-      _spr.drawArc(cx + 5, cy - 3, 9, 7, 130, 290, lineCol, bgCol, true);
+      // Crisp minimalist crescent moon + 2 tiny warm gold stars (zero drawArc artifacts)
+      _spr.fillSmoothCircle(cx - 1, cy, 10, lineCol, bgCol);
+      _spr.fillSmoothCircle(cx + 4, cy - 3, 9, bgCol, bgCol);
+      // Tiny gold 4-point sparkle star top-right
+      _spr.drawFastHLine(cx + 5, cy - 7, 5, sunCol);
+      _spr.drawFastVLine(cx + 7, cy - 9, 5, sunCol);
+      // Second tiny gold star dot
+      _spr.fillCircle(cx + 10, cy - 1, 1, sunCol);
     } else {
       drawOutlineSun(cx, cy, 8);
     }

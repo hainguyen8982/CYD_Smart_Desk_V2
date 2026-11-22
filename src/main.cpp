@@ -98,6 +98,16 @@ void loop() {
     // 2. Auto-adjust backlight according to ambient room light (LDR)
     hardware.updateAutoBrightness();
 
+    // 0. Khi đang nạp OTA: tạm dừng toàn bộ SPI/Display/Network trên Core 1 để tránh đụng Flash cache
+    if (webDashboard.isOtaInProgress()) {
+        webDashboard.update();
+        delay(10);
+        return;
+    }
+
+    // 2.5. Tick non-blocking alarm melody (zero delay() blocking touch!)
+    hardware.updateSound();
+
     // 3. Check touch tap events (wakes screen if asleep, or switches pages/wakes dock)
     uint16_t tx, ty;
     if (touch.checkTap(&tx, &ty)) {

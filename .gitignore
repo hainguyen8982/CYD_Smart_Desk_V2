@@ -1,7 +1,10 @@
 .pio
+.pio_home
+.platformio
 .vscode
 *.bak
 *.log
+*.wav
 scratch/
 __pycache__/
 *.pyc

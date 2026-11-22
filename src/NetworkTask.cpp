@@ -5,8 +5,49 @@
 #include "NetworkTask.h"
 #include "WeatherService.h"
 #include "FinanceService.h"
+#include "EcosystemService.h"
 #include "Display.h"
 #include "Config.h"
+#include <HTTPClient.h>
+
+static void reportNfcLanIpIfNeeded() {
+    if (strlen(NFC_REDIRECTOR_URL) == 0) return;
+    if (WiFi.status() != WL_CONNECTED) return;
+
+    static String lastReportedIp = "";
+    static unsigned long lastReportMs = 0;
+    String curIp = WiFi.localIP().toString();
+    unsigned long now = millis();
+
+    // Chỉ báo IP khi mới kết nối, khi đổi IP LAN, hoặc định kỳ mỗi 6 giờ
+    if (curIp == lastReportedIp && lastReportMs != 0 && (now - lastReportMs < 21600000UL)) {
+        return;
+    }
+
+    char devId[12], mdnsHost[24];
+    EcosystemService::getDeviceId(devId, sizeof(devId));
+    EcosystemService::getMdnsHost(mdnsHost, sizeof(mdnsHost));
+
+    char body[160];
+    snprintf(body, sizeof(body),
+             "{\"id\":\"%s\",\"ip\":\"%s\",\"mdns\":\"%s.local\",\"fw\":\"%s\"}",
+             devId, curIp.c_str(), mdnsHost, FIRMWARE_VERSION_STR);
+
+    HTTPClient http;
+    http.begin(NFC_REDIRECTOR_URL);
+    http.addHeader("Content-Type", "application/json");
+    http.addHeader("X-Api-Key", NFC_CHECKIN_SECRET);
+    http.setTimeout(4000);
+    int code = http.POST((uint8_t*)body, strlen(body));
+    if (code == 200) {
+        lastReportedIp = curIp;
+        lastReportMs = now;
+        Serial.printf("[NFC-Cloud] Checkin OK: %s -> %s\n", devId, curIp.c_str());
+    } else {
+        Serial.printf("[NFC-Cloud] Checkin HTTP %d\n", code);
+    }
+    http.end();
+}
 
 NetworkTask networkTask;
 
@@ -57,6 +98,9 @@ void NetworkTask::_taskWorker(void* arg) {
 
     while (true) {
         if (WiFi.status() == WL_CONNECTED) {
+            // Báo IP LAN lên NFC Cloud Redirector (chỉ chạy khi NFC_REDIRECTOR_URL được cấu hình)
+            reportNfcLanIpIfNeeded();
+
             unsigned long now = millis();
             bool doWeather = self->_triggerWeather || (now - self->_lastWeatherFetch >= WEATHER_FETCH_INTERVAL);
             bool doFinance = self->_triggerFinance || (now - self->_lastFinanceFetch >= FINANCE_FETCH_INTERVAL);

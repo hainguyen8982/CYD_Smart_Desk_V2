@@ -89,6 +89,7 @@ private:
     mutable SemaphoreHandle_t _mutex;
     unsigned long _lastFetch;
     unsigned long _lastCacheSaveMs = 0;
+    int16_t       _fxLastYday = -1;
     bool          _isFetching;
 };
 

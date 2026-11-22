@@ -89,6 +89,7 @@ public:
     void nextAlarmMelody();
     void prevAlarmMelody();
     void playAlarmMelody(uint8_t idx = 0xFF);
+    void updateSound(); // Non-blocking alarm melody state machine (ticked in loop)
     void saveSoundSettings();
 
     // ── Screen Power & Sleep / Office Schedule ─────────────────
@@ -129,6 +130,13 @@ private:
     bool          _dacAtMidpoint;
     unsigned long _lastLdrCheck;
     int           _smoothedLdr;
+
+    // Non-blocking alarm melody state machine (zero delay() while ringing!)
+    bool          _melodyActive = false;
+    uint8_t       _melodyIdx = 0;
+    uint8_t       _melodyStep = 0;
+    bool          _melodyNoteOn = false;
+    unsigned long _melodyNextMs = 0;
 
     // Power & Sleep Schedule State
     bool          _screenOff;

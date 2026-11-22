@@ -483,7 +483,8 @@ input[type=range] { width: 100%; accent-color: var(--accent); height: 6px; borde
         <span data-i18n="sec_wifi_title">Cài đặt Mạng & WiFi</span>
       </div>
       <div style="font-size: 12px; color: var(--text-dim); line-height: 1.7; margin-bottom: 12px;">
-        <div><span data-i18n="wifi_mdns">• Tên miền mDNS: </span><b style="color:var(--accent);">http://smartdesk.local</b></div>
+        <div><span>• Mã máy (NFC ID): </span><b id="deviceIdVal" style="color:#fff;">...</b></div>
+        <div><span data-i18n="wifi_mdns">• Tên miền mDNS: </span><b id="wifiMdnsVal" style="color:var(--accent);">http://smartdesk.local</b></div>
         <div><span data-i18n="wifi_ip_prefix">• Địa chỉ IP hiện tại: </span><span id="wifiIp" style="color:#fff;">...</span><span data-i18n="wifi_rssi_prefix"> (Sóng: </span><span id="wifiRssi">...</span> dBm)</div>
       </div>
 
@@ -523,7 +524,22 @@ input[type=range] { width: 100%; accent-color: var(--accent); height: 6px; borde
     </div>
 
 
-    <!-- 6. Firmware OTA Update Section -->
+    <!-- 6. Ecosystem EMO MAC Pairing Lock Section -->
+    <div class="card">
+      <div class="card-title">
+        <span style="font-size: 18px;">🤖</span>
+        <span>Ghép đôi EMO Companion (Chống nhiễu văn phòng)</span>
+      </div>
+      <div id="ecoPairInfo" style="font-size: 12px; color: var(--text-dim); margin-bottom: 10px; line-height: 1.5;">
+        Chưa khóa cặp MAC (tự dò EMO gần nhất).
+      </div>
+      <div class="grid-2">
+        <button class="btn btn-primary" onclick="startEcoPair()">🔗 Ghép nối EMO (30s)</button>
+        <button class="btn btn-outline" style="border-color:rgba(255,59,48,0.4); color:var(--danger);" onclick="unpairEco()">🔓 Hủy khóa cặp</button>
+      </div>
+    </div>
+
+    <!-- 7. Firmware OTA Update Section -->
     <div class="card">
       <div class="card-title">
         <span style="font-size: 18px;">🚀</span>
@@ -1304,8 +1320,10 @@ async function saveAlarmSettings() {
 
 let isInitialStatusLoaded = false;
 let autoSyncTimer = null;
+let isOtaUploading = false;
 
 async function fetchStatus() {
+  if (isOtaUploading) return;
   try {
     const res = await fetch('/status');
     if (!res.ok) throw new Error('Status fetch failed');
@@ -1351,6 +1369,24 @@ async function fetchStatus() {
 
     if (data.ip) document.getElementById('wifiIp').textContent = data.ip;
     if (data.rssi !== undefined) document.getElementById('wifiRssi').textContent = data.rssi;
+    if (data.deviceId) {
+      const devEl = document.getElementById('deviceIdVal');
+      if (devEl) devEl.textContent = data.deviceId;
+    }
+    if (data.mdnsHost) {
+      const mdnsEl = document.getElementById('wifiMdnsVal');
+      if (mdnsEl) mdnsEl.textContent = 'http://' + data.mdnsHost;
+    }
+    const ecoInfo = document.getElementById('ecoPairInfo');
+    if (ecoInfo) {
+      if (data.ecoPairing) {
+        ecoInfo.innerHTML = '<span style="color:var(--accent); font-weight:700;">📡 Đang mở ghép nối (30s)...</span> Hãy đặt EMO Companion ở cạnh để khóa cặp MAC.';
+      } else if (data.ecoLocked && data.ecoPeerMac) {
+        ecoInfo.innerHTML = `<span style="color:var(--success); font-weight:700;">🔒 Đã khóa cặp 1-1:</span> <code style="color:#fff;">${data.ecoPeerMac}</code> (chống nhiễu máy khác).`;
+      } else {
+        ecoInfo.textContent = 'Chưa khóa cặp MAC (tự dò EMO gần nhất). Bấm "Ghép nối EMO" để khóa cố định 1-1.';
+      }
+    }
 
     if (data.alarmHour !== undefined && data.alarmMinute !== undefined) {
       const hh = String(data.alarmHour).padStart(2, '0');
@@ -1751,6 +1787,19 @@ async function deleteAnniversary(idx) {
   }
 }
 
+function startEcoPair() {
+  fetch('/api/eco/pair', { method: 'POST' })
+    .then(r => { if (r.ok) { showToast('📡 Đã bật Pairing Mode 30 giây!'); fetchStatus(); } })
+    .catch(() => showToast('Lỗi kết nối!', false));
+}
+
+function unpairEco() {
+  if (!confirm('Hủy khóa cặp MAC với EMO Companion hiện tại?')) return;
+  fetch('/api/eco/unpair', { method: 'POST' })
+    .then(r => { if (r.ok) { showToast('🔓 Đã hủy khóa cặp EMO!'); fetchStatus(); } })
+    .catch(() => showToast('Lỗi kết nối!', false));
+}
+
 function uploadOtaFirmware() {
   const inp = document.getElementById('otaFileInput');
   const file = inp && inp.files && inp.files[0];
@@ -1769,7 +1818,9 @@ function uploadOtaFirmware() {
   txt.textContent = 'Đang tải lên 0%...';
 
   const xhr = new XMLHttpRequest();
-  xhr.open('POST', '/api/ota', true);
+  isOtaUploading = true;
+  xhr.timeout = 120000;
+  xhr.open('POST', `/api/ota?size=${file.size}`, true);
   xhr.upload.onprogress = (e) => {
     if (e.lengthComputable) {
       const pct = Math.round((e.loaded / e.total) * 100);
@@ -1778,6 +1829,7 @@ function uploadOtaFirmware() {
     }
   };
   xhr.onload = () => {
+    isOtaUploading = false;
     btn.disabled = false;
     if (xhr.status === 200) {
       bar.style.width = '100%';
@@ -1790,9 +1842,16 @@ function uploadOtaFirmware() {
     }
   };
   xhr.onerror = () => {
+    isOtaUploading = false;
     btn.disabled = false;
     txt.textContent = '❌ Mất kết nối khi nạp OTA';
     showToast('Lỗi kết nối khi nạp OTA!', false);
+  };
+  xhr.ontimeout = () => {
+    isOtaUploading = false;
+    btn.disabled = false;
+    txt.textContent = '❌ Quá thời gian nạp OTA (Timeout)';
+    showToast('Quá thời gian nạp OTA!', false);
   };
   const fd = new FormData();
   fd.append('firmware', file, file.name);

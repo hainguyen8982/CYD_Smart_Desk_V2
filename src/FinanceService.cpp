@@ -285,6 +285,16 @@ void FinanceService::_fetchExchangeRates() {
                 if (_mutex) xSemaphoreTake(_mutex, portMAX_DELAY);
                 _data.usdVndRate = usdToVnd;
 
+                // Kiểm tra qua ngày mới (NTP hợp lệ) -> dịch mảng lịch sử 7 ngày thật cho ngoại tệ
+                time_t nowSec = time(NULL);
+                int16_t curYday = -1;
+                if (nowSec >= 1600000000) {
+                    struct tm tNow;
+                    localtime_r(&nowSec, &tNow);
+                    curYday = (int16_t)tNow.tm_yday;
+                }
+                bool dayRolled = (curYday >= 0 && _fxLastYday >= 0 && curYday != _fxLastYday);
+
                 // 1. Tính toán tỉ giá Ngoại tệ 1 (_data.cur1Code)
                 float r1 = usdToVnd;
                 if (strcmp(_data.cur1Code, "USD") != 0) {
@@ -301,6 +311,9 @@ void FinanceService::_fetchExchangeRates() {
                         _data.cur17d[i] = roundf(r1 * (1.0f + v7_1[i] / 100.0f));
                     }
                 } else {
+                    if (dayRolled) {
+                        for (int i = 0; i < 6; i++) _data.cur17d[i] = _data.cur17d[i + 1];
+                    }
                     _data.cur17d[6] = r1;
                 }
 
@@ -340,7 +353,14 @@ void FinanceService::_fetchExchangeRates() {
                         _data.cur27d[i] = roundf(r2 * (1.0f + v7_2[i] / 100.0f));
                     }
                 } else {
+                    if (dayRolled) {
+                        for (int i = 0; i < 6; i++) _data.cur27d[i] = _data.cur27d[i + 1];
+                    }
                     _data.cur27d[6] = r2;
+                }
+                if (curYday >= 0) {
+                    if (dayRolled) _lastCacheSaveMs = 0; // Lưu NVS ngay khi sang ngày mới
+                    _fxLastYday = curYday;
                 }
 
                 float yest2 = _data.cur27d[5];
@@ -515,6 +535,7 @@ void FinanceService::_loadCache() {
     _data.cur2Max7d = prefs.getFloat("cur2_max", _data.cur2Max7d);
     _data.btcMin7d = prefs.getFloat("btc_min", _data.btcMin7d);
     _data.btcMax7d = prefs.getFloat("btc_max", _data.btcMax7d);
+    _fxLastYday    = prefs.getShort("fx_yday", -1);
 
     // Tính toán lại microbars 5 ngày đồng bộ tuyệt đối từ chuỗi 7 ngày đã tải
     for (int i = 0; i < 5; i++) {
@@ -574,6 +595,7 @@ void FinanceService::_saveCache() {
     prefs.putFloat("cur2_max", d.cur2Max7d);
     prefs.putFloat("btc_min", d.btcMin7d);
     prefs.putFloat("btc_max", d.btcMax7d);
+    prefs.putShort("fx_yday", _fxLastYday);
 
     prefs.end();
 }

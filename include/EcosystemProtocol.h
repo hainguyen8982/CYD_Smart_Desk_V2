@@ -29,7 +29,10 @@ enum EcosystemEventType : uint8_t {
     EVT_MOOD_SYNC       = 0x40,  // Đồng bộ tâm trạng bàn làm việc (payload = MoodType 0..5)
 
     EVT_WEATHER_SYNC    = 0x50,  // Đồng bộ nhiệt độ từ CYD sang EMO (payload = int16_t(roundf(temp * 10.0f)))
-    EVT_HUMIDITY_SYNC   = 0x51   // Đồng bộ độ ẩm & mã WMO (payload = (humidity << 8) | wmoCode)
+    EVT_HUMIDITY_SYNC   = 0x51,  // Đồng bộ độ ẩm & mã WMO (payload = (humidity << 8) | wmoCode)
+
+    EVT_PAIR_REQ        = 0x60,  // Yêu cầu ghép đôi khóa MAC (CYD -> EMO trong Pairing Mode 30s)
+    EVT_PAIR_ACK        = 0x61   // Xác nhận khóa MAC (EMO -> CYD)
 };
 
 // Cấu trúc gói tin nhị phân chuẩn (Ecosystem Packet - 6 bytes đóng gói chặt)

@@ -56,4 +56,10 @@
 #define LDR_CHECK_INTERVAL      500     // 500 ms
 #define DISPLAY_FPS_INTERVAL    33      // ~30 FPS target
 
+// ─── NFC Cloud Redirector (Optional — leave URL empty to disable) ───
+// Example: "https://go.yourdomain.com/api/checkin"
+#define NFC_REDIRECTOR_URL      ""
+#define NFC_CHECKIN_SECRET      "smartdesk-2026"
+#define FIRMWARE_VERSION_STR    "2.4.0"
+
 #endif // CONFIG_H
