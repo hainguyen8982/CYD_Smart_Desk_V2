@@ -57,6 +57,7 @@ typedef struct __attribute__((packed)) {
 
 ## 4. TÀI LIỆU LIÊN QUAN TRONG BỘ SƯU TẬP
 * Kế hoạch chi tiết CYD SmartDesk V2: [CYD_SmartDesk_V2/PROJECT_PLAN.md](file:///D:/Projects_2026/CYD_SmartDesk_V2/PROJECT_PLAN.md)
+* Hướng dẫn sử dụng cho khách hàng & Đóng gói: [CYD_SmartDesk_V2/USER_GUIDE.md](file:///D:/Projects_2026/CYD_SmartDesk_V2/USER_GUIDE.md)
 * Hướng dẫn NFC & PWA: [CYD_SmartDesk_V2/NFC_PWA_GUIDE.md](file:///D:/Projects_2026/CYD_SmartDesk_V2/NFC_PWA_GUIDE.md)
 * Đặc tả phần cứng NiceMCU-32S 2.8" IPS: [NICEMCU_32S_2.8IPS_HARDWARE_SPEC.md](file:///D:/Projects_2026/CYD_SmartDesk_V2/NICEMCU_32S_2.8IPS_HARDWARE_SPEC.md)
 * Bạn đồng hành cảm xúc: [ESP32_TDisplay_Emo_Companion/GEMINI.md](file:///d:/Projects_2026/ESP32_TDisplay_Emo_Companion/GEMINI.md)
