@@ -229,7 +229,8 @@ bool TouchManager::checkTap(uint16_t *x, uint16_t *y) {
         lastPressedTime = now;
         if (!_isTouching) {
             // Ngay khi vừa chạm ngón tay vào màn hình -> NHẬN LỆNH NGAY LẬP TỨC (Press event)
-            if (now - _lastTapTime >= 75) {
+            // Khóa chống nảy (debounce) 180ms giữa 2 lần chạm rời rạc để tránh nhận đúp trên màn cảm ứng điện dung
+            if (now - _lastTapTime >= 180) {
                 _isTouching = true;
                 _touchStartTime = now;
                 _startX = currX;
@@ -274,8 +275,8 @@ bool TouchManager::checkTap(uint16_t *x, uint16_t *y) {
             }
         }
     } else {
-        // Nhấc ngón tay khỏi màn hình đủ 25ms mới reset trạng thái (chống đứt quãng khi kéo trượt)
-        if (_isTouching && (now - lastPressedTime >= 25)) {
+        // Nhấc ngón tay khỏi màn hình đủ 65ms mới reset trạng thái (chống nảy / đứt quãng khi vẽ màn hình 16-bit)
+        if (_isTouching && (now - lastPressedTime >= 65)) {
             _isTouching = false;
         }
     }

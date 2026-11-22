@@ -571,7 +571,7 @@ static const VnGlyph ZEN_FONT_CLOCK_GLYPHS[] PROGMEM = {
     { 0x003A, 12, 45, 23, 6, 38, 12896 },
 };
 
-static const VnFontFace ZEN_FONT_CLOCK = {
+const VnFontFace ZEN_FONT_CLOCK = {
     11, 104, 82, 19,
     ZEN_FONT_CLOCK_GLYPHS, ZEN_FONT_CLOCK_BITMAPS
 };
@@ -708,7 +708,7 @@ static const VnGlyph ZEN_FONT_NUM_GLYPHS[] PROGMEM = {
     { 0x00B0, 10, 10, 12, 1, 5, 2405 },
 };
 
-static const VnFontFace ZEN_FONT_NUM = {
+const VnFontFace ZEN_FONT_NUM = {
     23, 32, 25, 6,
     ZEN_FONT_NUM_GLYPHS, ZEN_FONT_NUM_BITMAPS
 };
@@ -1308,7 +1308,7 @@ static const VnGlyph ZEN_FONT_LIGHT_GLYPHS[] PROGMEM = {
     { 0x25BC, 8, 9, 14, 3, 3, 8527 },
 };
 
-static const VnFontFace ZEN_FONT_LIGHT = {
+const VnFontFace ZEN_FONT_LIGHT = {
     232, 16, 13, 4,
     ZEN_FONT_LIGHT_GLYPHS, ZEN_FONT_LIGHT_BITMAPS
 };

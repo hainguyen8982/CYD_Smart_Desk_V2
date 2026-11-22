@@ -625,16 +625,10 @@ private:
     }
 
     static const VnFontFace* selectFace(const char* s, uint8_t font) {
-        if (font == 1) {
-            return &VN_FONT_SMALL;
+        if (font >= 4) {
+            return hasAlphaOrUTF8(s) ? &ZEN_FONT_LIGHT : &ZEN_FONT_NUM;
         }
-        if (font == 2) {
-            return &VN_FONT_MEDIUM;
-        }
-        if (font == 4) {
-            return hasAlphaOrUTF8(s) ? &VN_FONT_LARGE : nullptr;
-        }
-        return nullptr;
+        return &ZEN_FONT_LIGHT;
     }
 
     // ── Vector icon glyphs for symbols/emoji not present in the bitmap font ──

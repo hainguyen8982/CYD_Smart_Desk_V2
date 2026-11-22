@@ -104,46 +104,38 @@ private:
   VnSprite
       _spr; // Full-screen double-buffer sprite with UTF-8 Vietnamese support
   bool _sprReady;
-  unsigned long _lastRender;
+  volatile unsigned long _lastRender;
 
   // ── Page & Dock State ─────────────────────────────────────
   uint8_t _currentPage;
   bool _dockVisible;
   unsigned long _lastDockActivity;
 
-    // ── Popup Modal State ─────────────────────────────────────
-    enum PopupState {
-        POPUP_NONE = 0,
-        POPUP_WEATHER,
-        POPUP_LUNAR,
-        POPUP_ALARM,
-        POPUP_FINANCE_GOLD,
-        POPUP_FINANCE_CURRENCY
-    };
-    PopupState    _activePopup;
-    uint8_t       _currencyTab;        // 0 = cur1, 1 = cur2, 2 = BTC
-    uint8_t       _settingsTab;        // 0 = Theme, 1 = Sound, 2 = System
-    bool          _settingsSoundIsStartup; // Toggle between Alarm melody and Boot sound on Settings row 4
-    void          renderWeatherPopup();
-    void          renderWeatherPopupZen16();
-    void          renderLunarPopup();
-    void          renderLunarPopupZen16();
-    void          renderAlarmPopup();
-    void          renderAlarmTimeOnly();
-    void          renderAlarmToggleBtnOnly();
-    void          renderAlarmRingingScreen();
-    void          renderAlarmRingingScreenZen16();
-    void          renderFinanceGoldPopup();
-    void          renderFinanceGoldPopupZen16();
-    void          renderFinanceCurrencyPopup();
-    void          renderFinanceCurrencyPopupZen16();
-    void          drawPopupCloseButton(int16_t x = 282, int16_t y = 10);
-    void          drawFinanceSparkline(int16_t x, int16_t y, int16_t w, int16_t h,
-                                       const float* pts, uint8_t count, uint16_t color, bool areaFill);
-    void          drawFinanceMicroBars(int16_t x, int16_t y, int16_t w, int16_t h,
-                                       const float* deltas, uint8_t count);
-    void          drawFinanceBadge(int16_t x, int16_t y, int16_t w, int16_t h,
-                                   const char* text, bool isPositive);
+  // ── Popup Modal State ─────────────────────────────────────
+  enum PopupState {
+    POPUP_NONE = 0,
+    POPUP_WEATHER,
+    POPUP_LUNAR,
+    POPUP_ALARM,
+    POPUP_FINANCE_GOLD,
+    POPUP_FINANCE_CURRENCY
+  };
+  PopupState _activePopup;
+  uint8_t _currencyTab;         // 0 = cur1, 1 = cur2, 2 = BTC
+  uint8_t _settingsTab;         // 0 = Theme, 1 = Sound, 2 = System
+  bool _settingsSoundIsStartup; // Toggle between Alarm melody and Boot sound on
+                                // Settings row 4
+  void renderWeatherPopupZen16();
+  void renderLunarPopupZen16();
+  void renderAlarmPopup();
+  void renderAlarmTimeOnly();
+  void renderAlarmToggleBtnOnly();
+  void renderAlarmRingingScreenZen16();
+  void renderFinanceGoldPopupZen16();
+  void renderFinanceCurrencyPopupZen16();
+  void drawFinanceSparkline(int16_t x, int16_t y, int16_t w, int16_t h,
+                            const float *pts, uint8_t count, uint16_t color,
+                            bool areaFill);
 
   // ── Alarm Engine ──────────────────────────────────────────
   bool _alarmEnabled;
@@ -194,37 +186,31 @@ private:
   void pomoPause();
   void pomoReset();
   void pomoTick();
-  void drawTomatoMascot(int16_t cx, int16_t cy, bool isFocus);
 
   // ── Anniversary & Perpetual Calendar Ticker ──────────────
   int16_t _tickerOffset;
   unsigned long _lastTickerTick;
+  unsigned long _lastPetTick = 0;
   uint8_t _tickerCachedDay;
   String _cachedTickerMsg;
-  void renderPage0Ticker();
+  void renderClockTicker16(bool forceFull, bool needBody, int todayMday);
 
-    // ── Page renderers ───────────────────────────────────────
-    void renderPage0_WeatherClock();
-    void renderPage0_MinimalZen();
+    // ── Unified 16-bit Page renderers (ZEN & VIBE modes) ─────
     void renderPage0_MinimalZen16(bool forceFull);
-    void renderPage1_Calendar();
-    void renderPage1_CalendarZen();
+    void renderPage0_VibeBento16(bool forceFull);
     void renderPage1_CalendarZen16();
-    void renderPage2_Finance();
-    void renderPage2_FinanceZen();
     void renderPage2_FinanceZen16();
-    void renderPage3_Pomodoro();
-    void renderPage3_PomodoroZen();
     void renderPage3_PomodoroZen16(bool forceFull);
-    void renderPage4_Mood();
+    void renderPage3_PomodoroVibe16(bool forceFull);
     void renderPage4_MoodZen16();
-    void renderPage5_Settings();
     void renderPage5_SettingsZen16(bool forceFull);
     void renderSettingsBrightnessBarZen16(bool forceFull);
-    bool _zen16ScreenValid = false;
+    volatile bool _zen16ScreenValid = false;
     uint8_t _zen16LastPage = 255;
     uint8_t _zen16LastPopup = 0;
     uint8_t _zen16LastCurrencyTab = 255;
+    uint8_t _zen16LastThemeIdx = 255;
+    bool _zen16LastMinimalUi = true;
     bool _zen16LastDock = false;
     int _zen16LastMin = -1;
     int16_t _zen16LastCalYear = 0;
@@ -237,7 +223,6 @@ private:
     bool _zen16LastAutoBri = false;
     bool _zen16LastWifiOk = false;
     uint8_t _zen16SetDirty = 0x3F;
-    void renderPage4_Settings() { renderPage5_Settings(); }
     bool handleTouchSettings(int16_t x, int16_t y);
 
   // ── Smart Dock & Calibration ────────────────────────────
@@ -251,29 +236,11 @@ private:
   void drawDockIconTheme(int16_t cx, int16_t cy, bool isActive);
   void drawDockIconPower(int16_t cx, int16_t cy);
 
-  // ── Background & Visual Elements ─────────────────────────
-  void drawBackground();
-  void drawBlob(int16_t cx, int16_t cy, int16_t r, uint16_t color);
-  void drawSparkle(int16_t cx, int16_t cy, int16_t size, uint16_t color);
-  void drawStarDot(int16_t cx, int16_t cy, uint16_t color);
-  void drawGlassCard(int16_t x, int16_t y, int16_t w, int16_t h,
-                     int16_t radius);
-  void drawGlassCardAccent(int16_t x, int16_t y, int16_t w, int16_t h,
-                           int16_t radius, uint16_t accentColor);
-
-  // ── Weather icon drawing ─────────────────────────────────
-  void drawWeatherIcon(int16_t cx, int16_t cy, uint8_t weatherType,
-                       bool isNight);
+  // ── Weather & Moon icon drawing ──────────────────────────
   void drawMinimalWeatherIcon(int16_t cx, int16_t cy, uint8_t weatherType,
                               bool isNight, uint16_t bgCol);
-  void drawSunIcon(int16_t cx, int16_t cy, int16_t r);
-  void drawCloudIcon(int16_t cx, int16_t cy, int16_t w, int16_t h);
-  void drawPartlyCloudyIcon(int16_t cx, int16_t cy);
-  void drawRainIcon(int16_t cx, int16_t cy);
-  void drawStormIcon(int16_t cx, int16_t cy);
   void drawMoonIcon(int16_t cx, int16_t cy, int16_t r, uint8_t lunarDay,
                     uint16_t bgTint = 0);
-  void drawForecastIcon(int16_t cx, int16_t cy, uint8_t weatherType);
 };
 
 extern Display display;

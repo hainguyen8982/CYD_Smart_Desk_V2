@@ -369,7 +369,7 @@ input[type=range] { width: 100%; accent-color: var(--accent); height: 6px; borde
       <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 8px;">Phong cách hiển thị (Clock / Pomodoro / Finance):</div>
       <div class="grid-2" id="uiStyleButtons" style="margin-bottom: 14px;">
         <button class="btn-chip" id="btnStyleZen" onclick="setUiStyle(true)">✨ Minimal Zen</button>
-        <button class="btn-chip" id="btnStyleClassic" onclick="setUiStyle(false)">💎 Classic</button>
+        <button class="btn-chip" id="btnStyleClassic" onclick="setUiStyle(false)">💎 Vibe (Bento)</button>
       </div>
 
       <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 8px;" data-i18n="theme_sub">Bộ sưu tập Giao diện (Theme):</div>
@@ -1109,15 +1109,13 @@ const THEME_NAMES = [
   'Pastel Lavender', 'Nordic Frost', 'Sakura Blossom', 'Emerald Forest'
 ];
 
-let themeDebounce = null;
 function switchTheme(themeId) {
   highlightTheme(themeId);
   const dict = getDict();
   showToast(`${dict.t_theme}${THEME_NAMES[themeId] || themeId}`);
-  clearTimeout(themeDebounce);
-  themeDebounce = setTimeout(() => {
-    fetch(`/api/theme?id=${themeId}`).catch(() => {});
-  }, 100);
+  fetch(`/api/theme?id=${themeId}`).catch(() => {
+    showToast(dict.t_conn_err || 'Lỗi kết nối', false);
+  });
 }
 
 let brightTimeout = null;
@@ -1143,7 +1141,7 @@ function highlightUiStyle(isMinimal) {
 
 function setUiStyle(isMinimal) {
   highlightUiStyle(isMinimal);
-  showToast(isMinimal ? '✨ Đã bật Minimal Zen' : '💎 Đã chuyển Classic');
+  showToast(isMinimal ? '✨ Đã bật Minimal Zen' : '💎 Đã chuyển Vibe (Bento)');
   fetch(`/api/uistyle?minimal=${isMinimal ? 1 : 0}`).catch(() => {});
 }
 

@@ -276,23 +276,6 @@ void DeskMood::_saveSettings() {
     }
 }
 
-static void drawMemeBitmap160(TFT_eSprite& spr, int16_t startX, int16_t startY, const uint16_t* bmp) {
-    if (!bmp) return;
-    for (int r = 0; r < MEME_BITMAP_H; r++) {
-        int16_t py = startY + r;
-        if (py < 0 || py >= 240) continue;
-        int rowIdx = r * MEME_BITMAP_W;
-        for (int c = 0; c < MEME_BITMAP_W; c++) {
-            int16_t px = startX + c;
-            if (px < 0 || px >= 320) continue;
-            uint16_t color = pgm_read_word(&bmp[rowIdx + c]);
-            if (color != MEME_TRANSPARENT_COLOR) {
-                spr.drawPixel(px, py, color);
-            }
-        }
-    }
-}
-
 static void drawMemeBitmap160_16bit(TFT_eSPI& tft, int16_t startX, int16_t startY, const uint16_t* bmp) {
     if (!bmp) return;
     // Background is pure C_BLACK (0x0000 == MEME_TRANSPARENT_COLOR), so streaming
@@ -304,96 +287,6 @@ static void drawMemeBitmap160_16bit(TFT_eSPI& tft, int16_t startX, int16_t start
         tft.pushColor(pgm_read_word(&bmp[i]));
     }
     tft.endWrite();
-}
-
-// ═══════════════════════════════════════════════════════════════════════
-//  RENDER SIGNBOARD (MEME KHỔNG LỒ 160x160 > 2/3 MÀN HÌNH - KHÔNG VÒNG TRÒN)
-// ═══════════════════════════════════════════════════════════════════════
-void DeskMood::renderPage(VnSprite& spr, uint8_t lang, uint16_t themeBg) {
-    // 1. Phông nền toàn màn hình 320x240 sạch sẽ, phẳng hoàn toàn theo Theme
-    spr.fillSprite(themeBg);
-
-    int16_t cx = 160;
-    int16_t cy = 82; // Tâm ảnh: Meme chiếm từ Y=2 đến Y=162 (160px > 2/3 màn hình)
-
-    // 2. IN TRỰC TIẾP HÌNH MEME GỐC KHỔNG LỒ (160x160) VỚI NỀN TRONG SUỐT
-    const uint16_t* memeBmp = getMemeBitmap((uint8_t)_pack, (uint8_t)_mood);
-    drawMemeBitmap160(spr, cx - MEME_BITMAP_W / 2, cy - MEME_BITMAP_H / 2, memeBmp);
-
-    // 2b. NÚT ĐỔI BỘ MEME GÓC TRÊN BÊN PHẢI (ICON 2 MŨI TÊN XOAY TRÒN, 4 GÓC BO TRÒN R=8 MỊN MÀNG)
-    int16_t pBtnW = 28;
-    int16_t pBtnH = 28;
-    int16_t pBtnX = 320 - pBtnW - 8; // X = 284..312 (Cách xa meme > 44px, 100% không đè lên tranh)
-    int16_t pBtnY = 8;
-    int16_t pBtnR = 8; // Bo tròn 4 góc r=8 mềm mại đồng tâm
-
-    // Đổ bóng & Nền nút kính bo tròn khử răng cưa đồng tâm theo Theme (Card & CardBorder)
-    spr.fillSmoothRoundRect(pBtnX, pBtnY, pBtnW, pBtnH, pBtnR, theme.cardBorder, themeBg);
-    spr.fillSmoothRoundRect(pBtnX + 1, pBtnY + 1, pBtnW - 2, pBtnH - 2, pBtnR - 1, theme.card, theme.cardBorder);
-
-    // Vẽ icon 2 mũi tên xoay tròn (Cycle / Swap) màu accent neon của Theme
-    uint16_t swapIconColor = theme.accent;
-    int16_t icx = pBtnX + 14;
-    int16_t icy = pBtnY + 14;
-
-    // Mũi tên trên (quay sang phải rồi chúc xuống):
-    spr.drawFastHLine(icx - 5, icy - 5, 8, swapIconColor);
-    spr.drawFastVLine(icx - 6, icy - 4, 4, swapIconColor);
-    spr.drawLine(icx, icy - 8, icx + 3, icy - 5, swapIconColor);
-    spr.drawLine(icx, icy - 2, icx + 3, icy - 5, swapIconColor);
-
-    // Mũi tên dưới (quay sang trái rồi hất lên):
-    spr.drawFastHLine(icx - 2, icy + 5, 8, swapIconColor);
-    spr.drawFastVLine(icx + 6, icy + 1, 4, swapIconColor);
-    spr.drawLine(icx, icy + 8, icx - 3, icy + 5, swapIconColor);
-    spr.drawLine(icx, icy + 2, icx - 3, icy + 5, swapIconColor);
-
-    // 3. BIỂN BÁO NEON TỰ ĐỘNG SCALE BÓNG CHUẨN XÁC THEO ĐỘ DÀI TEXT (Y = 166..194)
-    // Nếu mood hiện tại được custom -> Hiển thị text custom riêng của mood đó!
-    // Nếu không -> Hiển thị text mặc định song ngữ (VI/EN) chuẩn của mood đó!
-    const char* tagStr = (_customEnabled[_mood] && _customTags[_mood][0] != '\0')
-                         ? _customTags[_mood]
-                         : getTag(_mood, lang);
-
-    uint8_t fontToUse = 2; // Font 2 đậm, gọn gàng và đẹp mắt dưới meme khổng lồ
-    int16_t textW = spr.textWidth(tagStr, fontToUse);
-
-    // Bóng tự co giãn vừa vặn (padding 18px mỗi bên, bo tròn viên thuốc r=13)
-    int16_t tagW = textW + 36;
-    if (tagW < 140) tagW = 140;
-    if (tagW > 308) tagW = 308;
-    int16_t tagH = 26;
-    int16_t tagY = 164; // Y = 164..190
-    int16_t tagR = tagH / 2;
-
-    // Đổ bóng & Nền viên thuốc Neon khử răng cưa đồng tâm mượt mà
-    uint16_t accent = getAccentColor(_mood);
-    spr.fillSmoothRoundRect(cx - tagW / 2, tagY, tagW, tagH, tagR, C_WHITE, themeBg);
-    spr.fillSmoothRoundRect(cx - tagW / 2 + 1, tagY + 1, tagW - 2, tagH - 2, tagR - 1, accent, C_WHITE);
-
-    // Chữ căn giữa chuẩn xác, không bao giờ bị tràn
-    spr.setTextDatum(MC_DATUM);
-    spr.setTextColor(C_BLACK);
-    spr.drawString(tagStr, cx, tagY + tagH / 2, fontToUse);
-
-    // 4. CÂU QUOTE VĂN PHÒNG HÀI HƯỚC HOẶC CUSTOM RIÊNG CỦA MOOD (Y = 207 — Cách đáy nút viên thuốc 10px, cách hàng chấm 10px cân đối hoàn hảo)
-    const char* msgStr = (_customEnabled[_mood] && _customMsgs[_mood][0] != '\0')
-                         ? _customMsgs[_mood]
-                         : getMessage(_mood, lang);
-    spr.setTextDatum(MC_DATUM);
-    spr.setTextColor(theme.textMain);
-    spr.drawString(msgStr, cx, 207, 2);
-
-    // 5. CHẤM CHỈ THỊ 6 TRẠNG THÁI (Y = 226)
-    int16_t dotStartX = cx - (MOOD_COUNT * 14) / 2 + 7;
-    for (int i = 0; i < MOOD_COUNT; i++) {
-        int16_t dx = dotStartX + i * 14;
-        if (i == (int)_mood) {
-            spr.fillSmoothRoundRect(dx - 6, 224, 13, 5, 2, accent, themeBg);
-        } else {
-            spr.fillSmoothCircle(dx, 226, 2, theme.track, themeBg);
-        }
-    }
 }
 
 void DeskMood::renderPageZen16(TFT_eSPI& tft, VnSprite& spr, const VnFontFace* lightFont, uint8_t lang) {
