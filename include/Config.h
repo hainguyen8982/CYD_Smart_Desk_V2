@@ -56,10 +56,15 @@
 #define LDR_CHECK_INTERVAL      500     // 500 ms
 #define DISPLAY_FPS_INTERVAL    33      // ~30 FPS target
 
-// ─── NFC Cloud Redirector (Optional — leave URL empty to disable) ───
-// Example: "https://go.yourdomain.com/api/checkin"
-#define NFC_REDIRECTOR_URL      ""
-#define NFC_CHECKIN_SECRET      "smartdesk-2026"
-#define FIRMWARE_VERSION_STR    "2.4.0"
+// ─── NFC Cloud Redirector & Cloud OTA (smartdesk.fabx.vn) ───────────
+#ifdef BOARD_NICEMCU_28IPS
+#define HARDWARE_MODEL_STR      "nicemcu_2.8ips"
+#else
+#define HARDWARE_MODEL_STR      "cyd_2.8_resistive"
+#endif
+#define NFC_REDIRECTOR_URL      "https://smartdesk.fabx.vn/api/checkin"
+#define NFC_CHECKIN_SECRET      "Sm@rtDesk@FABX"
+#define CLOUD_OTA_HOST_PREFIX   "https://smartdesk.fabx.vn/"
+#define FIRMWARE_VERSION_STR    "2.5.0"
 
 #endif // CONFIG_H

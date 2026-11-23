@@ -4,6 +4,7 @@
 #include "EcosystemService.h"
 #include <esp_task_wdt.h>
 #include <Preferences.h>
+#include <math.h>
 #include <time.h>
 
 HardwareManager hardware;
@@ -385,6 +386,48 @@ void HardwareManager::playClick() {
     playTouchSound();
 }
 
+// Sub-audible 1-step DAC ramp (< 25 Hz slope, well below Ø29mm speaker cutoff -> ZERO "tách" pop!)
+static void dacRampTo(int fromVal, int toVal, uint16_t stepDelayUs) {
+    int step = (toVal >= fromVal) ? 1 : -1;
+    for (int v = fromVal; (step > 0) ? (v <= toVal) : (v >= toVal); v += step) {
+        dacWrite(PIN_SPEAKER, (uint8_t)v);
+        delayMicroseconds(stepDelayUs);
+    }
+}
+
+static void dacPlaySineSweep(float fStart, float fEnd, uint16_t durMs, float amp, bool bellEnv = false) {
+    const float sampleRate = 32000.0f;
+    const uint32_t totalSamples = (uint32_t)((durMs * sampleRate) / 1000.0f);
+    if (totalSamples < 8) return;
+    const float twoPiOverFs = 6.2831853f / sampleRate;
+    float phase = 0.0f;
+    uint64_t t0 = esp_timer_get_time();
+
+    for (uint32_t i = 0; i < totalSamples; i++) {
+        float progress = (float)i / (float)totalSamples;
+        float freq = fStart + (fEnd - fStart) * progress;
+        phase += freq * twoPiOverFs;
+
+        float env;
+        if (bellEnv) {
+            // Bell envelope (sin(pi * t)): lets upward pitch sweep ring out clearly (Water / Chirp)
+            env = sinf(3.1415926f * progress);
+        } else {
+            // Crisp attack (1.5ms) + smooth exponential tail (Click / Crystal Ting)
+            float attack = (i < 48) ? ((float)i / 48.0f) : 1.0f;
+            env = attack * (1.0f - progress) * (1.0f - 0.5f * progress);
+        }
+        int val = 128 + (int)(amp * env * sinf(phase));
+        if (val < 4) val = 4;
+        if (val > 252) val = 252;
+        dacWrite(PIN_SPEAKER, (uint8_t)val);
+
+        uint64_t targetUs = t0 + ((uint64_t)(i + 1) * 1000000ULL) / 32000ULL;
+        while ((uint64_t)esp_timer_get_time() < targetUs) {}
+    }
+    dacWrite(PIN_SPEAKER, 128);
+}
+
 void HardwareManager::playTouchSound() {
     if (_soundVolume == 0 || _touchSound == TOUCH_SND_MUTE) return;
 
@@ -396,54 +439,47 @@ void HardwareManager::playTouchSound() {
     }
     lastTouchSoundTime = now;
 
-    if (_dacAtMidpoint) {
-        dacDisable(PIN_SPEAKER);
-        _dacAtMidpoint = false;
+    // Dừng mọi xung PWM/tone đang giữ chân loa rồi nạp êm DC midpoint 128 (ramp chậm dưới ngưỡng loa -> 0 pop!)
+    noTone(PIN_SPEAKER);
+    if (!_dacAtMidpoint) {
+        dacRampTo(0, 128, 100);
+        _dacAtMidpoint = true;
     }
+
+    // Biên độ analog dịu nhẹ chuẩn văn phòng (~22% thang DAC = 28/127 steps): rõ từng âm sắc, không ồn!
+    const float baseAmp = 28.0f * ((float)_soundVolume / 100.0f);
 
     switch (_touchSound) {
         case TOUCH_SND_CLICK:
-            // 1. Phím cơ (Mechanical Click): Tiếng "tách" đanh, dứt khoát với 2 micro-snap (1600Hz -> 2400Hz)
-            tone(PIN_SPEAKER, 1600, 4);
-            delay(5);
-            tone(PIN_SPEAKER, 2400, 6);
-            delay(7);
+            // 1. Phím cơ (Crisp Tock): Gọn gàng 12ms trượt trầm nhanh 2200Hz -> 650Hz
+            dacPlaySineSweep(2200.0f, 650.0f, 12, baseAmp * 1.2f, false);
             break;
 
         case TOUCH_SND_WATER:
-            // 2. Giọt nước (Water Drop): Tiếng "bõm" giọt nước nảy nhanh (1300Hz -> 2800Hz trong ~25ms)
-            tone(PIN_SPEAKER, 1300, 4);
-            delay(5);
-            tone(PIN_SPEAKER, 1750, 5);
-            delay(6);
-            tone(PIN_SPEAKER, 2200, 6);
-            delay(7);
-            tone(PIN_SPEAKER, 2800, 8);
-            delay(9);
+            // 2. Giọt nước (Bubble Bloop): Bao biên hình chuông 65ms quét rõ 550Hz -> 1950Hz ("bõm!")
+            dacPlaySineSweep(550.0f, 1950.0f, 65, baseAmp, true);
             break;
 
         case TOUCH_SND_BEEP:
-            // 3. Bíp nhẹ (Soft Beep): Tiếng "ting" dứt khoát, thanh thoát ở 1175Hz (nốt Re cao D6) trong 26ms
-            tone(PIN_SPEAKER, 1175, 26);
-            delay(28);
+            // 3. Bíp pha lê (Crystal Ting): 1 nốt sine thuần 1047Hz (C6) ngân êm 75ms
+            dacPlaySineSweep(1047.0f, 1047.0f, 75, baseAmp * 0.85f, false);
             break;
 
         case TOUCH_SND_CHIRP:
-            // 4. Chíp chíp (Dual Chirp): 2 tiếng chim non lảnh lót A6 (1760Hz) và D7 (2349Hz)
-            tone(PIN_SPEAKER, 1760, 12);
-            delay(14);
-            noTone(PIN_SPEAKER);
-            delay(14);
-            tone(PIN_SPEAKER, 2349, 16);
-            delay(18);
+            // 4. Chíp chíp (Dual Chime): 2 nốt tách bạch rõ ràng E6 (1319Hz) -> B6 (1976Hz)
+            dacPlaySineSweep(1319.0f, 1450.0f, 40, baseAmp * 0.85f, true);
+            delay(35);
+            dacPlaySineSweep(1976.0f, 2150.0f, 60, baseAmp * 0.90f, true);
             break;
 
         default:
-            tone(PIN_SPEAKER, 1600, 5);
-            delay(6);
+            dacPlaySineSweep(2200.0f, 650.0f, 12, baseAmp, false);
             break;
     }
-    stopSound();
+
+    // Giữ nguyên DAC ở điểm giữa DC 128 (_dacAtMidpoint = true):
+    // Tụ ghép AC chặn hoàn toàn DC -> 0V ở loa, 0 tiếng "tạch" khi tắt DAC và phản hồi chạm tức thì 0ms!
+    dacWrite(PIN_SPEAKER, 128);
 }
 
 void HardwareManager::playBeep(uint16_t freqHz, uint16_t durationMs) {

@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FabX SmartDesk — Cloud Admin</title>
+<style>
+  :root{--bg:#060a10;--card:#0e1520;--border:#1e2f42;--accent:#64d2ff;--ok:#22c55e;--warn:#f59e0b;--err:#ef4444;--text:#eef2f7;--dim:#8b9bb0}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;min-height:100vh;padding:20px}
+  .wrap{max-width:1120px;margin:0 auto}
+  header{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px;margin-bottom:20px;padding-bottom:14px;border-bottom:1px solid var(--border)}
+  .brand{font-size:20px;font-weight:800;letter-spacing:-.02em}
+  .brand span{color:var(--accent)}
+  .btn{background:var(--accent);color:#000;border:none;border-radius:10px;padding:9px 14px;font-weight:700;font-size:13px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  .btn-outline{background:transparent;color:var(--accent);border:1px solid rgba(100,210,255,.4)}
+  .btn-danger{background:rgba(239,68,68,.15);color:#f87171;border:1px solid rgba(239,68,68,.35)}
+  .btn-sm{padding:5px 10px;font-size:12px;border-radius:8px}
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:20px}
+  .stat{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px}
+  .stat .lbl{font-size:12px;color:var(--dim);margin-bottom:6px}
+  .stat .val{font-size:26px;font-weight:800}
+  .tabs{display:flex;gap:8px;margin-bottom:16px}
+  .tab{padding:10px 16px;border-radius:10px;background:var(--card);border:1px solid var(--border);color:var(--dim);font-weight:700;font-size:13px;cursor:pointer}
+  .tab.active{background:rgba(100,210,255,.14);border-color:var(--accent);color:var(--accent)}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:18px;margin-bottom:16px}
+  .toolbar{display:flex;flex-wrap:wrap;gap:10px;justify-content:space-between;align-items:center;margin-bottom:14px}
+  input,select,textarea{background:#070c14;border:1px solid var(--border);color:var(--text);border-radius:9px;padding:9px 11px;font-size:13px;font-family:inherit}
+  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{text-align:left;padding:10px 8px;border-bottom:1px solid rgba(255,255,255,.06);vertical-align:middle}
+  th{color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.04em}
+  .table-wrap{overflow-x:auto}
+  .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700}
+  .pill-ok{background:rgba(34,197,94,.16);color:#4ade80}
+  .pill-off{background:rgba(139,155,176,.14);color:var(--dim)}
+  .pill-beta{background:rgba(245,158,11,.16);color:#fbbf24}
+  .pill-fw{background:rgba(100,210,255,.14);color:var(--accent)}
+  .login-box{max-width:380px;margin:90px auto;background:var(--card);border:1px solid var(--border);border-radius:18px;padding:28px;text-align:center}
+  .login-box h1{font-size:20px;margin-bottom:8px}
+  .login-box p{font-size:13px;color:var(--dim);margin-bottom:18px}
+  .login-box input{width:100%;margin-bottom:12px}
+  .modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.72);align-items:center;justify-content:center;padding:16px;z-index:99}
+  .modal-bg.show{display:flex}
+  .modal{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:22px;width:100%;max-width:460px}
+  .modal h3{margin-bottom:14px}
+  .field{margin-bottom:11px}
+  .field label{display:block;font-size:12px;color:var(--dim);margin-bottom:4px}
+  .field input,.field textarea,.field select{width:100%}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .toast{position:fixed;bottom:20px;right:20px;background:#132030;border:1px solid var(--accent);color:#fff;padding:11px 16px;border-radius:10px;font-size:13px;display:none;z-index:120}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div id="loginView" class="login-box" style="display:none">
+    <h1>🔐 FabX SmartDesk Admin</h1>
+    <p>Nhập <b>ADMIN_KEY</b> để quản lý thiết bị & phát hành Firmware Cloud OTA.</p>
+    <input type="password" id="adminKeyInput" placeholder="Admin Key..." onkeydown="if(event.key==='Enter')doLogin()">
+    <button class="btn" style="width:100%;justify-content:center" onclick="doLogin()">Đăng nhập</button>
+    <div id="loginErr" style="color:var(--err);font-size:12px;margin-top:10px"></div>
+  </div>
+
+  <div id="appView" style="display:none">
+    <header>
+      <div class="brand">FabX <span>SmartDesk</span> Cloud Admin</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-outline btn-sm" onclick="loadData()">🔄 Làm mới</button>
+        <button class="btn btn-outline btn-sm" onclick="openAddDevice()">➕ Đăng ký máy mới</button>
+        <button class="btn btn-danger btn-sm" onclick="logout()">Đăng xuất</button>
+      </div>
+    </header>
+
+    <div class="stats">
+      <div class="stat"><div class="lbl">Tổng thiết bị</div><div class="val" id="stTotal">0</div></div>
+      <div class="stat"><div class="lbl">Online 24h qua</div><div class="val" style="color:var(--ok)" id="stOnline">0</div></div>
+      <div class="stat"><div class="lbl">Máy thử nghiệm (Beta)</div><div class="val" style="color:var(--warn)" id="stBeta">0</div></div>
+      <div class="stat"><div class="lbl">Bản Firmware OTA</div><div class="val" style="color:var(--accent)" id="stRel">0</div></div>
+    </div>
+
+    <div class="tabs">
+      <button class="tab active" id="tabBtnDev" onclick="showTab('dev')">📱 Quản lý Thiết bị</button>
+      <button class="tab" id="tabBtnFw" onclick="showTab('fw')">🚀 Cloud OTA Firmware</button>
+    </div>
+
+    <div id="tabDev" class="card">
+      <div class="toolbar">
+        <input type="text" id="searchInput" placeholder="Tìm ID, khách hàng, mã đơn, ghi chú..." style="min-width:260px;flex:1" oninput="renderDevices()">
+        <span id="devCountLbl" style="font-size:12px;color:var(--dim)"></span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Device ID</th>
+              <th>Trạng thái</th>
+              <th>Firmware / HW</th>
+              <th>Khách hàng & Đơn hàng</th>
+              <th>Ghi chú</th>
+              <th>Thao tác</th>
+            </tr>
+          </thead>
+          <tbody id="devTbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="tabFw" style="display:none">
+      <div class="card">
+        <h3 style="margin-bottom:12px">⬆️ Phát hành Firmware mới (Cloud OTA)</h3>
+        <div class="grid2">
+          <div class="field"><label>Phiên bản (SemVer, vd 2.5.0)</label><input id="fwVer" placeholder="2.5.0"></div>
+          <div class="field"><label>Mã phần cứng (hw)</label>
+            <select id="fwHw">
+              <option value="nicemcu_2.8ips">nicemcu_2.8ips (NiceMCU 2.8" IPS)</option>
+              <option value="cyd_2.8_resistive">cyd_2.8_resistive (CYD 2.8" Điện trở)</option>
+            </select>
+          </div>
+        </div>
+        <div class="field"><label>Ghi chú cập nhật (Changelog)</label><input id="fwLog" placeholder="VD: Thêm Cloud OTA 1 chạm, tối ưu giao diện Zen..."></div>
+        <div class="grid2" style="align-items:center">
+          <div class="field"><label>File firmware.bin</label><input type="file" id="fwFile" accept=".bin"></div>
+          <div class="field" style="padding-top:16px">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;color:#fbbf24">
+              <input type="checkbox" id="fwBeta" style="width:auto"> Chỉ phát hành Beta (máy nội bộ)
+            </label>
+          </div>
+        </div>
+        <button class="btn" id="fwUploadBtn" onclick="uploadFirmware()">🚀 Upload & Phát hành</button>
+      </div>
+
+      <div class="card">
+        <h3 style="margin-bottom:12px">📦 Danh sách bản phát hành</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Phiên bản</th><th>Phần cứng</th><th>Kênh</th><th>Dung lượng</th><th>Changelog</th><th>Thao tác</th></tr>
+            </thead>
+            <tbody id="fwTbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Device Modal -->
+<div class="modal-bg" id="devModal">
+  <div class="modal">
+    <h3 id="modalTitle">Cập nhật thiết bị</h3>
+    <div class="field"><label>Device ID (6 ký tự HEX)</label><input id="mId" placeholder="7350F8"></div>
+    <div class="grid2">
+      <div class="field"><label>Tên khách hàng</label><input id="mCustomer" placeholder="Nguyễn Văn A"></div>
+      <div class="field"><label>Số điện thoại</label><input id="mPhone" placeholder="09xx..."></div>
+    </div>
+    <div class="grid2">
+      <div class="field"><label>Mã đơn hàng</label><input id="mOrder" placeholder="FX-2026-001"></div>
+      <div class="field"><label>Ngày bán (YYYY-MM-DD)</label><input id="mSoldAt" type="date"></div>
+    </div>
+    <div class="grid2">
+      <div class="field"><label>Bảo hành (tháng)</label><input id="mWarr" type="number" value="6"></div>
+      <div class="field"><label>Kênh cập nhật</label>
+        <label style="display:flex;align-items:center;gap:8px;padding-top:8px;color:#fbbf24;cursor:pointer">
+          <input type="checkbox" id="mBeta" style="width:auto"> Nhận bản Beta
+        </label>
+      </div>
+    </div>
+    <div class="field"><label>Ghi chú</label><textarea id="mNote" rows="2" placeholder="Combo EMO, màu vỏ, ghi chú bảo hành..."></textarea></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+      <button class="btn btn-outline" onclick="closeModal()">Hủy</button>
+      <button class="btn" onclick="saveDevice()">💾 Lưu</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let adminKey = localStorage.getItem('fabx_admin_key') || '';
+let allDevices = {};
+let allReleases = [];
+
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.style.display = 'block';
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.style.display = 'none', 2800);
+}
+
+function esc(s) {
+  return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function timeAgo(ts) {
+  if (!ts) return 'Chưa online';
+  const m = Math.max(0, Math.round((Date.now() - ts) / 60000));
+  if (m < 2) return 'Vừa xong';
+  if (m < 60) return m + ' phút trước';
+  if (m < 1440) return Math.round(m / 60) + ' giờ trước';
+  return Math.round(m / 1440) + ' ngày trước';
+}
+
+async function api(path, opts = {}) {
+  const headers = { 'X-Admin-Key': adminKey, ...(opts.headers || {}) };
+  const res = await fetch(path, { ...opts, headers });
+  if (res.status === 403) { logout(); throw new Error('Sai Admin Key'); }
+  return res.json();
+}
+
+async function doLogin() {
+  adminKey = document.getElementById('adminKeyInput').value.trim();
+  if (!adminKey) return;
+  try {
+    const res = await fetch('/api/admin/overview', { headers: { 'X-Admin-Key': adminKey } });
+    if (!res.ok) {
+      document.getElementById('loginErr').textContent = 'Sai Admin Key!';
+      return;
+    }
+    localStorage.setItem('fabx_admin_key', adminKey);
+    document.getElementById('loginView').style.display = 'none';
+    document.getElementById('appView').style.display = 'block';
+    loadData();
+  } catch (e) {
+    document.getElementById('loginErr').textContent = 'Lỗi kết nối server';
+  }
+}
+
+function logout() {
+  localStorage.removeItem('fabx_admin_key');
+  adminKey = '';
+  document.getElementById('appView').style.display = 'none';
+  document.getElementById('loginView').style.display = 'block';
+}
+
+function showTab(t) {
+  document.getElementById('tabDev').style.display = t === 'dev' ? 'block' : 'none';
+  document.getElementById('tabFw').style.display = t === 'fw' ? 'block' : 'none';
+  document.getElementById('tabBtnDev').classList.toggle('active', t === 'dev');
+  document.getElementById('tabBtnFw').classList.toggle('active', t === 'fw');
+}
+
+async function loadData() {
+  try {
+    const data = await api('/api/admin/overview');
+    allDevices = data.devices || {};
+    allReleases = data.releases || [];
+    document.getElementById('stTotal').textContent = data.stats.total;
+    document.getElementById('stOnline').textContent = data.stats.online24h;
+    document.getElementById('stBeta').textContent = data.stats.betaCount;
+    document.getElementById('stRel').textContent = data.stats.releases;
+    renderDevices();
+    renderReleases();
+  } catch (e) {
+    toast('Lỗi tải dữ liệu: ' + e.message);
+  }
+}
+
+function renderDevices() {
+  const q = (document.getElementById('searchInput').value || '').toLowerCase();
+  const rows = Object.entries(allDevices)
+    .map(([id, d]) => ({ id, ...d }))
+    .filter(d => !q || `${d.id} ${d.customer||''} ${d.orderId||''} ${d.note||''} ${d.phone||''}`.toLowerCase().includes(q))
+    .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+
+  document.getElementById('devCountLbl').textContent = `Hiển thị ${rows.length} máy`;
+  const tbody = document.getElementById('devTbody');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--dim);padding:24px">Chưa có thiết bị nào</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(d => {
+    const isOnline = d.updatedAt && (Date.now() - d.updatedAt) < 86400000;
+    return `<tr>
+      <td>
+        <b>${esc(d.id)}</b> ${d.beta ? '<span class="pill pill-beta">BETA</span>' : ''}
+        <div style="font-size:11px;color:var(--dim)">${d.ip ? esc(d.ip) : 'Chưa kết nối'} ${d.rssi ? `(${d.rssi} dBm)` : ''}</div>
+      </td>
+      <td><span class="pill ${isOnline ? 'pill-ok' : 'pill-off'}">${isOnline ? '● Online' : '○ Offline'}</span><div style="font-size:11px;color:var(--dim);margin-top:3px">${timeAgo(d.updatedAt)}</div></td>
+      <td><span class="pill pill-fw">v${esc(d.fw || '?')}</span><div style="font-size:11px;color:var(--dim);margin-top:3px">${esc(d.hw || 'nicemcu_2.8ips')}</div></td>
+      <td><b>${esc(d.customer || '—')}</b><div style="font-size:11px;color:var(--dim)">${esc(d.orderId || '')} ${d.soldAt ? '• ' + esc(d.soldAt) : ''}</div></td>
+      <td style="max-width:200px;font-size:12px;color:var(--dim)">${esc(d.note || '')}</td>
+      <td style="white-space:nowrap">
+        <button class="btn btn-outline btn-sm" onclick="copyNfc('${esc(d.id)}')">NFC</button>
+        <button class="btn btn-outline btn-sm" onclick="openEditDevice('${esc(d.id)}')">Sửa</button>
+        <button class="btn btn-danger btn-sm" onclick="delDevice('${esc(d.id)}')">✕</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function renderReleases() {
+  const tbody = document.getElementById('fwTbody');
+  if (!allReleases.length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--dim);padding:24px">Chưa upload bản Firmware nào</td></tr>';
+    return;
+  }
+  tbody.innerHTML = allReleases.map(r => `<tr>
+    <td><b>v${esc(r.version)}</b><div style="font-size:11px;color:var(--dim)">${new Date(r.releasedAt).toLocaleString('vi-VN')}</div></td>
+    <td><code>${esc(r.hw)}</code></td>
+    <td>${r.beta ? '<span class="pill pill-beta">BETA</span>' : '<span class="pill pill-ok">STABLE</span>'}</td>
+    <td>${(r.size / 1024).toFixed(1)} KB</td>
+    <td style="max-width:260px;font-size:12px;color:var(--dim)">${esc(r.changelog)}</td>
+    <td style="white-space:nowrap">
+      ${r.beta ? `<button class="btn btn-sm" onclick="promoteRelease('${esc(r.id)}')">Đẩy Stable</button>` : ''}
+      <button class="btn btn-danger btn-sm" onclick="delRelease('${esc(r.id)}')">Xóa</button>
+    </td>
+  </tr>`).join('');
+}
+
+function copyNfc(id) {
+  const url = `${location.origin}/d/${id}`;
+  navigator.clipboard.writeText(url).then(() => toast('Đã copy: ' + url));
+}
+
+function openAddDevice() {
+  document.getElementById('modalTitle').textContent = '➕ Đăng ký máy mới';
+  document.getElementById('mId').disabled = false;
+  document.getElementById('mId').value = '';
+  document.getElementById('mCustomer').value = '';
+  document.getElementById('mPhone').value = '';
+  document.getElementById('mOrder').value = '';
+  document.getElementById('mSoldAt').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('mWarr').value = 6;
+  document.getElementById('mBeta').checked = false;
+  document.getElementById('mNote').value = '';
+  document.getElementById('devModal').classList.add('show');
+}
+
+function openEditDevice(id) {
+  const d = allDevices[id] || {};
+  document.getElementById('modalTitle').textContent = '✏️ Chỉnh sửa máy ' + id;
+  document.getElementById('mId').value = id;
+  document.getElementById('mId').disabled = true;
+  document.getElementById('mCustomer').value = d.customer || '';
+  document.getElementById('mPhone').value = d.phone || '';
+  document.getElementById('mOrder').value = d.orderId || '';
+  document.getElementById('mSoldAt').value = d.soldAt || '';
+  document.getElementById('mWarr').value = d.warrantyMonths || 6;
+  document.getElementById('mBeta').checked = !!d.beta;
+  document.getElementById('mNote').value = d.note || '';
+  document.getElementById('devModal').classList.add('show');
+}
+
+function closeModal() {
+  document.getElementById('devModal').classList.remove('show');
+}
+
+async function saveDevice() {
+  const id = document.getElementById('mId').value.trim().toUpperCase();
+  if (!id) return toast('Vui lòng nhập Device ID');
+  await api(`/api/admin/devices/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      customer: document.getElementById('mCustomer').value,
+      phone: document.getElementById('mPhone').value,
+      orderId: document.getElementById('mOrder').value,
+      soldAt: document.getElementById('mSoldAt').value,
+      warrantyMonths: Number(document.getElementById('mWarr').value) || 6,
+      beta: document.getElementById('mBeta').checked,
+      note: document.getElementById('mNote').value,
+    }),
+  });
+  closeModal();
+  toast('Đã lưu thông tin máy ' + id);
+  loadData();
+}
+
+async function delDevice(id) {
+  if (!confirm('Xóa thiết bị ' + id + ' khỏi danh sách?')) return;
+  await api(`/api/admin/devices/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  toast('Đã xóa ' + id);
+  loadData();
+}
+
+async function uploadFirmware() {
+  const ver = document.getElementById('fwVer').value.trim();
+  const hw = document.getElementById('fwHw').value;
+  const log = document.getElementById('fwLog').value.trim();
+  const beta = document.getElementById('fwBeta').checked ? '1' : '0';
+  const file = document.getElementById('fwFile').files[0];
+  if (!ver || !file) return toast('Nhập phiên bản và chọn file .bin!');
+  const btn = document.getElementById('fwUploadBtn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Đang tải lên...';
+  try {
+    const qs = new URLSearchParams({ version: ver, hw, beta, changelog: log });
+    const data = await api(`/api/admin/firmware?${qs.toString()}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/octet-stream' },
+      body: file,
+    });
+    if (data.ok) {
+      toast('Đã phát hành v' + ver + ' thành công!');
+      document.getElementById('fwFile').value = '';
+      loadData();
+    } else {
+      toast('Lỗi: ' + (data.error || 'upload failed'));
+    }
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🚀 Upload & Phát hành';
+  }
+}
+
+async function promoteRelease(id) {
+  if (!confirm('Công bố bản ' + id + ' sang Stable cho toàn bộ khách hàng?')) return;
+  await api(`/api/admin/firmware/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ beta: false }),
+  });
+  toast('Đã chuyển sang Stable!');
+  loadData();
+}
+
+async function delRelease(id) {
+  if (!confirm('Xóa bản Firmware ' + id + '?')) return;
+  await api(`/api/admin/firmware/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  toast('Đã xóa ' + id);
+  loadData();
+}
+
+if (adminKey) {
+  document.getElementById('appView').style.display = 'block';
+  loadData();
+} else {
+  document.getElementById('loginView').style.display = 'block';
+}
+</script>
+</body>
+</html>

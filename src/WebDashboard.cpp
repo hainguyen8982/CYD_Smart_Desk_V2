@@ -2,6 +2,7 @@
 //  WebDashboard.cpp — Web server implementation for CYD SmartDesk V2
 // ═══════════════════════════════════════════════════════════════════════
 #include "WebDashboard.h"
+#include "Config.h"
 #include "Language.h"
 #include "Display.h"
 #include "FinanceService.h"
@@ -212,17 +213,43 @@ void WebDashboard::update() {
     delay(200);
     ESP.restart();
   }
-  if (_otaInProgress && !_otaRebootRequested &&
+  if (_otaInProgress && !_otaRebootRequested && _cloudOtaState != 1 &&
       (millis() - _otaLastChunkMs >= 15000UL)) {
     _otaInProgress = false;
     Update.abort();
     Serial.println("[OTA] Aborted: client disconnected (15s idle timeout)");
   }
-  if (_otaRebootRequested && (millis() - _otaRebootTime >= 800)) {
+  if (_otaRebootRequested && (millis() - _otaRebootTime >= 1200)) {
     _otaRebootRequested = false;
     Serial.println("[OTA] Rebooting into new firmware...");
     delay(100);
     ESP.restart();
+  }
+}
+
+bool WebDashboard::consumeCloudOtaRequest(char* outUrl, size_t maxLen) {
+  if (!_cloudOtaRequested) return false;
+  _cloudOtaRequested = false;
+  strlcpy(outUrl, _cloudOtaUrl, maxLen);
+  return (strlen(outUrl) > 0);
+}
+
+void WebDashboard::setCloudOtaProgress(uint8_t pct) {
+  _cloudOtaProgress = (pct > 100) ? 100 : pct;
+  _otaLastChunkMs = millis();
+}
+
+void WebDashboard::finishCloudOta(bool success, const char* errMsg) {
+  _otaInProgress = false;
+  if (success) {
+    _cloudOtaProgress = 100;
+    _cloudOtaState = 2;
+    _cloudOtaError[0] = '\0';
+    _otaRebootTime = millis();
+    _otaRebootRequested = true;
+  } else {
+    _cloudOtaState = 3;
+    strlcpy(_cloudOtaError, errMsg ? errMsg : "Cloud OTA failed", sizeof(_cloudOtaError));
   }
 }
 
@@ -266,6 +293,8 @@ void WebDashboard::_setupRoutes() {
     EcosystemService::getMdnsHost(mdnsHost, sizeof(mdnsHost));
     ecosystem.getPairedMacStr(peerMac, sizeof(peerMac));
     doc["deviceId"] = devId;
+    doc["fw"] = FIRMWARE_VERSION_STR;
+    doc["hw"] = HARDWARE_MODEL_STR;
     doc["mdnsHost"] = String(mdnsHost) + ".local";
     doc["ecoPaired"] = ecosystem.isCompanionPaired();
     doc["ecoLocked"] = ecosystem.isPairedLocked();
@@ -798,4 +827,45 @@ void WebDashboard::_setupRoutes() {
           }
         }
       });
+
+  // ── POST /api/ota/cloud?url=... : 1-Click Cloud OTA from smartdesk.fabx.vn ──
+  _server.on("/api/ota/cloud", HTTP_POST, [this](AsyncWebServerRequest *request) {
+    if (isOtaInProgress()) {
+      request->send(409, "application/json", "{\"success\":false,\"error\":\"OTA already in progress\"}");
+      return;
+    }
+    String url = "";
+    if (request->hasParam("url", true)) url = request->getParam("url", true)->value();
+    else if (request->hasParam("url")) url = request->getParam("url")->value();
+    url.trim();
+
+    if (!url.startsWith(CLOUD_OTA_HOST_PREFIX) || !url.endsWith(".bin") || url.length() >= sizeof(_cloudOtaUrl)) {
+      request->send(400, "application/json", "{\"success\":false,\"error\":\"URL khong hop le (chi chap nhan smartdesk.fabx.vn)\"}");
+      return;
+    }
+
+    strlcpy(_cloudOtaUrl, url.c_str(), sizeof(_cloudOtaUrl));
+    _cloudOtaError[0] = '\0';
+    _cloudOtaProgress = 0;
+    _cloudOtaState = 1;
+    _otaInProgress = true;
+    _otaLastChunkMs = millis();
+    _cloudOtaRequested = true;
+    request->send(200, "application/json", "{\"success\":true}");
+  });
+
+  // ── GET /api/ota/status : Poll Cloud OTA progress ───────────────
+  _server.on("/api/ota/status", HTTP_GET, [this](AsyncWebServerRequest *request) {
+    JsonDocument doc;
+    const char* st = "idle";
+    if (_cloudOtaState == 1) st = "downloading";
+    else if (_cloudOtaState == 2) st = "done";
+    else if (_cloudOtaState == 3) st = "error";
+    doc["state"] = st;
+    doc["progress"] = (int)_cloudOtaProgress;
+    doc["error"] = _cloudOtaError;
+    String res;
+    serializeJson(doc, res);
+    request->send(200, "application/json", res);
+  });
 }

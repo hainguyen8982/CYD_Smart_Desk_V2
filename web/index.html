@@ -541,21 +541,40 @@ input[type=range] { width: 100%; accent-color: var(--accent); height: 6px; borde
 
     <!-- 7. Firmware OTA Update Section -->
     <div class="card">
-      <div class="card-title">
-        <span style="font-size: 18px;">🚀</span>
-        <span>Cập nhật Firmware (OTA)</span>
+      <div class="card-title" style="justify-content:space-between;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="font-size: 18px;">🚀</span>
+          <span>Cập nhật Firmware (OTA)</span>
+        </div>
+        <span id="fwVersionBadge" style="font-size:11px; color:var(--accent); background:rgba(0,229,255,0.12); border:1px solid rgba(0,229,255,0.3); padding:2px 8px; border-radius:99px;">v...</span>
       </div>
-      <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 10px; line-height: 1.5;">
-        Chọn file <code style="color:var(--accent);">firmware.bin</code> để nâng cấp trực tiếp qua Wi-Fi (không cần cắm cáp USB).
+
+      <!-- Cloud OTA 1-Click Box -->
+      <div id="cloudOtaBox" style="background:rgba(0,229,255,0.06); border:1px solid rgba(0,229,255,0.22); border-radius:12px; padding:12px; margin-bottom:12px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:6px;">
+          <div style="font-size:12px; font-weight:700; color:var(--accent);">☁️ Cập nhật trực tuyến (Cloud OTA)</div>
+          <button class="btn btn-outline" style="padding:4px 10px; font-size:11px; width:auto;" onclick="checkCloudUpdate(true)">🔄 Kiểm tra</button>
+        </div>
+        <div id="cloudOtaInfo" style="font-size:12px; color:var(--text-dim); line-height:1.5;">
+          Đang kiểm tra phiên bản mới từ smartdesk.fabx.vn...
+        </div>
+        <button id="cloudOtaBtn" class="btn btn-primary" style="display:none; margin-top:10px;" onclick="startCloudOta()">⚡ Cập nhật ngay (1 chạm)</button>
       </div>
-      <input type="file" id="otaFileInput" accept=".bin" style="width:100%; padding:8px; border-radius:8px; border:1px solid var(--card-border); background:#070B14; color:#fff; font-size:12px; margin-bottom:10px;">
+
       <div id="otaProgressWrap" style="display:none; margin-bottom:10px;">
         <div style="height:8px; background:rgba(255,255,255,0.08); border-radius:4px; overflow:hidden;">
           <div id="otaProgressBar" style="height:100%; width:0%; background:var(--accent); transition:width 0.15s;"></div>
         </div>
         <div id="otaProgressText" style="font-size:11px; color:var(--accent); margin-top:4px; text-align:center;">0%</div>
       </div>
-      <button id="otaUploadBtn" class="btn btn-primary" onclick="uploadOtaFirmware()">⬆️ Tải lên & Cập nhật</button>
+
+      <details style="margin-top:6px;">
+        <summary style="font-size:12px; color:var(--text-dim); cursor:pointer; user-select:none; padding:4px 0;">📁 Hoặc nạp thủ công từ file firmware.bin</summary>
+        <div style="margin-top:10px;">
+          <input type="file" id="otaFileInput" accept=".bin" style="width:100%; padding:8px; border-radius:8px; border:1px solid var(--card-border); background:#070B14; color:#fff; font-size:12px; margin-bottom:10px;">
+          <button id="otaUploadBtn" class="btn btn-outline" onclick="uploadOtaFirmware()">⬆️ Tải lên & Cập nhật</button>
+        </div>
+      </details>
     </div>
 
   </div><!-- /#panelSettings -->
@@ -1372,6 +1391,17 @@ async function fetchStatus() {
     if (data.deviceId) {
       const devEl = document.getElementById('deviceIdVal');
       if (devEl) devEl.textContent = data.deviceId;
+      deviceMeta.id = data.deviceId;
+    }
+    if (data.fw) {
+      deviceMeta.fw = data.fw;
+      deviceMeta.hw = data.hw || 'nicemcu_2.8ips';
+      const fwBadge = document.getElementById('fwVersionBadge');
+      if (fwBadge) fwBadge.textContent = 'v' + data.fw;
+      if (!cloudOtaChecked) {
+        cloudOtaChecked = true;
+        checkCloudUpdate(false);
+      }
     }
     if (data.mdnsHost) {
       const mdnsEl = document.getElementById('wifiMdnsVal');
@@ -1798,6 +1828,104 @@ function unpairEco() {
   fetch('/api/eco/unpair', { method: 'POST' })
     .then(r => { if (r.ok) { showToast('🔓 Đã hủy khóa cặp EMO!'); fetchStatus(); } })
     .catch(() => showToast('Lỗi kết nối!', false));
+}
+
+let deviceMeta = { id: '', fw: '', hw: 'nicemcu_2.8ips' };
+let cloudOtaChecked = false;
+let cloudOtaCandidate = null;
+
+function cmpSemver(a, b) {
+  const pa = String(a || '0.0.0').split('-')[0].split('.').map(n => parseInt(n, 10) || 0);
+  const pb = String(b || '0.0.0').split('-')[0].split('.').map(n => parseInt(n, 10) || 0);
+  for (let i = 0; i < 3; i++) {
+    if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) - (pb[i] || 0);
+  }
+  return 0;
+}
+
+async function checkCloudUpdate(manual) {
+  const info = document.getElementById('cloudOtaInfo');
+  const btn = document.getElementById('cloudOtaBtn');
+  if (!info || !btn) return;
+  if (manual) info.textContent = 'Đang kiểm tra bản cập nhật mới...';
+  try {
+    const qs = `hw=${encodeURIComponent(deviceMeta.hw)}&id=${encodeURIComponent(deviceMeta.id)}`;
+    const res = await fetch(`https://smartdesk.fabx.vn/api/firmware/latest?${qs}`, { cache: 'no-store' });
+    const d = await res.json();
+    if (!d.ok || !d.version || !d.url) {
+      cloudOtaCandidate = null;
+      btn.style.display = 'none';
+      info.innerHTML = `✅ Bạn đang ở phiên bản hiện tại (<b>v${escapeHtml(deviceMeta.fw || '?')}</b>). Chưa có bản phát hành mới.`;
+      return;
+    }
+    if (cmpSemver(d.version, deviceMeta.fw) > 0) {
+      cloudOtaCandidate = d;
+      btn.style.display = 'block';
+      btn.textContent = `⚡ Cập nhật lên v${d.version} ngay`;
+      const betaTag = d.beta ? ' <span style="color:#fbbf24;font-weight:700;">[BETA]</span>' : '';
+      info.innerHTML = `<b style="color:#4ade80;">✨ Có bản mới v${escapeHtml(d.version)}</b>${betaTag} (${(d.size/1024).toFixed(0)} KB)<br>${escapeHtml(d.changelog || 'Cải thiện hiệu năng và sửa lỗi.')}`;
+      if (!manual) showToast(`✨ Có Firmware mới v${d.version} trong mục Cài đặt!`);
+    } else {
+      cloudOtaCandidate = null;
+      btn.style.display = 'none';
+      info.innerHTML = `✅ SmartDesk đang ở phiên bản mới nhất (<b>v${escapeHtml(deviceMeta.fw)}</b>).`;
+      if (manual) showToast('Bạn đang dùng phiên bản mới nhất!');
+    }
+  } catch (e) {
+    btn.style.display = 'none';
+    info.textContent = 'Không thể kiểm tra máy chủ Cloud OTA (kiểm tra kết nối Internet).';
+  }
+}
+
+async function startCloudOta() {
+  if (!cloudOtaCandidate || !cloudOtaCandidate.url) return;
+  if (!confirm(`Cập nhật SmartDesk lên v${cloudOtaCandidate.version}?\n\nVui lòng KHÔNG rút nguồn điện trong ~30 giây.`)) return;
+  const btn = document.getElementById('cloudOtaBtn');
+  const wrap = document.getElementById('otaProgressWrap');
+  const bar = document.getElementById('otaProgressBar');
+  const txt = document.getElementById('otaProgressText');
+  btn.disabled = true;
+  wrap.style.display = 'block';
+  bar.style.width = '5%';
+  txt.textContent = '☁️ Đang kết nối máy chủ smartdesk.fabx.vn...';
+  isOtaUploading = true;
+
+  try {
+    const res = await fetch('/api/ota/cloud?url=' + encodeURIComponent(cloudOtaCandidate.url), { method: 'POST' });
+    const d = await res.json();
+    if (!res.ok || !d.success) throw new Error(d.error || 'Khởi chạy Cloud OTA thất bại');
+
+    const poll = setInterval(async () => {
+      try {
+        const sr = await fetch('/api/ota/status', { cache: 'no-store' });
+        const st = await sr.json();
+        const pct = st.progress || 0;
+        bar.style.width = pct + '%';
+        if (st.state === 'downloading') {
+          txt.textContent = `☁️ Đang tải & nạp Firmware: ${pct}%`;
+        } else if (st.state === 'done') {
+          clearInterval(poll);
+          bar.style.width = '100%';
+          txt.textContent = '✅ Cập nhật thành công! Đang khởi động lại SmartDesk...';
+          showToast('Cập nhật Cloud OTA thành công! Đang khởi động lại...');
+          setTimeout(() => { isOtaUploading = false; location.reload(); }, 6500);
+        } else if (st.state === 'error') {
+          clearInterval(poll);
+          isOtaUploading = false;
+          btn.disabled = false;
+          txt.textContent = '❌ Lỗi Cloud OTA: ' + (st.error || 'Unknown');
+          showToast('Cập nhật Cloud OTA thất bại!', false);
+        }
+      } catch (e) {
+        // ESP32 may have just rebooted right after finishing
+      }
+    }, 700);
+  } catch (e) {
+    isOtaUploading = false;
+    btn.disabled = false;
+    txt.textContent = '❌ ' + e.message;
+    showToast(e.message, false);
+  }
 }
 
 function uploadOtaFirmware() {

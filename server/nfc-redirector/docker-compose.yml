@@ -12,7 +12,7 @@ services:
       - ADMIN_KEY=${ADMIN_KEY:-}
     volumes:
       - nfc_data:/app/data
-    mem_limit: 128m
+    mem_limit: 256m
 
 volumes:
   nfc_data:

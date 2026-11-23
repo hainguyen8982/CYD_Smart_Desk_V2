@@ -10,6 +10,110 @@
 #include "Display.h"
 #include "Config.h"
 #include <HTTPClient.h>
+#include <WiFiClientSecure.h>
+#include <Update.h>
+
+static void runCloudOtaDownload(const char* url) {
+    Serial.printf("[CloudOTA] Starting HTTPS download: %s (FreeHeap=%u)\n", url, ESP.getFreeHeap());
+    WiFiClientSecure client;
+    client.setInsecure();
+    client.setTimeout(15);
+
+    HTTPClient http;
+    http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+    http.setTimeout(15000);
+    if (!http.begin(client, url)) {
+        webDashboard.finishCloudOta(false, "Cannot connect to Cloud OTA server");
+        return;
+    }
+
+    int code = http.GET();
+    if (code != HTTP_CODE_OK) {
+        char err[64];
+        snprintf(err, sizeof(err), "HTTP error %d", code);
+        http.end();
+        webDashboard.finishCloudOta(false, err);
+        return;
+    }
+
+    int totalLen = http.getSize();
+    if (totalLen <= 10000) {
+        http.end();
+        webDashboard.finishCloudOta(false, "Invalid firmware size");
+        return;
+    }
+
+    if (!Update.begin((size_t)totalLen, U_FLASH)) {
+        String e = Update.errorString();
+        http.end();
+        webDashboard.finishCloudOta(false, e.c_str());
+        return;
+    }
+
+    WiFiClient* stream = http.getStreamPtr();
+    uint8_t* buf = (uint8_t*)malloc(1024);
+    if (!buf) {
+        Update.abort();
+        http.end();
+        webDashboard.finishCloudOta(false, "Out of memory");
+        return;
+    }
+
+    size_t written = 0;
+    unsigned long lastDataMs = millis();
+    uint8_t lastPct = 255;
+
+    while (http.connected() && written < (size_t)totalLen) {
+        size_t avail = stream->available();
+        if (avail > 0) {
+            size_t toRead = (avail > 1024) ? 1024 : avail;
+            int n = stream->readBytes(buf, toRead);
+            if (n > 0) {
+                if (Update.write(buf, (size_t)n) != (size_t)n) {
+                    String e = Update.errorString();
+                    free(buf);
+                    Update.abort();
+                    http.end();
+                    webDashboard.finishCloudOta(false, e.c_str());
+                    return;
+                }
+                written += (size_t)n;
+                lastDataMs = millis();
+                uint8_t pct = (uint8_t)((written * 100ULL) / (size_t)totalLen);
+                if (pct != lastPct) {
+                    lastPct = pct;
+                    webDashboard.setCloudOtaProgress(pct);
+                }
+            }
+        } else {
+            if (millis() - lastDataMs > 15000UL) {
+                free(buf);
+                Update.abort();
+                http.end();
+                webDashboard.finishCloudOta(false, "Download timeout");
+                return;
+            }
+            vTaskDelay(pdMS_TO_TICKS(5));
+        }
+    }
+
+    free(buf);
+    http.end();
+
+    if (written != (size_t)totalLen) {
+        Update.abort();
+        webDashboard.finishCloudOta(false, "Incomplete download");
+        return;
+    }
+
+    if (Update.end(true)) {
+        Serial.printf("[CloudOTA] Success! Written %u bytes -> scheduling reboot\n", (unsigned)written);
+        webDashboard.finishCloudOta(true, "");
+    } else {
+        String e = Update.errorString();
+        webDashboard.finishCloudOta(false, e.c_str());
+    }
+}
 
 static void reportNfcLanIpIfNeeded() {
     if (strlen(NFC_REDIRECTOR_URL) == 0) return;
@@ -37,10 +141,10 @@ static void reportNfcLanIpIfNeeded() {
     EcosystemService::getDeviceId(devId, sizeof(devId));
     EcosystemService::getMdnsHost(mdnsHost, sizeof(mdnsHost));
 
-    char body[160];
+    char body[224];
     snprintf(body, sizeof(body),
-             "{\"id\":\"%s\",\"ip\":\"%s\",\"mdns\":\"%s.local\",\"fw\":\"%s\"}",
-             devId, curIp.c_str(), mdnsHost, FIRMWARE_VERSION_STR);
+             "{\"id\":\"%s\",\"ip\":\"%s\",\"mdns\":\"%s.local\",\"fw\":\"%s\",\"hw\":\"%s\",\"rssi\":%d}",
+             devId, curIp.c_str(), mdnsHost, FIRMWARE_VERSION_STR, HARDWARE_MODEL_STR, (int)WiFi.RSSI());
 
     HTTPClient http;
     http.begin(NFC_REDIRECTOR_URL);
@@ -106,6 +210,14 @@ void NetworkTask::_taskWorker(void* arg) {
     vTaskDelay(pdMS_TO_TICKS(1000));
 
     while (true) {
+        // Xử lý Cloud OTA (tải HTTPS firmware trên Core 0 khi Core 1 đã tạm dừng SPI/Display)
+        char cloudOtaUrl[192];
+        if (webDashboard.consumeCloudOtaRequest(cloudOtaUrl, sizeof(cloudOtaUrl))) {
+            runCloudOtaDownload(cloudOtaUrl);
+            vTaskDelay(pdMS_TO_TICKS(500));
+            continue;
+        }
+
         // Khi đang nạp OTA: tạm dừng mọi tác vụ mạng trên Core 0 để nhường RAM & Flash
         if (webDashboard.isOtaInProgress()) {
             vTaskDelay(pdMS_TO_TICKS(500));

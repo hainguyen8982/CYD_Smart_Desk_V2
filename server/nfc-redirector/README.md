@@ -21,7 +21,7 @@ curl http://127.0.0.1:3080/health
 ```nginx
 server {
     listen 443 ssl http2;
-    server_name go.tenmien.vn; # Thay bằng subdomain thực tế
+    server_name smartdesk.fabx.vn;
 
     location / {
         proxy_pass http://127.0.0.1:3080;
@@ -35,15 +35,16 @@ server {
 
 ## 3. Các Endpoint
 
-* `POST /api/checkin` (Header `X-Api-Key: <CHECKIN_SECRET>`): ESP32 tự gửi `{"id":"A3F91C","ip":"192.168.1.45","mdns":"smartdesk-f91c.local","fw":"2.4"}` mỗi khi vào Wi-Fi hoặc đổi IP LAN.
-* `GET /d/<DEVICE_ID>`: Link ghi lên tem NFC (ví dụ `https://go.tenmien.vn/d/A3F91C`) → Tự động nhảy thẳng vào `http://192.168.1.45/` và hiện hướng dẫn nếu điện thoại đang dùng 4G/khác Wi-Fi.
+* `GET /` & `GET /guide`: Trang **Hướng dẫn sử dụng online** cho khách hàng (`https://smartdesk.fabx.vn/guide`, in QR lên thẻ A6 Quick Start). Ảnh minh họa sau này chỉ cần thả vào `public/images/`.
+* `POST /api/checkin` (Header `X-Api-Key: <CHECKIN_SECRET>`): ESP32 tự gửi `{"id":"A3F91C","ip":"192.168.1.45","mdns":"smartdesk-f91c.local","fw":"2.4.0"}` mỗi khi vào Wi-Fi hoặc đổi IP LAN.
+* `GET /d/<DEVICE_ID>`: Link ghi lên tem NFC (ví dụ `https://smartdesk.fabx.vn/d/A3F91C`) → Tự động nhảy thẳng vào `http://192.168.1.45/` và hiện hướng dẫn nếu điện thoại đang dùng 4G/khác Wi-Fi.
 * `GET /health`: Healthcheck cho Docker/Monitoring.
 * `GET /admin/devices?key=<ADMIN_KEY>`: Xem JSON danh sách các máy đã check-in.
 
 ## 4. Kết nối với Firmware ESP32
 
-Mở `include/Config.h` và điền domain sau khi deploy xong:
+Đã cấu hình sẵn trong `include/Config.h`:
 ```cpp
-#define NFC_REDIRECTOR_URL      "https://go.tenmien.vn/api/checkin"
+#define NFC_REDIRECTOR_URL      "https://smartdesk.fabx.vn/api/checkin"
 #define NFC_CHECKIN_SECRET      "smartdesk-2026"
 ```

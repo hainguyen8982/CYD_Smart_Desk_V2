@@ -82,12 +82,21 @@ M3_CBORE_D     = 6.3     # Counterbore tunnel for M3 screw head (Ø5.5mm) & scre
 PILLAR_OUT_D   = 9.2     # Outer diameter of rear hollow screw pillars
 PILLAR_SEAT_T  = 2.8     # Clamping wall thickness behind PCB for exact M3x9 fit
 
-# ── SNAP-IN USB-C SOCKET & SPEAKER ──────────────────────────────────────
-USB_CUT_W      = 14.0    # Measured snap-in USB-C cutout width (mm)
-USB_CUT_H      = 5.5     # Measured snap-in USB-C cutout height (mm)
-USB_CUT_R      = 0.8
-USB_CENTER_Z   = 11.0    # Height of USB-C socket center above desk tabletop (mm)
-SPK_DIA        = 24.4    # Internal speaker retaining ring inner diameter (8Ω 1W)
+# ── USB-C 4-PIN BREAKOUT PCB (12x13.5x1.0mm) & SNAP-IN Ø29mm SPEAKER ────
+USBC_PCB_W     = 12.0    # Measured 4-pin USB-C breakout PCB width (mm)
+USBC_PCB_L     = 13.5    # Measured 4-pin USB-C breakout PCB length (mm)
+USBC_PCB_T     = 1.0     # Measured breakout PCB thickness (1.0mm!)
+USBC_PCB_CLR   = 0.25    # Slide-in FDM clearance per side (mm)
+USB_CUT_W      = 9.5     # Tight precision oval cutout hugging 9.0mm USB-C metal shell (+0.25mm/side)
+USB_CUT_H      = 3.4     # Tight precision oval cutout hugging 3.0mm USB-C metal shell (+0.20mm top/bot)
+USB_CUT_R      = 1.6
+USB_WALL_THIN  = 1.2     # Inner rear-wall recess so USB-C shell sits 1.0mm behind outer surface (full plug click!)
+USBC_PCB_BOT_Z = 6.3     # Fixed bottom pedestal seat height above desk tabletop (mm)
+USB_CENTER_Z   = USBC_PCB_BOT_Z + USBC_PCB_T + 1.5  # 8.8mm -> cutout Z=[7.1, 10.5] hugs shell Z=[7.3, 10.3]!
+SPK_DIA        = 29.4    # Snap-in speaker cradle inner diameter (fits Ø29.0mm speaker w/ 0.4mm clearance)
+SPK_BASE_T     = 4.0     # Measured speaker base/rim thickness (mm) for glue-free snap clips
+NFC_ROOF_ICON  = True    # Debossed bold (( • )) NFC touch target on center of sloped roof
+FOOT_RECESS_D  = 8.2     # Anti-slip silicone foot recess diameter (fits 8.0mm pads w/ 0.2mm FDM clearance)
 
 TILT_RAD       = math.radians(TILT_DEG)
 SIN_T          = math.sin(TILT_RAD)
@@ -272,14 +281,15 @@ def make_common_cavity():
     safe_inner_box = safe_xz ^ make_sloped_roof_clip(z_inset=WALL + 0.4)
 
     # Rear bay: tapered to (rear_w - 2*WALL) with concentric rounded X-Z corners AND rounded X-Y rear corners
-    # so it stays >= 2.2mm clear of rear R3.5mm fillet AND 45° bottom undercut!
+    # Use full inner_z_h height so safe_inner_box's single 15° sloped roof plane forms ONE continuous flat
+    # interior ceiling under the NFC roof zone (zero 2-angle ridge for flat 11x21mm NFC sticker mounting!).
     bay_xz = Manifold.extrude(
-        rounded_rect_cs(rear_w - 2 * WALL, z_rear - WALL - BOTTOM_WALL - 0.8, inner_cr + 1.0, segs=32),
+        rounded_rect_cs(rear_w - 2 * WALL, inner_z_h, inner_cr + 1.0, segs=32),
         DEPTH - REAR_WALL
     ).transform([
         [1.0, 0.0, 0.0, 0.0],
         [0.0, 0.0, 1.0, 0.0],
-        [0.0, 1.0, 0.0, BOTTOM_WALL + (z_rear - WALL - BOTTOM_WALL - 0.8) / 2.0 + 0.4],
+        [0.0, 1.0, 0.0, inner_z_c],
     ])
     bay_xy = Manifold.extrude(
         rounded_rect_cs(rear_w - 2 * WALL, DEPTH - REAR_WALL, 6.0, segs=32), Z_TOP
@@ -465,36 +475,132 @@ def build_rear_wedge():
             )
             body = body - m3_thru - cbore
 
-    # 4. SNAP-IN 2-PIN PANEL-MOUNT USB-C CUTOUT (14.0 x 5.5 mm, centered on lower rear wall)
+    # 4. USB-C 4-PIN BREAKOUT PCB (12.0 x 13.5 mm) TIGHT CUTOUT + GLUE-FREE SNAP-IN CRADLE
     usb_ry = USB_CENTER_Z - Z_TOP / 2.0
     usb_cut = rear_to_desk(
-        Manifold.extrude(rounded_rect_cs(USB_CUT_W, USB_CUT_H, USB_CUT_R, segs=24), REAR_WALL + 6.0)
+        Manifold.extrude(rounded_rect_cs(USB_CUT_W, USB_CUT_H, USB_CUT_R, segs=28), REAR_WALL + 6.0)
         .translate([0.0, usb_ry, -REAR_WALL - 3.0])
     )
-    body = body - usb_cut
+    # Inner rear-wall thinning pocket (1.2mm deep from inside) so the USB-C metal mouth sits
+    # right behind a sleek 1.0mm outer bezel -> tight 9.5x3.4mm hole AND full plug engagement!
+    z_pcb_bot = USBC_PCB_BOT_Z                        # 6.3 mm above desk (fixed bottom seat)
+    z_pcb_top = z_pcb_bot + USBC_PCB_T               # 7.3 mm above desk (1.0mm PCB)
+    slot_w = USBC_PCB_W + 2.0 * USBC_PCB_CLR         # 12.5 mm
+    inner_usb_recess = Manifold.cube([slot_w, USB_WALL_THIN + 1.0, USBC_PCB_T + 3.6], center=True).translate([
+        0.0, DEPTH - REAR_WALL + USB_WALL_THIN / 2.0 - 0.5, z_pcb_bot + (USBC_PCB_T + 3.6) / 2.0
+    ])
+    body = body - usb_cut - inner_usb_recess
 
-    # 5. PRECISION CIRCULAR SPEAKER GRILLE + RETAINING RING (RIGHT rear, clear of top M3 tunnels!)
-    spk_rx, spk_ry = 14.5, 2.0
-    grille_cuts = [Manifold.cylinder(REAR_WALL + 6.0, 1.0, 1.0, 16).translate([spk_rx, spk_ry, -REAR_WALL - 3.0])]
+    # Internal slide-in cradle on flat floor (supports PCB + resists cable insertion force!)
+    y_inner_rear = DEPTH - REAR_WALL + USB_WALL_THIN  # PCB front edge seats 1.2mm into rear wall!
+    slot_l = USBC_PCB_L + 0.35                        # 13.85 mm
+    rail_t = 2.0
+    stop_t = 2.2
+    cradle_w = slot_w + 2.0 * rail_t                 # 16.5 mm
+    cradle_l = slot_l + stop_t                       # 16.05 mm
+    y_cradle_front = y_inner_rear - cradle_l         # ~21.75 mm
+    y_cradle_mid = y_inner_rear - cradle_l / 2.0
+
+    # 4a. Solid floor pedestal from Z=BOTTOM_WALL-0.5 up to z_pcb_bot
+    ped_h = z_pcb_bot - (BOTTOM_WALL - 0.5)
+    pedestal = Manifold.cube([cradle_w, cradle_l + 0.6, ped_h], center=True).translate([
+        0.0, y_cradle_mid + 0.3, (BOTTOM_WALL - 0.5) + ped_h / 2.0
+    ])
+    # 4b. Left & right lateral guide rails rising 2.2mm above 1.0mm PCB top
+    rail_h = USBC_PCB_T + 2.2
+    rails = None
+    for sx in (-1.0, 1.0):
+        rx = sx * (slot_w / 2.0 + rail_t / 2.0)
+        r_wall = Manifold.cube([rail_t, cradle_l + 0.6, rail_h], center=True).translate([
+            rx, y_cradle_mid + 0.3, z_pcb_bot + rail_h / 2.0
+        ])
+        # Short 3.2mm tail-end snap retention nub right above 1.0mm PCB top (z_pcb_top + 0.05mm)
+        # Positioned near the PCB tail so you can angle the USB-C nose in first, then click the tail down!
+        nub_pts = [
+            [0.0, 0.0],
+            [-sx * 0.60, 0.45],
+            [-sx * 0.60, 0.85],
+            [0.0, 1.45],
+        ] if sx < 0 else [
+            [0.0, 0.0],
+            [0.0, 1.45],
+            [-sx * 0.60, 0.85],
+            [-sx * 0.60, 0.45],
+        ]
+        nub_prof = CrossSection([nub_pts])
+        nub_len = 3.2
+        nub_y_start = y_inner_rear - slot_l + 0.8    # Right at the PCB tail end!
+        nub = Manifold.extrude(nub_prof, nub_len).transform([
+            [1.0, 0.0, 0.0, sx * (slot_w / 2.0)],
+            [0.0, 0.0, 1.0, nub_y_start],
+            [0.0, 1.0, 0.0, z_pcb_top + 0.05],
+        ])
+        r_tot = r_wall + nub
+        rails = r_tot if rails is None else (rails + r_tot)
+
+    # 4c. Sturdy back-stop wall (absorbs USB-C plug push force) with 6.6mm center wire slot
+    stop_wall = Manifold.cube([cradle_w, stop_t, rail_h], center=True).translate([
+        0.0, y_cradle_front + stop_t / 2.0, z_pcb_bot + rail_h / 2.0
+    ])
+    wire_notch = Manifold.cube([6.6, stop_t + 2.0, rail_h + 2.0], center=True).translate([
+        0.0, y_cradle_front + stop_t / 2.0, z_pcb_top + rail_h / 2.0 + 0.2
+    ])
+    usbc_cradle = (pedestal + rails + (stop_wall - wire_notch)) ^ outer
+    body = body + usbc_cradle
+
+    # 5. PRECISION SPEAKER GRILLE + GLUE-FREE 3-ARM SNAP-IN MOUNT (Ø29.0mm, 4.0mm base!)
+    spk_rx, spk_ry = 14.5, 3.5
+    grille_cuts = [Manifold.cylinder(REAR_WALL + 6.0, 1.05, 1.05, 16).translate([spk_rx, spk_ry, -REAR_WALL - 3.0])]
     for ring_idx in range(1, 4):
-        rad = ring_idx * 3.3
+        rad = ring_idx * 3.8
         cnt = ring_idx * 6
         for i in range(cnt):
             ang = 2.0 * math.pi * i / cnt
             grille_cuts.append(
-                Manifold.cylinder(REAR_WALL + 6.0, 0.9, 0.9, 16)
+                Manifold.cylinder(REAR_WALL + 6.0, 0.95, 0.95, 16)
                 .translate([spk_rx + rad * math.cos(ang), spk_ry + rad * math.sin(ang), -REAR_WALL - 3.0])
             )
     for gc in grille_cuts:
         body = body - rear_to_desk(gc)
 
-    spk_ring = rear_to_desk(
-        (Manifold.cylinder(4.8, SPK_DIA / 2.0 + 1.6, SPK_DIA / 2.0 + 1.6, 40)
-         - Manifold.cylinder(5.6, SPK_DIA / 2.0, SPK_DIA / 2.0, 40).translate([0, 0, -0.4])
-         - Manifold.cube([7.0, 8.0, 6.0], center=True).translate([0, -SPK_DIA / 2.0 - 1.0, 2.0]))
-        .translate([spk_rx, spk_ry, -REAR_WALL - 4.2])
-    )
-    body = body + (spk_ring ^ outer)
+    # Build glue-free 3-arm snap-in speaker cradle in rear-local coords (rz goes inward from -REAR_WALL)
+    r_in = SPK_DIA / 2.0        # 14.7 mm
+    arm_t = 2.0
+    r_out = r_in + arm_t        # 16.7 mm
+    hook_in = 1.1               # 1.1mm radial snap catch behind 4.0mm speaker base
+    arm_depth = SPK_BASE_T + 1.8  # 5.8 mm total arm depth
+
+    def make_sector_band(r0, r1, deg_center, deg_span, h, z_start, segs=12):
+        a0 = math.radians(deg_center - deg_span / 2.0)
+        a1 = math.radians(deg_center + deg_span / 2.0)
+        pts = []
+        for i in range(segs + 1):
+            a = a0 + (a1 - a0) * i / segs
+            pts.append([r1 * math.cos(a), r1 * math.sin(a)])
+        for i in range(segs, -1, -1):
+            a = a0 + (a1 - a0) * i / segs
+            pts.append([r0 * math.cos(a), r0 * math.sin(a)])
+        return Manifold.extrude(CrossSection([pts]), h).translate([0.0, 0.0, z_start])
+
+    spk_mount = None
+    # 3 flexible snap-in arms: Right (0°), Left (180°), Bottom (270°) -> 0° overhang when printed upright!
+    for deg_c in (0.0, 180.0, 270.0):
+        # Main cantilever arm wall (embedded 0.6mm into rear wall for strong fusion)
+        arm = make_sector_band(r_in, r_out, deg_c, 36.0, arm_depth + 0.6, -REAR_WALL - arm_depth)
+        # 45° triangular snap-hook lip behind the 4.0mm speaker base (from depth 4.15mm to 5.8mm)
+        s1 = make_sector_band(r_in, r_out, deg_c, 32.0, 0.06, -REAR_WALL - (SPK_BASE_T + 0.15))
+        s2 = make_sector_band(r_in - hook_in, r_out, deg_c, 32.0, 0.45, -REAR_WALL - (SPK_BASE_T + 1.05))
+        s3 = make_sector_band(r_in, r_out, deg_c, 32.0, 0.06, -REAR_WALL - arm_depth)
+        hook = Manifold.batch_hull([s1, s2, s3])
+        part = arm + hook
+        spk_mount = part if spk_mount is None else (spk_mount + part)
+
+    # Top locator arc (90°, 48° wide, 4.2mm deep, NO downward hook -> 100% support-free!)
+    top_loc = make_sector_band(r_in, r_out, 90.0, 48.0, SPK_BASE_T + 0.8, -REAR_WALL - (SPK_BASE_T + 0.2))
+    spk_mount = spk_mount + top_loc
+
+    spk_mount_desk = rear_to_desk(spk_mount.translate([spk_rx, spk_ry, 0.0]))
+    body = body + (spk_mount_desk ^ outer)
 
     # 6. FOUR HORIZONTAL PILL VENTILATION SLOTS (LEFT rear behind ESP32, clear of top M3 tunnels!)
     for i in range(4):
@@ -505,10 +611,65 @@ def build_rear_wedge():
         )
         body = body - vent
 
-    # 7. FOUR BOTTOM SILICONE FOOT RECESSES (Ø7.0mm x 0.8mm deep, clear of bottom M3 tunnels!)
+    # 7. FOUR BOTTOM SILICONE FOOT RECESSES (Ø8.2mm x 0.8mm deep -> fits 8.0mm anti-slip pads!)
+    foot_r = FOOT_RECESS_D / 2.0
     for sx in (-1, 1):
-        for fy in (12.0, DEPTH - 6.5):
-            body = body - Manifold.cylinder(1.2, 3.5, 3.5, 24).translate([sx * 24.0, fy, -0.4])
+        for fy in (12.5, DEPTH - 7.0):
+            body = body - Manifold.cylinder(1.2, foot_r, foot_r, 28).translate([sx * 24.0, fy, -0.4])
+
+    # 8. DEBossed MINIMALIST NFC WAVE ICON (( • )) ON CENTER OF SLOPED ROOF
+    #    Bold 1.35mm strokes, 0.50mm deep perpendicular to roof -> crisp in 1-color OR 1-click AMS paint!
+    if NFC_ROOF_ICON:
+        c = FRONT_CHAMFER
+        rf = REAR_FILLET
+        y_tf = FRONT_H * SIN_T
+        z_rear = Z_TOP - (DEPTH - y_tf) * math.tan(math.radians(TOP_SLOPE_DEG))
+        y_f = y_tf + c * COS_T
+        z_f = Z_TOP - c * SIN_T
+        y_r = DEPTH - rf
+        z_r = z_rear
+        slope = (z_f - z_r) / (y_r - y_f)
+        roof_ang = math.atan(slope)  # downward tilt angle toward +Y
+        ca, sa = math.cos(roof_ang), math.sin(roof_ang)
+
+        # Center of usable roof strip (between front cap seam and rear fillet)
+        y_c = 0.5 * ((y_f + SPLIT_D * 0.7) + y_r)
+        z_c = z_r + (y_r - y_c) * slope
+
+        def make_arc_band(r_in, r_out, a_deg, side, segs=14):
+            a0 = math.radians(-a_deg)
+            a1 = math.radians(a_deg)
+            pts = []
+            for i in range(segs + 1):
+                a = a0 + (a1 - a0) * i / segs
+                pts.append([side * r_out * math.cos(a), r_out * math.sin(a)])
+            for i in range(segs, -1, -1):
+                a = a0 + (a1 - a0) * i / segs
+                pts.append([side * r_in * math.cos(a), r_in * math.sin(a)])
+            if side < 0:
+                pts.reverse()
+            return CrossSection([pts])
+
+        nfc_depth = 0.50
+        # Extrude from w = -nfc_depth to +3.0 along local +Z (mapped to outward roof normal)
+        nfc_parts = [Manifold.cylinder(nfc_depth + 3.0, 1.15, 1.15, 24).translate([0.0, 0.0, -nfc_depth])]
+        for side in (-1.0, 1.0):
+            cs1 = make_arc_band(2.8, 4.15, 45.0, side)
+            cs2 = make_arc_band(5.3, 6.65, 43.0, side)
+            nfc_parts.append(Manifold.extrude(cs1, nfc_depth + 3.0).translate([0.0, 0.0, -nfc_depth]))
+            nfc_parts.append(Manifold.extrude(cs2, nfc_depth + 3.0).translate([0.0, 0.0, -nfc_depth]))
+
+        nfc_local = nfc_parts[0]
+        for p in nfc_parts[1:]:
+            nfc_local = nfc_local + p
+
+        # Map local (X=right, Y=along roof toward rear, Z=outward roof normal) -> Desk (X, Y, Z)
+        nfc_desk = nfc_local.transform([
+            [1.0,  0.0, 0.0, 0.0],
+            [0.0,   ca,  sa, y_c],
+            [0.0,  -sa,  ca, z_c],
+        ])
+        body = body - nfc_desk
 
     return body
 

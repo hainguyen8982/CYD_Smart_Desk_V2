@@ -20,7 +20,10 @@ public:
     void requestWiFiPortal() { _portalRequested = true; }
     bool isPortalRequested() const { return _portalRequested; }
     void clearPortalRequest() { _portalRequested = false; }
-    bool isOtaInProgress() const { return _otaInProgress || _otaRebootRequested; }
+    bool isOtaInProgress() const { return _otaInProgress || _otaRebootRequested || _cloudOtaState == 1; }
+    bool consumeCloudOtaRequest(char* outUrl, size_t maxLen);
+    void setCloudOtaProgress(uint8_t pct);
+    void finishCloudOta(bool success, const char* errMsg);
 
 private:
     AsyncWebServer _server;
@@ -36,6 +39,11 @@ private:
     volatile unsigned long _otaLastChunkMs = 0;
     volatile bool  _otaRebootRequested = false;
     unsigned long  _otaRebootTime = 0;
+    volatile bool  _cloudOtaRequested = false;
+    volatile uint8_t _cloudOtaState = 0;    // 0=idle, 1=downloading, 2=done, 3=error
+    volatile uint8_t _cloudOtaProgress = 0;
+    char           _cloudOtaUrl[192] = {0};
+    char           _cloudOtaError[96] = {0};
 
     // Deferred Core 1 UI/Hardware commands (prevents Core 0 async_tcp races)
     volatile bool    _hasPendingPage = false;

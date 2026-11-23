@@ -687,7 +687,7 @@ void Display::renderPage0_MinimalZen16(bool forceFull) {
     // via sprite -> push
     _spr.fillSprite(zenBg);
     drawBellIcon(296, 18, _alarmEnabled);
-    drawMinimalWeatherIcon(268, 72, weather.getType(), weather.isNight(),
+    drawMinimalWeatherIcon(278, 72, weather.getType(), weather.isNight(),
                            zenBg);
     renderDock();
     _spr.pushSprite(0, 0);
@@ -727,22 +727,22 @@ void Display::renderPage0_MinimalZen16(bool forceFull) {
     snprintf(mmStr, sizeof(mmStr), ":%02d", t.tm_min);
     int16_t hhW = _spr.measureSmoothFace(&ZEN_FONT_CLOCK, hhStr);
     int16_t mmW = _spr.measureSmoothFace(&ZEN_FONT_CLOCK, mmStr);
-    int16_t clockX0 = 114 - (hhW + mmW) / 2;
-    if (clockX0 < 10)
-      clockX0 = 10;
+    int16_t clockX0 = 120 - (hhW + mmW) / 2;
+    if (clockX0 < 6)
+      clockX0 = 6;
 
     VnSprite::drawSmoothFace16(_tft, &ZEN_FONT_CLOCK, hhStr, clockX0, 88,
-                               ML_DATUM, zenAccent, zenBg, 8, 38,
-                               hhW + (clockX0 - 8) + 2, 98);
+                               ML_DATUM, zenAccent, zenBg, 4, 38,
+                               hhW + (clockX0 - 4) + 2, 98);
     VnSprite::drawSmoothFace16(_tft, &ZEN_FONT_CLOCK, mmStr, clockX0 + hhW, 88,
                                ML_DATUM, zenText, zenBg, clockX0 + hhW, 38,
-                               226 - (clockX0 + hhW), 98);
+                               242 - (clockX0 + hhW), 98);
 
-    // 3. Temperature (16-bit Be Vietnam Pro Regular 25px)
+    // 3. Temperature (16-bit Be Vietnam Pro Regular 25px — shifted right so never clips wide clock digits!)
     char tempNum[12];
     snprintf(tempNum, sizeof(tempNum), "%.0f°C", w.valid ? w.temp : 29.0f);
-    VnSprite::drawSmoothFace16(_tft, &ZEN_FONT_NUM, tempNum, 268, 114, MC_DATUM,
-                               zenText, zenBg, 228, 96, 84, 38);
+    VnSprite::drawSmoothFace16(_tft, &ZEN_FONT_NUM, tempNum, 278, 114, MC_DATUM,
+                               zenText, zenBg, 244, 96, 68, 38);
 
     // 4. Thin 3px Champagne Gold Progress Bar (direct 16-bit!)
     const int16_t barX = 18, barY = 152, barW = 284, barH = 3;
