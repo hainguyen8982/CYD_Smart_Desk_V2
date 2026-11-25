@@ -784,13 +784,24 @@ void Display::renderPage0_MinimalZen16(bool forceFull) {
     }
 
     char rightMeta[28];
-    if (w.valid && w.humidity > 0)
+    bool hasHumidity = (w.valid && w.humidity > 0);
+    if (hasHumidity)
       snprintf(rightMeta, sizeof(rightMeta), "RH %d%%", w.humidity);
     else
       snprintf(rightMeta, sizeof(rightMeta), "%s",
                (strlen(w.city) > 0) ? w.city : "TP.HCM");
     VnSprite::drawSmoothFace16(_tft, &ZEN_FONT_LIGHT, rightMeta, 302, 176,
                                MR_DATUM, zenDim, zenBg, 226, 165, 80, 22);
+    if (hasHumidity) {
+      int16_t rw = _spr.measureSmoothFace(&ZEN_FONT_LIGHT, rightMeta);
+      int16_t dx = 302 - rw - 8;
+      if (dx >= 230) {
+        uint16_t dropCol = RGB565(92, 196, 255);
+        _tft.fillCircle(dx, 178, 3, dropCol);
+        _tft.fillTriangle(dx, 171, dx - 3, 177, dx + 3, 177, dropCol);
+        _tft.drawPixel(dx - 1, 178, RGB565(215, 244, 255));
+      }
+    }
   }
 
   // 6. Floating 16-bit Vietnamese Ticker (smooth marquee, 0% flicker!)

@@ -169,7 +169,7 @@ function readJsonBody(req, maxBytes = 16384) {
   });
 }
 
-function renderRedirectPage(id, entry) {
+function renderRedirectPage(id, entry, installMode = false) {
   const safeId = escHtml(id);
   const safeIp = escHtml(entry.ip);
   const targetUrl = `http://${safeIp}/`;
@@ -183,8 +183,15 @@ function renderRedirectPage(id, entry) {
 <html lang="vi">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>CYD SmartDesk — Đang kết nối...</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>SmartDesk • ${safeId}</title>
+<link rel="manifest" href="/d/${safeId}/manifest.json">
+<meta name="theme-color" content="#070B14">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SmartDesk">
+<link rel="apple-touch-icon" href="/app-icon.png">
+<link rel="icon" type="image/png" href="/app-icon.png">
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
   body{background:#000;color:#fff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
@@ -196,7 +203,7 @@ function renderRedirectPage(id, entry) {
   @keyframes spin{to{transform:rotate(360deg)}}
   .help{display:none;margin-top:18px;padding-top:16px;border-top:1px solid rgba(255,255,255,.08);text-align:left}
   .help.show{display:block}
-  .btn{display:block;width:100%;text-decoration:none;text-align:center;padding:12px 14px;border-radius:12px;font-weight:700;font-size:14px;margin-top:10px}
+  .btn{display:block;width:100%;text-decoration:none;text-align:center;padding:12px 14px;border-radius:12px;font-weight:700;font-size:14px;margin-top:10px;border:none;cursor:pointer}
   .btn-primary{background:#64d2ff;color:#000}
   .btn-outline{background:transparent;color:#64d2ff;border:1px solid rgba(100,210,255,.45)}
   .meta{margin-top:14px;font-size:11px;color:#606672;text-align:center}
@@ -205,6 +212,18 @@ function renderRedirectPage(id, entry) {
 <body>
   <div class="card">
     <div class="badge">SMARTDESK • ${safeId}</div>
+    ${installMode ? `
+    <img src="/app-icon.png" width="56" height="56" style="border-radius:14px;margin-bottom:10px;border:1px solid rgba(100,210,255,.4)" alt="SmartDesk">
+    <h1>Cài App SmartDesk vĩnh viễn</h1>
+    <p style="text-align:left;margin-top:8px">Cài từ trang này giúp biểu tượng ngoài màn hình chính <b>không bao giờ bị lỗi khi đổi IP Wi-Fi</b> (trên Android còn tự mở thẳng App khi chạm NFC):</p>
+    <p id="installHint" style="text-align:left;margin-top:10px;background:rgba(100,210,255,.08);padding:10px 12px;border-radius:10px;color:#d6e4f0">
+      • <b>iPhone (Safari):</b> Bấm nút <b>Chia sẻ (⎋)</b> → chọn <b>Thêm vào MH chính</b>.<br>
+      • <b>Android (Chrome):</b> Bấm nút <b>📲 Cài đặt ứng dụng</b> bên dưới (hoặc menu ⋮ → Cài đặt ứng dụng).
+    </p>
+    <button id="pwaInstallBtn" class="btn btn-primary" style="display:none" onclick="triggerInstall()">📲 Cài đặt ứng dụng ngay</button>
+    <a class="btn btn-outline" href="${targetUrl}">➡️ Vào bảng điều khiển (${safeIp})</a>
+    <a class="btn btn-outline" href="/guide#nfc">📖 Mẹo mở nhanh NFC trên iPhone</a>
+    ` : `
     <h1>Đang mở bảng điều khiển...</h1>
     <p>Đang chuyển hướng tới SmartDesk tại <b>${safeIp}</b></p>
     <div class="spinner" id="sp"></div>
@@ -213,16 +232,33 @@ function renderRedirectPage(id, entry) {
       <p>• Hãy đảm bảo điện thoại đang kết nối <b>cùng mạng Wi-Fi</b> với SmartDesk (tắt 4G/5G hoặc VPN nếu đang bật).<br>• Kiểm tra SmartDesk đang có nguồn điện.</p>
       <a class="btn btn-primary" href="${targetUrl}">🔄 Mở trực tiếp (${safeIp})</a>
       ${mdnsUrl ? `<a class="btn btn-outline" href="${mdnsUrl}">📡 Thử qua mDNS (${mdnsHost})</a>` : ""}
+      <a class="btn btn-outline" href="/d/${safeId}?install=1">📲 Cài App ra màn hình chính</a>
       <a class="btn btn-outline" href="/guide">📖 Xem Hướng dẫn sử dụng</a>
     </div>
+    `}
     <div class="meta">Cập nhật IP lần cuối: ${escHtml(seenText)}</div>
   </div>
   <script>
+    if ('serviceWorker' in navigator) { navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(function(){}); }
+    let deferredPrompt = null;
+    window.addEventListener('beforeinstallprompt', function(e) {
+      e.preventDefault();
+      deferredPrompt = e;
+      var btn = document.getElementById('pwaInstallBtn');
+      if (btn) btn.style.display = 'block';
+    });
+    function triggerInstall() {
+      if (!deferredPrompt) return;
+      deferredPrompt.prompt();
+      deferredPrompt = null;
+    }
+    ${installMode ? "" : `
     setTimeout(function(){ window.location.href = ${JSON.stringify(targetUrl)}; }, 80);
     setTimeout(function(){
       document.getElementById('sp').style.display = 'none';
       document.getElementById('help').classList.add('show');
     }, 2600);
+    `}
   </script>
 </body>
 </html>`;
@@ -388,6 +424,52 @@ const server = http.createServer(async (req, res) => {
     return fs.createReadStream(filePath).pipe(res);
   }
 
+  // ── Cloud PWA Service Worker & App Icon ───────────────────────
+  if (req.method === "GET" && pathname === "/sw.js") {
+    res.writeHead(200, {
+      "Content-Type": "application/javascript; charset=utf-8",
+      "Cache-Control": "no-cache",
+      "Service-Worker-Allowed": "/",
+    });
+    return res.end("self.addEventListener('install',()=>self.skipWaiting());self.addEventListener('activate',e=>e.waitUntil(self.clients.claim()));self.addEventListener('fetch',()=>{});");
+  }
+
+  if (req.method === "GET" && pathname === "/app-icon.png") {
+    const iconPath = path.join(PUBLIC_DIR, "app-icon.png");
+    if (fs.existsSync(iconPath)) {
+      res.writeHead(200, { "Content-Type": "image/png", "Cache-Control": "public, max-age=604800" });
+      return fs.createReadStream(iconPath).pipe(res);
+    }
+  }
+
+  // ── Per-Device Persistent PWA Manifest (/d/:id/manifest.json) ──
+  if (req.method === "GET" && /^\/d\/[^/]+\/manifest\.json$/.test(pathname)) {
+    const id = decodeURIComponent(pathname.split("/")[2] || "").toUpperCase();
+    if (!isValidDeviceId(id)) {
+      return sendJson(res, 400, { error: "invalid_id" });
+    }
+    const manifest = {
+      name: `SmartDesk • ${id}`,
+      short_name: "SmartDesk",
+      description: "Bảng điều khiển FabX SmartDesk V2",
+      start_url: `/d/${id}`,
+      scope: "/d/",
+      display: "standalone",
+      orientation: "portrait",
+      background_color: "#070B14",
+      theme_color: "#070B14",
+      icons: [
+        { src: "/app-icon.png", sizes: "192x192", type: "image/png", purpose: "any" },
+        { src: "/app-icon.png", sizes: "192x192", type: "image/png", purpose: "maskable" },
+      ],
+    };
+    res.writeHead(200, {
+      "Content-Type": "application/manifest+json; charset=utf-8",
+      "Cache-Control": "public, max-age=3600",
+    });
+    return res.end(JSON.stringify(manifest));
+  }
+
   // ── NFC Redirect Page ─────────────────────────────────────────
   if (req.method === "GET" && pathname.startsWith("/d/")) {
     let id = "";
@@ -402,7 +484,8 @@ const server = http.createServer(async (req, res) => {
       return res.end("Invalid Device ID");
     }
     const entry = devices[id];
-    const html = entry && entry.ip ? renderRedirectPage(id, entry) : renderNotFoundPage(id);
+    const installMode = url.searchParams.get("install") === "1";
+    const html = entry && entry.ip ? renderRedirectPage(id, entry, installMode) : renderNotFoundPage(id);
     res.writeHead(200, {
       "Content-Type": "text/html; charset=utf-8",
       "Cache-Control": "no-store, no-cache, must-revalidate",
